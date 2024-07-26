@@ -101,13 +101,13 @@ func (u Uint128) Xor64(v uint64) Uint128 {
 }
 
 // Add returns u+v.
-func (u Uint128) Add(v Uint128) Uint128 {
+func (u Uint128) Add(v Uint128) (Uint128, error) {
 	lo, carry := bits.Add64(u.Lo, v.Lo, 0)
 	hi, carry := bits.Add64(u.Hi, v.Hi, carry)
 	if carry != 0 {
-		panic("overflow")
+		return Uint128{}, ErrOverflow
 	}
-	return Uint128{lo, hi}
+	return Uint128{lo, hi}, nil
 }
 
 // AddWrap returns u+v with wraparound semantics; for example,
