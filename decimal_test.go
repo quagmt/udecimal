@@ -9,7 +9,11 @@ import (
 
 func TestParse(t *testing.T) {
 	testcases := []string{
+		"0.123",
+		"-0.123",
 		"0",
+		"0.9999999999999999999",
+		"-0.9999999999999999999",
 		"1",
 		"123",
 		"123.456",
@@ -33,16 +37,44 @@ func TestParse(t *testing.T) {
 }
 
 func TestDiv(t *testing.T) {
-	a, err := Parse("1234567890123456000")
-	require.NoError(t, err)
+	testcases := []struct {
+		a, b string
+	}{
+		{"1234567890123456789", "1"},
+		{"1234567890123456789", "2"},
+		{"123456789012345678.9", "0.1"},
+		{"1111111111111", "1111.123456789123456789"},
+		{"1", "1111.123456789123456789"},
+		{"1", "1.123456789123456789"},
+		{"1", "2"},
+		{"1", "3"},
+		{"1", "4"},
+		{"1", "5"},
+		{"123456789123456789.123456789", "3.123456789"},
+		{"123456789123456789.123456789", "3"},
+	}
 
-	b, err := Parse("0.9999999999999999999")
-	require.NoError(t, err)
+	for _, tc := range testcases {
+		t.Run(tc.a+"/"+tc.b, func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
 
-	c, err := a.Div(b)
-	require.NoError(t, err)
+			b, err := Parse(tc.b)
+			require.NoError(t, err)
 
-	t.Logf("c = %s", c)
+			c, err := a.Div(b)
+			require.NoError(t, err)
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			prec := int32(c.scale)
+			cc := aa.DivRound(bb, prec+1).Truncate(prec)
+
+			require.Equal(t, cc.String(), c.String())
+		})
+	}
 }
 
 func BenchmarkString(b *testing.B) {
@@ -89,10 +121,10 @@ func TestShopspringDiv(t *testing.T) {
 }
 
 func BenchmarkDiv(b *testing.B) {
-	a, err := Parse("189")
+	a, err := Parse("1234567890123456789")
 	require.NoError(b, err)
 
-	bb, err := Parse("3.1")
+	bb, err := Parse("1111.123456789123456789")
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -102,10 +134,10 @@ func BenchmarkDiv(b *testing.B) {
 }
 
 func BenchmarkShopspringDiv(b *testing.B) {
-	a, err := decimal.NewFromString("1234567890123456789.123")
+	a, err := decimal.NewFromString("1234567890123456789")
 	require.NoError(b, err)
 
-	bb, err := decimal.NewFromString("3")
+	bb, err := decimal.NewFromString("1111.123456789123456789")
 	require.NoError(b, err)
 
 	b.ResetTimer()

@@ -1,3 +1,3 @@
 bench:
-	go test -bench BenchmarkShopspringString -benchmem -memprofile mem.out
+	go test -bench BenchmarkDiv -benchmem -memprofile mem.out
  

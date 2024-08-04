@@ -6,16 +6,6 @@ import (
 )
 
 var (
-	// maxBint is the maximum value that can be represented by a bint.
-	// consists of 38 digits (1 digit less than 2^128-1) to avoid overflow.
-	// maxBInt = 99_999_999_999_999_999_999_999_999_999_999_999_999
-	maxBint = bint{
-		hi: 5_421_010_862_427_522_170,
-		lo: 687_399_551_400_673_279,
-	}
-)
-
-var (
 	ErrOverflow = fmt.Errorf("overflow")
 )
 
@@ -72,19 +62,6 @@ func (u bint) LessThan(v bint) bool {
 	return false
 }
 
-func overflow(hi, lo uint64) (bint, error) {
-	u := bint{
-		hi: hi,
-		lo: lo,
-	}
-
-	if u.GreaterThan(maxBint) {
-		return bint{}, ErrOverflow
-	}
-
-	return u, nil
-}
-
 func (u bint) Add(v bint) (bint, error) {
 	lo, carry := bits.Add64(u.lo, v.lo, 0)
 	hi, carry := bits.Add64(u.hi, v.hi, carry)
@@ -92,7 +69,7 @@ func (u bint) Add(v bint) (bint, error) {
 		return bint{}, ErrOverflow
 	}
 
-	return overflow(hi, lo)
+	return bint{hi: hi, lo: lo}, nil
 }
 
 // Add64 returns u+v.
@@ -103,17 +80,18 @@ func (u bint) Add64(v uint64) (bint, error) {
 		return bint{}, ErrOverflow
 	}
 
-	return overflow(hi, lo)
+	return bint{hi: hi, lo: lo}, nil
 }
 
 func (u bint) Sub(v bint) (bint, error) {
 	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
 	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
 	if borrow != 0 {
+		// borrow != 0 means u < v and this must not happen
 		return bint{}, ErrOverflow
 	}
 
-	return overflow(hi, lo)
+	return bint{hi: hi, lo: lo}, nil
 }
 
 // Sub64 returns u-v.
@@ -124,7 +102,7 @@ func (u bint) Sub64(v uint64) (bint, error) {
 		return bint{}, ErrOverflow
 	}
 
-	return overflow(hi, lo)
+	return bint{hi: hi, lo: lo}, nil
 }
 
 func (u bint) Mul64(v uint64) (bint, error) {
@@ -135,7 +113,7 @@ func (u bint) Mul64(v uint64) (bint, error) {
 		return bint{}, ErrOverflow
 	}
 
-	return overflow(hi, lo)
+	return bint{hi: hi, lo: lo}, nil
 }
 
 func (u bint) Mul(v bint) (bint, error) {
@@ -161,29 +139,28 @@ func (u bint) Mul(v bint) (bint, error) {
 		return bint{}, ErrOverflow
 	}
 
-	return overflow(hi, lo)
+	return bint{hi: hi, lo: lo}, nil
 }
 
 // MulPow10 is similar to Mul. However it doesn't return error
 // but 256-bits unsigned integer instead. The carry will be stored to U256.carry
-func (u bint) MulPow10(pow int) U256 {
-	v := pow10[pow]
+func (u bint) MulPow10(pow uint8) U256 {
+	return u.MulToU256(pow10[pow])
+}
 
+func (u bint) MulToU256(v bint) U256 {
 	// TODO: can speed up with SIMD
 	hi, lo := bits.Mul64(u.lo, v.lo)
 	p0, p1 := bits.Mul64(u.hi, v.lo)
 	p2, p3 := bits.Mul64(u.lo, v.hi)
 
-	// calculate hi,lo
-	// NOTE: carryIn doesn't mean the carry value from previous calculation
-	// under the hood: sum = hi + p1 + carryIn (add 0/1 to the total sum???)
-	// hence, hi, c1 := bits.Add64(hi, p3, c0) is incorrect
-	// The total overflow carry must be sum of all carries
+	// calculate hi + p1 + p3
+	// total carry = carry(hi+p1) + carry(hi+p1+p3)
 	hi, c0 := bits.Add64(hi, p1, 0)
 	hi, c1 := bits.Add64(hi, p3, 0)
 	c1 += c0
 
-	// calculate carry
+	// calculate upper part of U256
 	// TODO: can speed up with SIMD
 	e0, e1 := bits.Mul64(u.hi, v.hi)
 	d, d0 := bits.Add64(p0, p2, 0)
@@ -200,10 +177,6 @@ func (u bint) MulPow10(pow int) U256 {
 		hi:    hi,
 		carry: carry,
 	}
-}
-
-func (u bint) Mul64Pow10(v uint64) U256 {
-	return U256{}
 }
 
 func FromU64(v uint64) bint {
@@ -229,14 +202,6 @@ func (u bint) QuoRem(v bint) (q, r bint, err error) {
 		}
 
 		q = FromU64(tq)
-		// calculate remainder using trial quotient, then adjust if remainder is
-		// greater than divisor
-		// r = u.Sub(v.Mul64(tq))
-		// if r.Cmp(v) >= 0 {
-		// 	q = q.Add64(1)
-		// 	r = r.Sub(v)
-		// }
-
 		vq, err := v.Mul64(tq)
 		if err != nil {
 			return q, r, err
@@ -275,7 +240,7 @@ func (u bint) QuoRem64(v uint64) (q bint, r uint64) {
 
 // Lsh returns u<<n.
 func (u bint) Lsh(n uint) (s bint) {
-	if n > 64 {
+	if n >= 64 {
 		s.lo = 0
 		s.hi = u.lo << (n - 64)
 	} else {
@@ -287,7 +252,7 @@ func (u bint) Lsh(n uint) (s bint) {
 
 // Rsh returns u>>n.
 func (u bint) Rsh(n uint) (s bint) {
-	if n > 64 {
+	if n >= 64 {
 		s.lo = u.hi >> (n - 64)
 		s.hi = 0
 	} else {
@@ -295,24 +260,4 @@ func (u bint) Rsh(n uint) (s bint) {
 		s.hi = u.hi >> n
 	}
 	return
-}
-
-// String returns the base-10 representation of u as a string.
-func (u bint) String() string {
-	if u.IsZero() {
-		return "0"
-	}
-	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
-	for i := len(buf); ; i -= 19 {
-		q, r := u.QuoRem64(1e19) // largest power of 10 that fits in a uint64
-		var n int
-		for ; r != 0; r /= 10 {
-			n++
-			buf[i-n] += byte(r % 10)
-		}
-		if q.IsZero() {
-			return string(buf[i-n:])
-		}
-		u = q
-	}
 }

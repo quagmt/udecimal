@@ -55,13 +55,14 @@ var pow10 = [39]bint{
 // The number is represented as a coefficient and a scale.
 // Number = coef / 10^(scale)
 // For efficiency, both whole and fractional parts can only have 19 digits at most.
+// then, max coef = 10^38-1
 type Decimal struct {
 	coef  bint
 	neg   bool // true if number is negative
-	scale int8
+	scale uint8
 }
 
-func isOverflow(coef bint, scale int8) bool {
+func isOverflow(coef bint, scale uint8) bool {
 	// scale = frac digits
 	// whole part has at most 19 digits
 	// consider it's overflow when total digits > scale + 19 --> coef >= 10^(scale+19)
@@ -90,12 +91,12 @@ func Parse(s string) (Decimal, error) {
 	var (
 		err   error
 		coef  bint
-		scale int8
+		scale uint8
 	)
 
 	for ; pos < width; pos++ {
 		if s[pos] == '.' {
-			scale = int8(width - pos - 1)
+			scale = uint8(width - pos - 1)
 			continue
 		}
 
@@ -134,8 +135,8 @@ func (u Decimal) Div(v Decimal) (Decimal, error) {
 	// Need to multiply divident with factor
 	// to make sure the total decimal number after the decimal point is MaxScale
 	factor := MaxScale - (u.scale - v.scale)
-	divident := u.coef.MulPow10(int(factor))
-	quo, _, err := divident.QuoRem(v.coef)
+	divident := u.coef.MulPow10(factor)
+	quo, err := divident.Quo(v.coef)
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -143,10 +144,10 @@ func (u Decimal) Div(v Decimal) (Decimal, error) {
 	// rescale the fraction part by removing trailing zeros
 	trailingZeros := getTrailingZeros(quo)
 	if trailingZeros > 0 {
-		quo, _ = quo.QuoRem64(pow10[trailingZeros-1].lo)
+		quo, _ = quo.QuoRem64(pow10[trailingZeros].lo)
 	}
 
-	return Decimal{neg: neg, coef: quo, scale: int8(MaxScale - trailingZeros)}, nil
+	return Decimal{neg: neg, coef: quo, scale: uint8(MaxScale - trailingZeros)}, nil
 }
 
 func (u Decimal) String() string {
@@ -171,9 +172,14 @@ func (u Decimal) String() string {
 	}
 
 	qlo := quo.lo
-	for ; qlo != 0; qlo /= 10 {
+	if qlo != 0 {
+		for ; qlo != 0; qlo /= 10 {
+			n++
+			buf[i-n] += byte(qlo % 10)
+		}
+	} else {
+		// quo is zero, so we need to print at least one zero
 		n++
-		buf[i-n] += byte(qlo % 10)
 	}
 
 	if u.neg {
@@ -185,44 +191,36 @@ func (u Decimal) String() string {
 	return unsafe.String(unsafe.SliceData(p), len(p))
 }
 
-func getTrailingZeros(coef bint) int8 {
-	var z int8 = 0
+func getTrailingZeros(coef bint) uint8 {
+	var z uint8 = 0
+	if _, rem := coef.QuoRem64(1e16); rem == 0 {
+		z = 16
 
-	q, rem := coef.QuoRem64(pow10[16].lo)
-	if rem == 0 {
-		z += 16
-
-		// short path because max scale is 19
-		q, rem = q.QuoRem64(100)
-		if rem == 0 {
+		// short path because maxScale is only 19
+		if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
 			z += 2
 		}
 
-		q, rem = q.QuoRem64(10)
-		if rem == 0 {
+		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
 			z += 1
 		}
 
 		return z
 	}
 
-	q, rem = q.QuoRem64(pow10[8].lo)
-	if rem == 0 {
+	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
 		z += 8
 	}
 
-	q, rem = q.QuoRem64(10_000)
-	if rem == 0 {
+	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
 		z += 4
 	}
 
-	q, rem = q.QuoRem64(100)
-	if rem == 0 {
+	if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
 		z += 2
 	}
 
-	q, rem = coef.QuoRem64(10)
-	if rem == 0 {
+	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
 		z += 1
 	}
 
