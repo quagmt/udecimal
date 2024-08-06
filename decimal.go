@@ -2,6 +2,8 @@ package udecimal
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"unsafe"
 )
 
@@ -51,11 +53,25 @@ var pow10 = [39]bint{
 	{lo: 687_399_551_400_673_280, hi: 5_421_010_862_427_522_170}, // 10^38
 }
 
+var (
+	ErrOverflow     = fmt.Errorf("overflow")
+	ErrMaxScale     = fmt.Errorf("scale out of range. Max scale is %d", MaxScale)
+	ErrEmptyString  = fmt.Errorf("parse empty string")
+	ErrInvalidChar  = fmt.Errorf("invalid character")
+	ErrDivideByZero = fmt.Errorf("can't divide by zero")
+)
+
+var (
+	Zero = Decimal{}
+	One  = MustFromInt64(1, 0)
+)
+
 // Decimal represents a fixed-point decimal number.
 // The number is represented as a coefficient and a scale.
 // Number = coef / 10^(scale)
 // For efficiency, both whole and fractional parts can only have 19 digits at most.
-// then, max coef = 10^38-1
+// Hence, the decimal range is:
+// -9_999_999_999_999_999_999.9_999_999_999_999_999_999 <= D <= 9_999_999_999_999_999_999.9_999_999_999_999_999_999
 type Decimal struct {
 	coef  bint
 	neg   bool // true if number is negative
@@ -65,16 +81,73 @@ type Decimal struct {
 func isOverflow(coef bint, scale uint8) bool {
 	// scale = frac digits
 	// whole part has at most 19 digits
-	// consider it's overflow when total digits > scale + 19 --> coef >= 10^(scale+19)
+	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
 	return !coef.LessThan(pow10[scale+19])
 }
 
+func MustFromInt64(coef int64, scale uint8) Decimal {
+	d, err := NewFromInt64(coef, scale)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
+func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
+	var neg bool
+	if coef < 0 {
+		neg = true
+		coef = -coef
+	}
+
+	if scale > MaxScale {
+		return Decimal{}, ErrMaxScale
+	}
+
+	return Decimal{
+		coef:  bintFromHiLo(0, uint64(coef)),
+		neg:   neg,
+		scale: scale,
+	}, nil
+}
+
+func NewFromFloat64(f float64) (Decimal, error) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return Decimal{}, fmt.Errorf("invalid float value: %v", f)
+	}
+
+	s := strconv.FormatFloat(f, 'f', -1, 64)
+	d, err := Parse(s)
+	if err != nil {
+		return Decimal{}, fmt.Errorf("converting float: %w", err)
+	}
+
+	return d, nil
+}
+
+func MustFromFloat64(f float64) Decimal {
+	d, err := NewFromFloat64(f)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
+// TODO: improve with SIMD
+// Parse parses a number in string to Decimal.
+// The string must be in the format of: [+-]d{1,19}[.d{1,19}]
+// Returns error if:
+//
+//  1. empty/invalid string
+//  2. the number has whole or fraction part greater than 10^19-1
 func Parse(s string) (Decimal, error) {
 	var pos int
 	width := len(s)
 
 	if width == 0 {
-		return Decimal{}, fmt.Errorf("empty string")
+		return Decimal{}, ErrEmptyString
 	}
 
 	var neg bool
@@ -101,7 +174,8 @@ func Parse(s string) (Decimal, error) {
 		}
 
 		if s[pos] < '0' || s[pos] > '9' {
-			return Decimal{}, fmt.Errorf("invalid character: %c", s[pos])
+			// return Decimal{}, fmt.Errorf("invalid character: %c", s[pos])
+			return Decimal{}, fmt.Errorf("%w: %c", ErrInvalidChar, s[pos])
 		}
 
 		coef, err = coef.Mul64(10)
@@ -122,77 +196,222 @@ func Parse(s string) (Decimal, error) {
 	return Decimal{neg: neg, coef: coef, scale: scale}, nil
 }
 
-func (u Decimal) Div(v Decimal) (Decimal, error) {
-	var neg bool
-	if u.neg != v.neg {
-		neg = true
+// MustParse parses a number in string to Decimal
+// Panic on error
+func MustParse(s string) Decimal {
+	d, err := Parse(s)
+	if err != nil {
+		panic(err)
 	}
 
-	if v.coef.IsZero() {
-		return Decimal{}, fmt.Errorf("division by zero")
+	return d
+}
+
+// Add returns d + e
+// Returns overflow when:
+//
+//  1. either whole or fration part is greater than 10^19-1
+//  2. coef >= 2^128
+func (d Decimal) Add(e Decimal) (Decimal, error) {
+	dcoef, ecoef := d.coef, e.coef
+
+	var (
+		scale uint8
+		err   error
+	)
+	switch {
+	case d.scale == e.scale:
+		scale = d.scale
+	case d.scale > e.scale:
+		scale = d.scale
+		// can't overflow because scale is limited to 19
+		// and whole part also has at most 19 digits
+		// keep this check for safety, in case we change the limit in the future
+		ecoef, err = ecoef.Mul(pow10[d.scale-e.scale])
+		if err != nil {
+			return Decimal{}, err
+		}
+	case d.scale < e.scale:
+		scale = e.scale
+
+		dcoef, err = dcoef.Mul(pow10[e.scale-d.scale])
+		if err != nil {
+			return Decimal{}, err
+		}
 	}
 
-	// Need to multiply divident with factor
-	// to make sure the total decimal number after the decimal point is MaxScale
-	factor := MaxScale - (u.scale - v.scale)
-	divident := u.coef.MulPow10(factor)
-	quo, err := divident.Quo(v.coef)
+	if d.neg == e.neg {
+		// same sign
+		coef, err := dcoef.Add(ecoef)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		if isOverflow(coef, scale) {
+			return Decimal{}, ErrOverflow
+		}
+
+		return newWithRTZ(d.neg, coef, scale), nil
+	}
+
+	// different sign
+	switch dcoef.Cmp(ecoef) {
+	case 1:
+		// dcoef > ecoef, subtract can't overflow
+		coef, _ := dcoef.Sub(ecoef)
+		return newWithRTZ(d.neg, coef, scale), nil
+	default:
+		// dcoef <= ecoef
+		coef, _ := ecoef.Sub(dcoef)
+		return newWithRTZ(e.neg, coef, scale), nil
+	}
+}
+
+func (d Decimal) Add64(e uint64) (Decimal, error) {
+	if d.neg {
+		d.coef, _ = d.coef.Sub64(e)
+		return d, nil
+	}
+
+	dcoef, err := d.coef.Add64(e)
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	// rescale the fraction part by removing trailing zeros
-	trailingZeros := getTrailingZeros(quo)
-	if trailingZeros > 0 {
-		quo, _ = quo.QuoRem64(pow10[trailingZeros].lo)
-	}
-
-	return Decimal{neg: neg, coef: quo, scale: uint8(MaxScale - trailingZeros)}, nil
+	return Decimal{neg: false, coef: dcoef, scale: d.scale}, nil
 }
 
-func (u Decimal) String() string {
-	if u.coef.IsZero() {
-		return "0"
+func (d Decimal) Sub(e Decimal) (Decimal, error) {
+	dcoef, ecoef := d.coef, e.coef
+
+	var (
+		scale uint8
+		err   error
+	)
+
+	switch {
+	case d.scale == e.scale:
+		scale = d.scale
+	case d.scale > e.scale:
+		scale = d.scale
+
+		// can't overflow because scale is limited to 19
+		// and whole part also has at most 19 digits
+		// keep this check for safety, in case we change the limit in the future
+		ecoef, err = ecoef.Mul(pow10[d.scale-e.scale])
+		if err != nil {
+			return Decimal{}, err
+		}
+	case d.scale < e.scale:
+		scale = e.scale
+
+		dcoef, err = dcoef.Mul(pow10[e.scale-d.scale])
+		if err != nil {
+			return Decimal{}, err
+		}
 	}
 
-	quo, rem := u.coef.QuoRem64(pow10[u.scale].lo)
-	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
-
-	i := len(buf)
-	n := 0
-
-	if rem != 0 {
-		for ; rem != 0; rem /= 10 {
-			n++
-			buf[i-n] += byte(rem % 10)
+	if d.neg != e.neg {
+		// different sign
+		coef, err := dcoef.Add(ecoef)
+		if err != nil {
+			return Decimal{}, err
 		}
 
-		buf[i-1-int(u.scale)] = '.'
-		n = int(u.scale + 1)
-	}
-
-	qlo := quo.lo
-	if qlo != 0 {
-		for ; qlo != 0; qlo /= 10 {
-			n++
-			buf[i-n] += byte(qlo % 10)
+		if isOverflow(coef, scale) {
+			return Decimal{}, ErrOverflow
 		}
-	} else {
-		// quo is zero, so we need to print at least one zero
-		n++
+
+		return newWithRTZ(d.neg, coef, scale), nil
 	}
 
-	if u.neg {
-		n++
-		buf[i-n] = '-'
+	// same sign
+	switch dcoef.Cmp(ecoef) {
+	case 1:
+		// dcoef > ecoef, subtract can't overflow
+		coef, _ := dcoef.Sub(ecoef)
+		return newWithRTZ(d.neg, coef, scale), nil
+	default:
+		// dcoef <= ecoef
+		coef, _ := ecoef.Sub(dcoef)
+		return newWithRTZ(!d.neg, coef, scale), nil
+	}
+}
+
+func (d Decimal) Sub64(e Decimal) (Decimal, error) {
+	if !d.neg {
+		d.coef, _ = d.coef.Sub(e.coef)
+		return d, nil
 	}
 
-	p := buf[i-n:]
-	return unsafe.String(unsafe.SliceData(p), len(p))
+	coef, err := e.coef.Add(d.coef)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return Decimal{neg: true, coef: coef, scale: d.scale}, nil
+}
+
+func (d Decimal) Mul(e Decimal) (Decimal, error) {
+	return Decimal{}, nil
+}
+
+func (d Decimal) Mul64(v uint64) (Decimal, error) {
+	return Decimal{}, nil
+}
+
+func (d Decimal) Div(e Decimal) (Decimal, error) {
+	var neg bool
+	if d.neg != e.neg {
+		neg = true
+	}
+
+	if e.coef.IsZero() {
+		return Decimal{}, ErrDivideByZero
+	}
+
+	// Need to multiply divident with factor
+	// to make sure the total decimal number after the decimal point is MaxScale
+	factor := MaxScale - (d.scale - e.scale)
+
+	var (
+		quo bint
+		err error
+	)
+
+	d256 := d.coef.MulToU256(pow10[factor])
+	quo, err = d256.quo(e.coef)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newWithRTZ(neg, quo, MaxScale), nil
+}
+
+// newWithRTZ return the decimal after removing all trailing zeros
+func newWithRTZ(neg bool, coef bint, scale uint8) Decimal {
+	if scale == 0 {
+		return Decimal{neg: neg, coef: coef, scale: 0}
+	}
+
+	trailingZeros := getTrailingZeros(coef)
+	if trailingZeros > 0 {
+		coef, _ = coef.QuoRem64(pow10[trailingZeros].lo)
+	}
+
+	return Decimal{neg: neg, coef: coef, scale: scale - trailingZeros}
+}
+
+func (d Decimal) Div64(v uint64) (Decimal, error) {
+	return Decimal{}, nil
 }
 
 func getTrailingZeros(coef bint) uint8 {
-	var z uint8 = 0
+	var z uint8
+	if coef.hi == 0 {
+		return getTrailingZeros64(coef.lo)
+	}
+
 	if _, rem := coef.QuoRem64(1e16); rem == 0 {
 		z = 16
 
@@ -202,14 +421,14 @@ func getTrailingZeros(coef bint) uint8 {
 		}
 
 		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-			z += 1
+			z++
 		}
 
 		return z
 	}
 
 	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
-		z += 8
+		z = 8
 	}
 
 	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
@@ -221,8 +440,212 @@ func getTrailingZeros(coef bint) uint8 {
 	}
 
 	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-		z += 1
+		z++
 	}
 
 	return z
 }
+
+func getTrailingZeros64(u uint64) uint8 {
+	var z uint8
+	if r := u % 1e16; r == 0 {
+		z = 16
+
+		if r := u % pow10[z+2].lo; r == 0 {
+			z += 2
+		}
+
+		if r := u % pow10[z+1].lo; r == 0 {
+			z++
+		}
+
+		return z
+	}
+
+	if r := u % pow10[8].lo; r == 0 {
+		z = 8
+	}
+
+	if r := u % pow10[z+4].lo; r == 0 {
+		z += 4
+	}
+
+	if r := u % pow10[z+2].lo; r == 0 {
+		z += 2
+	}
+
+	if r := u % pow10[z+1].lo; r == 0 {
+		z++
+	}
+
+	return z
+}
+
+func (d Decimal) Scale() int {
+	return int(d.scale)
+}
+
+func (d Decimal) Cmp(e Decimal) int {
+	if d.neg && !e.neg {
+		return -1
+	}
+
+	if !d.neg && e.neg {
+		return 1
+	}
+
+	// d.neg = e.neg
+	if d.neg {
+		// both are negative, return the opposite
+		return -d.cmpDec(e)
+	}
+
+	return d.cmpDec(e)
+}
+
+func (d Decimal) cmpDec(e Decimal) int {
+	if d.scale == e.scale {
+		return d.coef.Cmp(e.coef)
+	}
+
+	// scale is different
+	if d.scale < e.scale {
+		// d has more fraction digits
+		d256 := d.coef.MulToU256(pow10[e.scale-d.scale])
+		return d256.Cmp128(e.coef)
+	}
+
+	// v has more fraction digits
+	v256 := e.coef.MulToU256(pow10[d.scale-e.scale])
+	return v256.Cmp128(d.coef)
+}
+
+func (d Decimal) Neg() Decimal {
+	return Decimal{neg: !d.neg, coef: d.coef, scale: d.scale}
+}
+
+func (d Decimal) Abs() Decimal {
+	return Decimal{neg: false, coef: d.coef, scale: d.scale}
+}
+
+// Sign returns:
+//
+//	-1 if d < 0
+//	 0 if d == 0
+//	+1 if d > 0
+func (d Decimal) Sign() int {
+	if d.neg {
+		return -1
+	}
+
+	if d.coef.IsZero() {
+		return 0
+	}
+
+	return 1
+}
+
+// IsZero returns
+//
+//	true if d == 0
+//	false if d != 0
+func (d Decimal) IsZero() bool {
+	return d.coef.IsZero()
+}
+
+// IsNeg returns
+//
+//	true if d < 0
+//	false if d >= 0
+func (d Decimal) IsNeg() bool {
+	return d.neg
+}
+
+// IsPos returns
+//
+//	true if d > 0
+//	false if d <= 0
+func (d Decimal) IsPos() bool {
+	return !d.neg && !d.coef.IsZero()
+}
+
+func (d Decimal) String() string {
+	if d.coef.IsZero() {
+		return "0"
+	}
+
+	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
+	n := d.writeToBytes(buf)
+
+	return unsafeBytesToString(buf[n:])
+}
+
+func (d Decimal) writeToBytes(b []byte) int {
+	if d.coef.IsZero() {
+		b[0] = '0'
+		return 1
+	}
+
+	quo, rem := d.coef.QuoRem64(pow10[d.scale].lo)
+	l := len(b)
+	n := 0
+
+	if rem != 0 {
+		for ; rem != 0; rem /= 10 {
+			n++
+			b[l-n] += byte(rem % 10)
+		}
+
+		b[l-1-int(d.scale)] = '.'
+		n = int(d.scale + 1)
+	}
+
+	qlo := quo.lo
+	if qlo != 0 {
+		for ; qlo != 0; qlo /= 10 {
+			n++
+			b[l-n] += byte(qlo % 10)
+		}
+	} else {
+		// quo is zero, so we need to print at least one zero
+		n++
+	}
+
+	if d.neg {
+		n++
+		b[l-n] = '-'
+	}
+
+	return l - n
+}
+
+func (d Decimal) Scan(value interface{}) error {
+	return nil
+}
+
+func (d Decimal) MarshalText() ([]byte, error) {
+	buf := []byte("0000000000000000000000000000000000000000")
+	n := d.writeToBytes(buf)
+	return buf[n:], nil
+}
+
+func (d Decimal) UnmarshalText(text []byte) error {
+
+	return nil
+}
+
+func unsafeBytesToString(b []byte) string {
+	// Ignore if your IDE shows an error here; it's a false positive.
+	p := unsafe.SliceData(b)
+	return unsafe.String(p, len(b))
+}
+
+// func unsafeStringToBytes(s string) []byte {
+// 	// unsafe.StringData output is unspecified for empty string input so always
+// 	// return nil.
+// 	if len(s) == 0 {
+// 		return nil
+// 	}
+
+// 	return unsafe.Slice(unsafe.StringData(s), len(s))
+// }

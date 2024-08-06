@@ -1,7 +1,9 @@
 package udecimal
 
 import (
+	"fmt"
 	"math/bits"
+	"strconv"
 )
 
 // U256 represents a 256-bits unsigned integer
@@ -15,26 +17,48 @@ type U256 struct {
 }
 
 // for debugging
-// func (u U256) PrintBit() string {
-// 	b1 := strconv.FormatUint(u.carry.hi, 2)
-// 	b2 := strconv.FormatUint(u.carry.lo, 2)
-// 	b3 := strconv.FormatUint(u.hi, 2)
-// 	b4 := strconv.FormatUint(u.lo, 2)
+func (u U256) PrintBit() string {
+	b1 := strconv.FormatUint(u.carry.hi, 2)
+	b2 := strconv.FormatUint(u.carry.lo, 2)
+	b3 := strconv.FormatUint(u.hi, 2)
+	b4 := strconv.FormatUint(u.lo, 2)
 
-// 	return fmt.Sprintf("%s.%s.%s.%s", apz(b1), apz(b2), apz(b3), apz(b4))
-// }
+	return fmt.Sprintf("%s.%s.%s.%s", apz(b1), apz(b2), apz(b3), apz(b4))
+}
 
-// func apz(s string) string {
-// 	l := len(s)
+func apz(s string) string {
+	for range 64 - len(s) {
+		s = "0" + s
+	}
 
-// 	n := 64 - l
+	return s
+}
 
-// 	for range n {
-// 		s = "0" + s
-// 	}
+// Compare 2 U256, returns:
+//
+//	+1 when u > v
+//	 0 when u = v
+//	-1 when u < v
+func (u U256) Cmp(v U256) int {
+	if k := u.carry.Cmp(v.carry); k != 0 {
+		return k
+	}
 
-// 	return s
-// }
+	return bintFromHiLo(u.hi, u.lo).Cmp(bintFromHiLo(v.hi, v.lo))
+}
+
+// Compare U256 and U128, returns:
+//
+//	+1 when u > v
+//	 0 when u = v
+//	-1 when u < v
+func (u U256) Cmp128(v bint) int {
+	if !u.carry.IsZero() {
+		return 1
+	}
+
+	return bintFromHiLo(u.hi, u.lo).Cmp(v)
+}
 
 func (u U256) Sub(v U256) (U256, error) {
 	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
@@ -53,39 +77,12 @@ func (u U256) Sub(v U256) (U256, error) {
 	return U256{lo: lo, hi: hi, carry: c1}, nil
 }
 
-func (u U256) Sub128(v bint) (U256, error) {
-	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
-	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
-
-	c1, err := u.carry.Sub64(borrow)
-	if err != nil {
-		return U256{}, err
-	}
-
-	return U256{lo: lo, hi: hi, carry: c1}, nil
-
-}
-
-// compare against bint
-//
-//	+1 when u > v
-//	 0 when u = v
-//	-1 when u < v
-func (u U256) CmpBint(v bint) int {
-	if !u.carry.IsZero() {
-		return 1
-	}
-
-	b := bint{hi: u.hi, lo: u.lo}
-	return b.Cmp(v)
-}
-
 func (u U256) Lsh(n uint) (v U256) {
 	switch {
 	case n < 64:
 		v.carry = u.carry.Lsh(n)
 		v.carry.lo = v.carry.lo | u.hi>>(64-n)
-		c := bint{hi: u.hi, lo: u.lo}.Lsh(n)
+		c := bintFromHiLo(u.hi, u.lo).Lsh(n)
 		v.hi = c.hi
 		v.lo = c.lo
 
@@ -97,7 +94,7 @@ func (u U256) Lsh(n uint) (v U256) {
 
 	case n >= 128:
 		v.lo, v.hi = 0, 0
-		v.carry = bint{hi: u.hi, lo: u.lo}.Lsh(n - 128)
+		v.carry = bintFromHiLo(u.hi, u.lo).Lsh(n - 128)
 
 	default:
 		// n < 0, can't happen
@@ -132,15 +129,14 @@ func (u U256) Rsh(n uint) (v U256) {
 }
 
 // Quo only returns quotient of u/v
-func (u U256) Quo(v bint) (bint, error) {
+func (u U256) quo(v bint) (bint, error) {
 	if u.carry.IsZero() {
-		b := bint{hi: u.hi, lo: u.lo}
-		q, _, err := b.QuoRem(v)
+		q, _, err := bintFromHiLo(u.hi, u.lo).QuoRem(v)
 		return q, err
 	}
 
 	if v.hi == 0 {
-		q, _, err := u.QuoRem64(v.lo)
+		q, _, err := u.quoRem64(v.lo)
 		return q, err
 	}
 
@@ -150,35 +146,49 @@ func (u U256) Quo(v bint) (bint, error) {
 		return bint{}, ErrOverflow
 	}
 
-	// 0 <= n <= 63
+	// 1 <= n <= 63 (as bint < 10^38)
 	n := uint(bits.LeadingZeros64(v.hi))
 	v1 := v.Lsh(n)
-	u1 := u.Lsh(n).Rsh(64)
+	u1 := u.Rsh(64 - n)
 
-	// let q, r are final quotient and remainder
-	// calculate 'trial quotient' tq: tq < u/v + 2^64 --> tq < q + 2^64
+	// let q are final quotient and remainder
+	// calculate 'trial quotient' tq (q <= tq < q + 2^64)
 	// let tq = q + k --> k < 2^64
-	tq, _, err := u1.QuoRem64(v1.hi)
+	tq, _, err := u1.quoRem64(v1.hi)
 	if err != nil {
 		return bint{}, err
 	}
 
 	vq := v.MulToU256(tq)
 
-	// vqu = (q+k)*v - (q*v + r) = k*v - r
-	// k*v < 2^128 --> vqu < 2^128 and can be represented in a bint (no overflow)
+	// Some pre-conditions:
+	// We only allow bint to have 38-digits max, then:
+	// max(u) = (10^38-1) * 10^19 = 10^58 - 10^19 < 2^190 --> u < 2^190
+	//
+	// max(v*k) = u * [2^(64-n) - 1]/2^(127-n) (with n is v's leading zeros, 1 <= n <= 63)
+	// --> max(v*k) = u / 2^63 < 2^190 / 2^63
+	// --> v*k < 2^127
+
+	// vqu = vq - u = (q+k)*v - (q*v + r) = k*v - r
+	// with v*k < 2^127 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
+
+	if vq.Cmp(u) <= 0 {
+		// vq <= u means tq = q
+		return tq, nil
+	}
+
 	vqu, err := vq.Sub(u)
 	if err != nil {
 		return bint{}, err
 	}
 
-	// techically this can't happen, just put it here to do fuzz test
+	// techically this can't happen, just put it here to do fuzz test and cross-check with other libs
 	if vqu.carry.hi&vqu.carry.lo != 0 {
 		return bint{}, ErrOverflow
 	}
 
 	// k1 = k - 1
-	k1, _, err := bint{hi: vqu.hi, lo: vqu.lo}.QuoRem(v)
+	k1, _, err := bintFromHiLo(vqu.hi, vqu.lo).QuoRem(v)
 	if err != nil {
 		return bint{}, err
 	}
@@ -194,7 +204,7 @@ func (u U256) Quo(v bint) (bint, error) {
 		return bint{}, err
 	}
 
-	// we don't really care abount the remainder, might uncomment later if needed
+	// we don't really care abount the remainder, might un-comment later if needed
 	// r, err := v.Sub(r1)
 	// if err != nil {
 	// 	return bint{}, bint{}, err
@@ -203,21 +213,25 @@ func (u U256) Quo(v bint) (bint, error) {
 	return tq, nil
 }
 
-func (u U256) QuoRem64(v uint64) (q bint, r bint, err error) {
+func (u U256) quoRem64(v uint64) (q bint, r uint64, err error) {
 	// obvious case that the result won't fit in 128-bits number
 	if u.carry.hi != 0 {
 		err = ErrOverflow
 		return
 	}
 
-	b := bint{hi: u.carry.lo, lo: u.hi}
-	quo, rem := b.QuoRem64(v)
+	if u.carry.lo == 0 {
+		q, r = bintFromHiLo(u.hi, u.lo).QuoRem64(v)
+		return
+	}
+
+	quo, rem := bintFromHiLo(u.carry.lo, u.hi).QuoRem64(v)
 	if quo.hi != 0 {
 		err = ErrOverflow
 		return
 	}
 
 	q.hi = quo.lo
-	q.lo, r.lo = bits.Div64(rem, u.lo, v)
+	q.lo, r = bits.Div64(rem, u.lo, v)
 	return
 }

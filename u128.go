@@ -1,12 +1,7 @@
 package udecimal
 
 import (
-	"fmt"
 	"math/bits"
-)
-
-var (
-	ErrOverflow = fmt.Errorf("overflow")
 )
 
 // bint (big unsigned-integer) is a 128-bits unsigned integer
@@ -17,11 +12,11 @@ type bint struct {
 	lo uint64
 }
 
-func (b bint) IsZero() bool {
-	return b == bint{}
+func (u bint) IsZero() bool {
+	return u == bint{}
 }
 
-// Cmp compares u, v and retuns:
+// Cmp compares u, v and returns:
 //
 //	-1 if u < v
 //	0 if u == v
@@ -142,14 +137,7 @@ func (u bint) Mul(v bint) (bint, error) {
 	return bint{hi: hi, lo: lo}, nil
 }
 
-// MulPow10 is similar to Mul. However it doesn't return error
-// but 256-bits unsigned integer instead. The carry will be stored to U256.carry
-func (u bint) MulPow10(pow uint8) U256 {
-	return u.MulToU256(pow10[pow])
-}
-
 func (u bint) MulToU256(v bint) U256 {
-	// TODO: can speed up with SIMD
 	hi, lo := bits.Mul64(u.lo, v.lo)
 	p0, p1 := bits.Mul64(u.hi, v.lo)
 	p2, p3 := bits.Mul64(u.lo, v.hi)
@@ -161,7 +149,6 @@ func (u bint) MulToU256(v bint) U256 {
 	c1 += c0
 
 	// calculate upper part of U256
-	// TODO: can speed up with SIMD
 	e0, e1 := bits.Mul64(u.hi, v.hi)
 	d, d0 := bits.Add64(p0, p2, 0)
 	d, d1 := bits.Add64(d, c1, 0)
@@ -179,8 +166,12 @@ func (u bint) MulToU256(v bint) U256 {
 	}
 }
 
-func FromU64(v uint64) bint {
+func bintFromU64(v uint64) bint {
 	return bint{lo: v}
+}
+
+func bintFromHiLo(hi, lo uint64) bint {
+	return bint{hi: hi, lo: lo}
 }
 
 // QuoRem returns q = u/v and r = u%v.
@@ -188,7 +179,7 @@ func (u bint) QuoRem(v bint) (q, r bint, err error) {
 	if v.hi == 0 {
 		var r64 uint64
 		q, r64 = u.QuoRem64(v.lo)
-		r = FromU64(r64)
+		r = bintFromU64(r64)
 	} else {
 		// generate a "trial quotient," guaranteed to be within 1 of the actual
 		// quotient, then adjust.
@@ -201,7 +192,7 @@ func (u bint) QuoRem(v bint) (q, r bint, err error) {
 			tq--
 		}
 
-		q = FromU64(tq)
+		q = bintFromU64(tq)
 		vq, err := v.Mul64(tq)
 		if err != nil {
 			return q, r, err
