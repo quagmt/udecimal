@@ -78,11 +78,12 @@ type Decimal struct {
 	scale uint8
 }
 
+// isOverflow return true if the whole or fraction part has more than 19 digits
 func isOverflow(coef bint, scale uint8) bool {
 	// scale = frac digits
 	// whole part has at most 19 digits
 	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
-	return !coef.LessThan(pow10[scale+19])
+	return !coef.LessThan(pow10[scale+MaxScale])
 }
 
 func MustFromInt64(coef int64, scale uint8) Decimal {
@@ -208,7 +209,7 @@ func MustParse(s string) Decimal {
 }
 
 // Add returns d + e
-// Returns overflow when:
+// Returns overflow error when:
 //
 //  1. either whole or fration part is greater than 10^19-1
 //  2. coef >= 2^128
@@ -251,7 +252,7 @@ func (d Decimal) Add(e Decimal) (Decimal, error) {
 			return Decimal{}, ErrOverflow
 		}
 
-		return newWithRTZ(d.neg, coef, scale), nil
+		return newWithRTZ(d.neg, coef, scale)
 	}
 
 	// different sign
@@ -259,14 +260,19 @@ func (d Decimal) Add(e Decimal) (Decimal, error) {
 	case 1:
 		// dcoef > ecoef, subtract can't overflow
 		coef, _ := dcoef.Sub(ecoef)
-		return newWithRTZ(d.neg, coef, scale), nil
+		return newWithRTZ(d.neg, coef, scale)
 	default:
 		// dcoef <= ecoef
 		coef, _ := ecoef.Sub(dcoef)
-		return newWithRTZ(e.neg, coef, scale), nil
+		return newWithRTZ(e.neg, coef, scale)
 	}
 }
 
+// Add64 returns d + e where e is a uint64
+// Returns overflow error when:
+//
+//  1. either whole or fration part is greater than 10^19-1
+//  2. coef >= 2^128
 func (d Decimal) Add64(e uint64) (Decimal, error) {
 	if d.neg {
 		d.coef, _ = d.coef.Sub64(e)
@@ -281,6 +287,11 @@ func (d Decimal) Add64(e uint64) (Decimal, error) {
 	return Decimal{neg: false, coef: dcoef, scale: d.scale}, nil
 }
 
+// Sub returns d - e
+// Returns overflow error when:
+//
+//  1. either whole or fration part is greater than 10^19-1
+//  2. coef >= 2^128
 func (d Decimal) Sub(e Decimal) (Decimal, error) {
 	dcoef, ecoef := d.coef, e.coef
 
@@ -322,7 +333,7 @@ func (d Decimal) Sub(e Decimal) (Decimal, error) {
 			return Decimal{}, ErrOverflow
 		}
 
-		return newWithRTZ(d.neg, coef, scale), nil
+		return newWithRTZ(d.neg, coef, scale)
 	}
 
 	// same sign
@@ -330,14 +341,19 @@ func (d Decimal) Sub(e Decimal) (Decimal, error) {
 	case 1:
 		// dcoef > ecoef, subtract can't overflow
 		coef, _ := dcoef.Sub(ecoef)
-		return newWithRTZ(d.neg, coef, scale), nil
+		return newWithRTZ(d.neg, coef, scale)
 	default:
 		// dcoef <= ecoef
 		coef, _ := ecoef.Sub(dcoef)
-		return newWithRTZ(!d.neg, coef, scale), nil
+		return newWithRTZ(!d.neg, coef, scale)
 	}
 }
 
+// Sub64 returns d - e where e is a uint64
+// Returns overflow error when:
+//
+//  1. either whole or fration part is greater than 10^19-1
+//  2. coef >= 2^128
 func (d Decimal) Sub64(e Decimal) (Decimal, error) {
 	if !d.neg {
 		d.coef, _ = d.coef.Sub(e.coef)
@@ -349,49 +365,109 @@ func (d Decimal) Sub64(e Decimal) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	return Decimal{neg: true, coef: coef, scale: d.scale}, nil
+	return newWithRTZ(true, coef, d.scale)
 }
 
+// Mul returns d * e
+// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// Returns overflow error when:
+//
+//  1. either whole or fration part is greater than 10^19-1
+//  2. coef >= 2^128
 func (d Decimal) Mul(e Decimal) (Decimal, error) {
-	return Decimal{}, nil
-}
-
-func (d Decimal) Mul64(v uint64) (Decimal, error) {
-	return Decimal{}, nil
-}
-
-func (d Decimal) Div(e Decimal) (Decimal, error) {
-	var neg bool
-	if d.neg != e.neg {
-		neg = true
+	if e.coef.IsZero() {
+		return Decimal{}, nil
 	}
 
+	scale := d.scale + e.scale
+	neg := d.neg != e.neg
+	coef := d.coef.MulToU256(e.coef)
+
+	if scale <= MaxScale {
+		if coef.Cmp128(pow10[scale+MaxScale]) >= 0 {
+			return Decimal{}, ErrOverflow
+		}
+
+		return newWithRTZ(neg, bintFromHiLo(coef.hi, coef.lo), scale)
+	}
+
+	rcoef, err := coef.quo(pow10[scale-MaxScale])
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newWithRTZ(neg, rcoef, MaxScale)
+}
+
+// Mul64 returns d * e where e is a uint64
+// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// Returns overflow error when:
+//
+//  1. either whole or fration part is greater than 10^19-1
+//  2. coef >= 2^128
+func (d Decimal) Mul64(v uint64) (Decimal, error) {
+	if v == 0 {
+		return Decimal{}, nil
+	}
+
+	if v == 1 {
+		return d, nil
+	}
+
+	coef, err := d.coef.Mul64(v)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newWithRTZ(d.neg, coef, d.scale)
+}
+
+// Div returns d / e
+// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// Returns overflow error when:
+//
+// 1. either whole or fration part is greater than 10^19-1
+// 2. coef >= 2^128
+//
+// Returns divide by zero error when e is zero
+func (d Decimal) Div(e Decimal) (Decimal, error) {
 	if e.coef.IsZero() {
 		return Decimal{}, ErrDivideByZero
 	}
+
+	neg := d.neg != e.neg
 
 	// Need to multiply divident with factor
 	// to make sure the total decimal number after the decimal point is MaxScale
 	factor := MaxScale - (d.scale - e.scale)
 
-	var (
-		quo bint
-		err error
-	)
-
 	d256 := d.coef.MulToU256(pow10[factor])
-	quo, err = d256.quo(e.coef)
+	quo, err := d256.quo(e.coef)
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return newWithRTZ(neg, quo, MaxScale), nil
+	return newWithRTZ(neg, quo, MaxScale)
+}
+
+func (d Decimal) Div64(v uint64) (Decimal, error) {
+	if v == 0 {
+		return Decimal{}, ErrDivideByZero
+	}
+
+	d256 := d.coef.MulToU256(pow10[MaxScale])
+	quo, _, err := d256.quoRem64ToBint(v)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newWithRTZ(d.neg, quo, MaxScale)
 }
 
 // newWithRTZ return the decimal after removing all trailing zeros
-func newWithRTZ(neg bool, coef bint, scale uint8) Decimal {
+func newWithRTZ(neg bool, coef bint, scale uint8) (Decimal, error) {
 	if scale == 0 {
-		return Decimal{neg: neg, coef: coef, scale: 0}
+		return Decimal{neg: neg, coef: coef, scale: 0}, nil
 	}
 
 	trailingZeros := getTrailingZeros(coef)
@@ -399,86 +475,13 @@ func newWithRTZ(neg bool, coef bint, scale uint8) Decimal {
 		coef, _ = coef.QuoRem64(pow10[trailingZeros].lo)
 	}
 
-	return Decimal{neg: neg, coef: coef, scale: scale - trailingZeros}
-}
+	rescale := scale - trailingZeros
 
-func (d Decimal) Div64(v uint64) (Decimal, error) {
-	return Decimal{}, nil
-}
-
-func getTrailingZeros(coef bint) uint8 {
-	var z uint8
-	if coef.hi == 0 {
-		return getTrailingZeros64(coef.lo)
+	if isOverflow(coef, rescale) {
+		return Decimal{}, ErrOverflow
 	}
 
-	if _, rem := coef.QuoRem64(1e16); rem == 0 {
-		z = 16
-
-		// short path because maxScale is only 19
-		if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
-			z += 2
-		}
-
-		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-			z++
-		}
-
-		return z
-	}
-
-	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
-		z = 8
-	}
-
-	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
-		z += 4
-	}
-
-	if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
-		z += 2
-	}
-
-	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-		z++
-	}
-
-	return z
-}
-
-func getTrailingZeros64(u uint64) uint8 {
-	var z uint8
-	if r := u % 1e16; r == 0 {
-		z = 16
-
-		if r := u % pow10[z+2].lo; r == 0 {
-			z += 2
-		}
-
-		if r := u % pow10[z+1].lo; r == 0 {
-			z++
-		}
-
-		return z
-	}
-
-	if r := u % pow10[8].lo; r == 0 {
-		z = 8
-	}
-
-	if r := u % pow10[z+4].lo; r == 0 {
-		z += 4
-	}
-
-	if r := u % pow10[z+2].lo; r == 0 {
-		z += 2
-	}
-
-	if r := u % pow10[z+1].lo; r == 0 {
-		z++
-	}
-
-	return z
+	return Decimal{neg: neg, coef: coef, scale: rescale}, nil
 }
 
 func (d Decimal) Scale() int {

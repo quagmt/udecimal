@@ -39,7 +39,7 @@ func apz(s string) string {
 //	+1 when u > v
 //	 0 when u = v
 //	-1 when u < v
-func (u U256) Cmp(v U256) int {
+func (u U256) cmp(v U256) int {
 	if k := u.carry.Cmp(v.carry); k != 0 {
 		return k
 	}
@@ -136,12 +136,12 @@ func (u U256) quo(v bint) (bint, error) {
 	}
 
 	if v.hi == 0 {
-		q, _, err := u.quoRem64(v.lo)
+		q, _, err := u.quoRem64ToBint(v.lo)
 		return q, err
 	}
 
-	// if u >= 2^192, the quotient won't fit in 128-bits number (overflow)
-	// put in both here and inside QuoRem64, in case we call QuoRem64 directly
+	// if u >= 2^192, the quotient won't fit in 128-bits number (overflow).
+	// Put in both here and inside QuoRem64, in case we call QuoRem64 directly
 	if u.carry.hi != 0 {
 		return bint{}, ErrOverflow
 	}
@@ -151,10 +151,9 @@ func (u U256) quo(v bint) (bint, error) {
 	v1 := v.Lsh(n)
 	u1 := u.Rsh(64 - n)
 
-	// let q are final quotient and remainder
+	// let q are final quotient and remainder and tq = q + k (k >= 0)
 	// calculate 'trial quotient' tq (q <= tq < q + 2^64)
-	// let tq = q + k --> k < 2^64
-	tq, _, err := u1.quoRem64(v1.hi)
+	tq, _, err := u1.quoRem64ToBint(v1.hi)
 	if err != nil {
 		return bint{}, err
 	}
@@ -172,7 +171,7 @@ func (u U256) quo(v bint) (bint, error) {
 	// vqu = vq - u = (q+k)*v - (q*v + r) = k*v - r
 	// with v*k < 2^127 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
 
-	if vq.Cmp(u) <= 0 {
+	if vq.cmp(u) <= 0 {
 		// vq <= u means tq = q
 		return tq, nil
 	}
@@ -213,7 +212,12 @@ func (u U256) quo(v bint) (bint, error) {
 	return tq, nil
 }
 
-func (u U256) quoRem64(v uint64) (q bint, r uint64, err error) {
+// quoRem64ToBint return q,r which:
+//
+//	q must be a bint
+//	u = q*v + r
+//	Return overflow if the result q doesn't fit in a bint
+func (u U256) quoRem64ToBint(v uint64) (q bint, r uint64, err error) {
 	// obvious case that the result won't fit in 128-bits number
 	if u.carry.hi != 0 {
 		err = ErrOverflow
@@ -234,4 +238,8 @@ func (u U256) quoRem64(v uint64) (q bint, r uint64, err error) {
 	q.hi = quo.lo
 	q.lo, r = bits.Div64(rem, u.lo, v)
 	return
+}
+
+func (u U256) trailingZeros() int {
+	return 0
 }

@@ -3,3 +3,6 @@ bench:
  
 lint:
 	golangci-lint run ./... -v
+
+test:
+	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...

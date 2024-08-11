@@ -241,6 +241,25 @@ func (u bint) Lsh(n uint) (s bint) {
 	return
 }
 
+func (u bint) String() string {
+	if u.IsZero() {
+		return "0"
+	}
+	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
+	for i := len(buf); ; i -= 19 {
+		q, r := u.QuoRem64(1e19) // largest power of 10 that fits in a uint64
+		var n int
+		for ; r != 0; r /= 10 {
+			n++
+			buf[i-n] += byte(r % 10)
+		}
+		if q.IsZero() {
+			return string(buf[i-n:])
+		}
+		u = q
+	}
+}
+
 // Rsh returns u>>n.
 func (u bint) Rsh(n uint) (s bint) {
 	if n >= 64 {
@@ -251,4 +270,79 @@ func (u bint) Rsh(n uint) (s bint) {
 		s.hi = u.hi >> n
 	}
 	return
+}
+
+func getTrailingZeros(coef bint) uint8 {
+	var z uint8
+	if coef.hi == 0 {
+		return getTrailingZeros64(coef.lo)
+	}
+
+	if _, rem := coef.QuoRem64(1e16); rem == 0 {
+		z = 16
+
+		// short path because maxScale is only 19
+		if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
+			z += 2
+		}
+
+		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
+			z++
+		}
+
+		return z
+	}
+
+	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
+		z = 8
+	}
+
+	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
+		z += 4
+	}
+
+	if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
+		z += 2
+	}
+
+	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
+		z++
+	}
+
+	return z
+}
+
+func getTrailingZeros64(u uint64) uint8 {
+	var z uint8
+	if r := u % 1e16; r == 0 {
+		z = 16
+
+		if r := u % pow10[z+2].lo; r == 0 {
+			z += 2
+		}
+
+		if r := u % pow10[z+1].lo; r == 0 {
+			z++
+		}
+
+		return z
+	}
+
+	if r := u % pow10[8].lo; r == 0 {
+		z = 8
+	}
+
+	if r := u % pow10[z+4].lo; r == 0 {
+		z += 4
+	}
+
+	if r := u % pow10[z+2].lo; r == 0 {
+		z += 2
+	}
+
+	if r := u % pow10[z+1].lo; r == 0 {
+		z++
+	}
+
+	return z
 }
