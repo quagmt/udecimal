@@ -54,11 +54,11 @@ var pow10 = [39]bint{
 }
 
 var (
-	ErrOverflow     = fmt.Errorf("overflow")
-	ErrMaxScale     = fmt.Errorf("scale out of range. Max scale is %d", MaxScale)
-	ErrEmptyString  = fmt.Errorf("parse empty string")
-	ErrInvalidChar  = fmt.Errorf("invalid character")
-	ErrDivideByZero = fmt.Errorf("can't divide by zero")
+	ErrOverflow      = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
+	ErrMaxScale      = fmt.Errorf("scale out of range. Max digits after decimal point is %d", MaxScale)
+	ErrEmptyString   = fmt.Errorf("parse empty string")
+	ErrInvalidFormat = fmt.Errorf("invalid string format")
+	ErrDivideByZero  = fmt.Errorf("can't divide by zero")
 )
 
 var (
@@ -139,20 +139,32 @@ func MustFromFloat64(f float64) Decimal {
 // TODO: improve with SIMD
 // Parse parses a number in string to Decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
+// e.g. "123", "-123", "123.456", "-123.456", "+123.456", "0.123"
 // Returns error if:
 //
 //  1. empty/invalid string
 //  2. the number has whole or fraction part greater than 10^19-1
 func Parse(s string) (Decimal, error) {
-	var pos int
+	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to decimal", ErrInvalidFormat, s)
 	width := len(s)
 
 	if width == 0 {
 		return Decimal{}, ErrEmptyString
 	}
 
-	var neg bool
+	// max width = 1 + 19 + 1 + 19 = 40 (sign + whole + dot + fraction)
+	if width > 40 {
+		return Decimal{}, fmt.Errorf("%w: overflow. string length is greater than 40", ErrInvalidFormat)
+	}
+
+	var (
+		pos int
+		neg bool
+	)
+
 	switch s[0] {
+	case '.':
+		return Decimal{}, errInvalidFormat
 	case '-':
 		neg = true
 		pos++
@@ -162,21 +174,44 @@ func Parse(s string) (Decimal, error) {
 		// do nothing
 	}
 
+	// prevent "+" or "-"
+	if pos == width {
+		return Decimal{}, errInvalidFormat
+	}
+
+	// prevent "-.123" or "+.123"
+	if s[pos] == '.' {
+		return Decimal{}, errInvalidFormat
+	}
+
 	var (
 		err   error
 		coef  bint
 		scale uint8
 	)
-
 	for ; pos < width; pos++ {
 		if s[pos] == '.' {
+			// return err if we encounter the '.' more than once
+			if scale != 0 {
+				return Decimal{}, errInvalidFormat
+			}
+
 			scale = uint8(width - pos - 1)
+
+			// prevent "123." or "-123."
+			if scale == 0 {
+				return Decimal{}, errInvalidFormat
+			}
+
+			if scale > MaxScale {
+				return Decimal{}, ErrMaxScale
+			}
+
 			continue
 		}
 
 		if s[pos] < '0' || s[pos] > '9' {
-			// return Decimal{}, fmt.Errorf("invalid character: %c", s[pos])
-			return Decimal{}, fmt.Errorf("%w: %c", ErrInvalidChar, s[pos])
+			return Decimal{}, errInvalidFormat
 		}
 
 		coef, err = coef.Mul64(10)
@@ -194,7 +229,7 @@ func Parse(s string) (Decimal, error) {
 		return Decimal{}, ErrOverflow
 	}
 
-	return Decimal{neg: neg, coef: coef, scale: scale}, nil
+	return newWithRTZ(neg, coef, scale)
 }
 
 // MustParse parses a number in string to Decimal
@@ -274,17 +309,38 @@ func (d Decimal) Add(e Decimal) (Decimal, error) {
 //  1. either whole or fration part is greater than 10^19-1
 //  2. coef >= 2^128
 func (d Decimal) Add64(e uint64) (Decimal, error) {
-	if d.neg {
-		d.coef, _ = d.coef.Sub64(e)
-		return d, nil
-	}
-
-	dcoef, err := d.coef.Add64(e)
+	ecoef, err := bintFromHiLo(0, e).Mul(pow10[d.scale])
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return Decimal{neg: false, coef: dcoef, scale: d.scale}, nil
+	if d.neg {
+		var (
+			dcoef bint
+			neg   bool
+		)
+
+		if d.coef.GreaterThan(ecoef) {
+			dcoef, err = d.coef.Sub(ecoef)
+			neg = true
+		} else {
+			dcoef, err = ecoef.Sub(d.coef)
+			neg = false
+		}
+
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		return newWithRTZ(neg, dcoef, d.scale)
+	}
+
+	dcoef, err := d.coef.Add(ecoef)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newWithRTZ(false, dcoef, d.scale)
 }
 
 // Sub returns d - e
@@ -620,21 +676,6 @@ func (d Decimal) writeToBytes(b []byte) int {
 	}
 
 	return l - n
-}
-
-func (d Decimal) Scan(value interface{}) error {
-	return nil
-}
-
-func (d Decimal) MarshalText() ([]byte, error) {
-	buf := []byte("0000000000000000000000000000000000000000")
-	n := d.writeToBytes(buf)
-	return buf[n:], nil
-}
-
-func (d Decimal) UnmarshalText(text []byte) error {
-
-	return nil
 }
 
 func unsafeBytesToString(b []byte) string {

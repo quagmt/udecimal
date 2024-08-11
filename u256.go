@@ -239,7 +239,3 @@ func (u U256) quoRem64ToBint(v uint64) (q bint, r uint64, err error) {
 	q.lo, r = bits.Div64(rem, u.lo, v)
 	return
 }
-
-func (u U256) trailingZeros() int {
-	return 0
-}
