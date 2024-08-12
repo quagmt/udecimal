@@ -57,7 +57,7 @@ var (
 	ErrOverflow      = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
 	ErrMaxScale      = fmt.Errorf("scale out of range. Max digits after decimal point is %d", MaxScale)
 	ErrEmptyString   = fmt.Errorf("parse empty string")
-	ErrInvalidFormat = fmt.Errorf("invalid string format")
+	ErrInvalidFormat = fmt.Errorf("invalid format")
 	ErrDivideByZero  = fmt.Errorf("can't divide by zero")
 )
 
@@ -86,15 +86,8 @@ func isOverflow(coef bint, scale uint8) bool {
 	return !coef.LessThan(pow10[scale+MaxScale])
 }
 
-func MustFromInt64(coef int64, scale uint8) Decimal {
-	d, err := NewFromInt64(coef, scale)
-	if err != nil {
-		panic(err)
-	}
-
-	return d
-}
-
+// NewFromInt64 returns a decimal which equals to coef / 10^scale
+// Trailing zeros wll be removed and the scale will also be adjusted
 func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 	var neg bool
 	if coef < 0 {
@@ -106,22 +99,36 @@ func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 		return Decimal{}, ErrMaxScale
 	}
 
-	return Decimal{
-		coef:  bintFromHiLo(0, uint64(coef)),
-		neg:   neg,
-		scale: scale,
-	}, nil
+	return newWithRTZ(neg, bintFromHiLo(0, uint64(coef)), scale)
 }
 
+// MustFromInt64 similars to NewFromInt64, but panics instead of returning error
+func MustFromInt64(coef int64, scale uint8) Decimal {
+	d, err := NewFromInt64(coef, scale)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
+// NewFromFloat64 returns decimal from float64 f
+// !!!NOTE: you'll expect to lose some precision for this method due to FormatFloat. See: https://stackoverflow.com/questions/21895756/why-are-floating-point-numbers-inaccurate
+// This method is suitable for small numbers with small precision. e.g. 1.0001, 0.0001, -123.456, -1000000.123456
+// If you don't want to lose any precision, use Parse with string input instead
+//
+// Returns error if:
+//  1. f is NaN or Inf
+//  2. error when parsing float to string and then to decimal
 func NewFromFloat64(f float64) (Decimal, error) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return Decimal{}, fmt.Errorf("invalid float value: %v", f)
+		return Decimal{}, fmt.Errorf("%w: can't parse float '%v' to decimal", ErrInvalidFormat, f)
 	}
 
 	s := strconv.FormatFloat(f, 'f', -1, 64)
 	d, err := Parse(s)
 	if err != nil {
-		return Decimal{}, fmt.Errorf("converting float: %w", err)
+		return Decimal{}, fmt.Errorf("can't parse float: %w", err)
 	}
 
 	return d, nil
@@ -154,7 +161,7 @@ func Parse(s string) (Decimal, error) {
 
 	// max width = 1 + 19 + 1 + 19 = 40 (sign + whole + dot + fraction)
 	if width > 40 {
-		return Decimal{}, fmt.Errorf("%w: overflow. string length is greater than 40", ErrInvalidFormat)
+		return Decimal{}, fmt.Errorf("%w: string length is greater than 40", ErrInvalidFormat)
 	}
 
 	var (
@@ -283,10 +290,6 @@ func (d Decimal) Add(e Decimal) (Decimal, error) {
 			return Decimal{}, err
 		}
 
-		if isOverflow(coef, scale) {
-			return Decimal{}, ErrOverflow
-		}
-
 		return newWithRTZ(d.neg, coef, scale)
 	}
 
@@ -385,10 +388,6 @@ func (d Decimal) Sub(e Decimal) (Decimal, error) {
 			return Decimal{}, err
 		}
 
-		if isOverflow(coef, scale) {
-			return Decimal{}, ErrOverflow
-		}
-
 		return newWithRTZ(d.neg, coef, scale)
 	}
 
@@ -410,18 +409,39 @@ func (d Decimal) Sub(e Decimal) (Decimal, error) {
 //
 //  1. either whole or fration part is greater than 10^19-1
 //  2. coef >= 2^128
-func (d Decimal) Sub64(e Decimal) (Decimal, error) {
-	if !d.neg {
-		d.coef, _ = d.coef.Sub(e.coef)
-		return d, nil
-	}
-
-	coef, err := e.coef.Add(d.coef)
+func (d Decimal) Sub64(e uint64) (Decimal, error) {
+	ecoef, err := bintFromHiLo(0, e).Mul(pow10[d.scale])
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return newWithRTZ(true, coef, d.scale)
+	if !d.neg {
+		var (
+			dcoef bint
+			neg   bool
+		)
+
+		if d.coef.GreaterThan(ecoef) {
+			dcoef, err = d.coef.Sub(ecoef)
+			neg = false
+		} else {
+			dcoef, err = ecoef.Sub(d.coef)
+			neg = true
+		}
+
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		return newWithRTZ(neg, dcoef, d.scale)
+	}
+
+	dcoef, err := d.coef.Add(ecoef)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newWithRTZ(true, dcoef, d.scale)
 }
 
 // Mul returns d * e
@@ -523,6 +543,10 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 // newWithRTZ return the decimal after removing all trailing zeros
 func newWithRTZ(neg bool, coef bint, scale uint8) (Decimal, error) {
 	if scale == 0 {
+		if isOverflow(coef, 0) {
+			return Decimal{}, ErrOverflow
+		}
+
 		return Decimal{neg: neg, coef: coef, scale: 0}, nil
 	}
 

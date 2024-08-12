@@ -1,9 +1,7 @@
 package udecimal
 
 import (
-	"fmt"
 	"math/bits"
-	"strconv"
 )
 
 // U256 represents a 256-bits unsigned integer
@@ -17,22 +15,22 @@ type U256 struct {
 }
 
 // for debugging
-func (u U256) PrintBit() string {
-	b1 := strconv.FormatUint(u.carry.hi, 2)
-	b2 := strconv.FormatUint(u.carry.lo, 2)
-	b3 := strconv.FormatUint(u.hi, 2)
-	b4 := strconv.FormatUint(u.lo, 2)
+// func (u U256) PrintBit() string {
+// 	b1 := strconv.FormatUint(u.carry.hi, 2)
+// 	b2 := strconv.FormatUint(u.carry.lo, 2)
+// 	b3 := strconv.FormatUint(u.hi, 2)
+// 	b4 := strconv.FormatUint(u.lo, 2)
 
-	return fmt.Sprintf("%s.%s.%s.%s", apz(b1), apz(b2), apz(b3), apz(b4))
-}
+// 	return fmt.Sprintf("%s.%s.%s.%s", apz(b1), apz(b2), apz(b3), apz(b4))
+// }
 
-func apz(s string) string {
-	for range 64 - len(s) {
-		s = "0" + s
-	}
+// func apz(s string) string {
+// 	for range 64 - len(s) {
+// 		s = "0" + s
+// 	}
 
-	return s
-}
+// 	return s
+// }
 
 // Compare 2 U256, returns:
 //
@@ -77,31 +75,31 @@ func (u U256) Sub(v U256) (U256, error) {
 	return U256{lo: lo, hi: hi, carry: c1}, nil
 }
 
-func (u U256) Lsh(n uint) (v U256) {
-	switch {
-	case n < 64:
-		v.carry = u.carry.Lsh(n)
-		v.carry.lo = v.carry.lo | u.hi>>(64-n)
-		c := bintFromHiLo(u.hi, u.lo).Lsh(n)
-		v.hi = c.hi
-		v.lo = c.lo
+// func (u U256) Lsh(n uint) (v U256) {
+// 	switch {
+// 	case n < 64:
+// 		v.carry = u.carry.Lsh(n)
+// 		v.carry.lo = v.carry.lo | u.hi>>(64-n)
+// 		c := bintFromHiLo(u.hi, u.lo).Lsh(n)
+// 		v.hi = c.hi
+// 		v.lo = c.lo
 
-	case 64 <= n && n < 128:
-		v.lo = 0
-		v.hi = u.lo << (n - 64)
-		v.carry.lo = u.hi<<(n-64) | u.lo>>(128-n)
-		v.carry.hi = u.carry.lo<<(n-64) | u.hi>>(128-n)
+// 	case 64 <= n && n < 128:
+// 		v.lo = 0
+// 		v.hi = u.lo << (n - 64)
+// 		v.carry.lo = u.hi<<(n-64) | u.lo>>(128-n)
+// 		v.carry.hi = u.carry.lo<<(n-64) | u.hi>>(128-n)
 
-	case n >= 128:
-		v.lo, v.hi = 0, 0
-		v.carry = bintFromHiLo(u.hi, u.lo).Lsh(n - 128)
+// 	case n >= 128:
+// 		v.lo, v.hi = 0, 0
+// 		v.carry = bintFromHiLo(u.hi, u.lo).Lsh(n - 128)
 
-	default:
-		// n < 0, can't happen
-	}
+// 	default:
+// 		// n < 0, can't happen
+// 	}
 
-	return
-}
+// 	return
+// }
 
 func (u U256) Rsh(n uint) (v U256) {
 	switch {
@@ -167,7 +165,6 @@ func (u U256) quo(v bint) (bint, error) {
 	// max(v*k) = u * [2^(64-n) - 1]/2^(127-n) (with n is v's leading zeros, 1 <= n <= 63)
 	// --> max(v*k) = u / 2^63 < 2^190 / 2^63
 	// --> v*k < 2^127
-
 	// vqu = vq - u = (q+k)*v - (q*v + r) = k*v - r
 	// with v*k < 2^127 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
 
@@ -203,7 +200,7 @@ func (u U256) quo(v bint) (bint, error) {
 		return bint{}, err
 	}
 
-	// we don't really care abount the remainder, might un-comment later if needed
+	// we don't really need the remainder, might un-comment later if needed
 	// r, err := v.Sub(r1)
 	// if err != nil {
 	// 	return bint{}, bint{}, err
