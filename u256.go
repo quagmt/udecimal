@@ -75,32 +75,6 @@ func (u U256) Sub(v U256) (U256, error) {
 	return U256{lo: lo, hi: hi, carry: c1}, nil
 }
 
-// func (u U256) Lsh(n uint) (v U256) {
-// 	switch {
-// 	case n < 64:
-// 		v.carry = u.carry.Lsh(n)
-// 		v.carry.lo = v.carry.lo | u.hi>>(64-n)
-// 		c := bintFromHiLo(u.hi, u.lo).Lsh(n)
-// 		v.hi = c.hi
-// 		v.lo = c.lo
-
-// 	case 64 <= n && n < 128:
-// 		v.lo = 0
-// 		v.hi = u.lo << (n - 64)
-// 		v.carry.lo = u.hi<<(n-64) | u.lo>>(128-n)
-// 		v.carry.hi = u.carry.lo<<(n-64) | u.hi>>(128-n)
-
-// 	case n >= 128:
-// 		v.lo, v.hi = 0, 0
-// 		v.carry = bintFromHiLo(u.hi, u.lo).Lsh(n - 128)
-
-// 	default:
-// 		// n < 0, can't happen
-// 	}
-
-// 	return
-// }
-
 func (u U256) Rsh(n uint) (v U256) {
 	switch {
 	case n < 64:
@@ -127,6 +101,12 @@ func (u U256) Rsh(n uint) (v U256) {
 }
 
 // Quo only returns quotient of u/v
+// The implementation follows Hacker's Delight multiword division algorithm
+// with some constraints regarding max coef and scale value, including:
+//
+//	max(coef) = 10^38-1
+//	max(scale) = 19
+//	max(whole_part) = 10^19-1
 func (u U256) quo(v bint) (bint, error) {
 	if u.carry.IsZero() {
 		q, _, err := bintFromHiLo(u.hi, u.lo).QuoRem(v)
@@ -167,7 +147,6 @@ func (u U256) quo(v bint) (bint, error) {
 	// --> v*k < 2^127
 	// vqu = vq - u = (q+k)*v - (q*v + r) = k*v - r
 	// with v*k < 2^127 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
-
 	if vq.cmp(u) <= 0 {
 		// vq <= u means tq = q
 		return tq, nil
@@ -214,25 +193,24 @@ func (u U256) quo(v bint) (bint, error) {
 //	q must be a bint
 //	u = q*v + r
 //	Return overflow if the result q doesn't fit in a bint
-func (u U256) quoRem64ToBint(v uint64) (q bint, r uint64, err error) {
+func (u U256) quoRem64ToBint(v uint64) (bint, uint64, error) {
 	// obvious case that the result won't fit in 128-bits number
 	if u.carry.hi != 0 {
-		err = ErrOverflow
-		return
+		return bint{}, 0, ErrOverflow
 	}
 
 	if u.carry.lo == 0 {
-		q, r = bintFromHiLo(u.hi, u.lo).QuoRem64(v)
-		return
+		q, r := bintFromHiLo(u.hi, u.lo).QuoRem64(v)
+		return q, r, nil
 	}
 
 	quo, rem := bintFromHiLo(u.carry.lo, u.hi).QuoRem64(v)
 	if quo.hi != 0 {
-		err = ErrOverflow
-		return
+		return bint{}, 0, ErrOverflow
 	}
 
-	q.hi = quo.lo
-	q.lo, r = bits.Div64(rem, u.lo, v)
-	return
+	hi := quo.lo
+	lo, r := bits.Div64(rem, u.lo, v)
+
+	return bintFromHiLo(hi, lo), r, nil
 }

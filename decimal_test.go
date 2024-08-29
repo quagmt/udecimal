@@ -12,67 +12,74 @@ import (
 
 func TestParse(t *testing.T) {
 	testcases := []struct {
-		s       string
-		wantErr error
+		input, want string
+		wantErr     error
 	}{
-		{"0.123", nil},
-		{"-0.123", nil},
-		{"0", nil},
-		{"0.9999999999999999999", nil},
-		{"-0.9999999999999999999", nil},
-		{"1", nil},
-		{"123", nil},
-		{"123.456", nil},
-		{"123.456789012345678901", nil},
-		{"123456789.123456789", nil},
-		{"-1", nil},
-		{"-123", nil},
-		{"-123.456", nil},
-		{"-123.456789012345678901", nil},
-		{"-123456789.123456789", nil},
-		{"-123456789123456789.123456789123456789", nil},
-		{"-123456.123456", nil},
-		{"1234567891234567890.0123456879123456789", nil},
-		{"9999999999999999999.9999999999999999999", nil},
-		{"-9999999999999999999.9999999999999999999", nil},
-		{"123456.0000000000000000001", nil},
-		{"-123456.0000000000000000001", nil},
-		{"+123456.123456", nil},
-		{"+123.123", nil},
-		{"", ErrEmptyString},
-		{".", fmt.Errorf("%w: can't parse '.' to decimal", ErrInvalidFormat)},
-		{"123.", fmt.Errorf("%w: can't parse '123.' to decimal", ErrInvalidFormat)},
-		{"-123.", fmt.Errorf("%w: can't parse '-123.' to decimal", ErrInvalidFormat)},
-		{"-.123456", fmt.Errorf("%w: can't parse '-.123456' to decimal", ErrInvalidFormat)},
-		{"12c45.123456", fmt.Errorf("%w: can't parse '12c45.123456' to decimal", ErrInvalidFormat)},
-		{"1245.-123456", fmt.Errorf("%w: can't parse '1245.-123456' to decimal", ErrInvalidFormat)},
-		{"1245.123.456", fmt.Errorf("%w: can't parse '1245.123.456' to decimal", ErrInvalidFormat)},
-		{"12345..123456", fmt.Errorf("%w: can't parse '12345..123456' to decimal", ErrInvalidFormat)},
-		{"123456.123c456", fmt.Errorf("%w: can't parse '123456.123c456' to decimal", ErrInvalidFormat)},
-		{"+.", fmt.Errorf("%w: can't parse '+.' to decimal", ErrInvalidFormat)},
-		{"-12345678912345678901.1234567890123456789", fmt.Errorf("%w: string length is greater than 40", ErrInvalidFormat)},
-		{"12345678901234567890.123456789", ErrOverflow},
-		{"1234567890123456789123456789012345678901", ErrOverflow},
-		{"340282366920938463463374607431768211459", ErrOverflow},
-		{"1.234567890123456789012348901", ErrMaxScale},
-		{"+", fmt.Errorf("%w: can't parse '+' to decimal", ErrInvalidFormat)},
-		{"-", fmt.Errorf("%w: can't parse '-' to decimal", ErrInvalidFormat)},
+		{"123.456000", "123.456", nil},
+		{"123.0000", "123", nil},
+		{"0.123", "0.123", nil},
+		{"-0.123", "-0.123", nil},
+		{"0", "0", nil},
+		{"0.00000", "0", nil},
+		{"-0", "0", nil},
+		{"-0.00000", "0", nil},
+		{"-123.0000", "-123", nil},
+		{"0.9999999999999999999", "0.9999999999999999999", nil},
+		{"-0.9999999999999999999", "-0.9999999999999999999", nil},
+		{"1", "1", nil},
+		{"123", "123", nil},
+		{"123.456", "123.456", nil},
+		{"123.456789012345678901", "123.456789012345678901", nil},
+		{"123456789.123456789", "123456789.123456789", nil},
+		{"-1", "-1", nil},
+		{"-123", "-123", nil},
+		{"-123.456", "-123.456", nil},
+		{"-123.456789012345678901", "-123.456789012345678901", nil},
+		{"-123456789.123456789", "-123456789.123456789", nil},
+		{"-123456789123456789.123456789123456789", "-123456789123456789.123456789123456789", nil},
+		{"-123456.123456", "-123456.123456", nil},
+		{"1234567891234567890.0123456879123456789", "1234567891234567890.0123456879123456789", nil},
+		{"9999999999999999999.9999999999999999999", "9999999999999999999.9999999999999999999", nil},
+		{"-9999999999999999999.9999999999999999999", "-9999999999999999999.9999999999999999999", nil},
+		{"123456.0000000000000000001", "123456.0000000000000000001", nil},
+		{"-123456.0000000000000000001", "-123456.0000000000000000001", nil},
+		{"+123456.123456", "123456.123456", nil},
+		{"+123.123", "123.123", nil},
+		{"", "", ErrEmptyString},
+		{".", "", fmt.Errorf("%w: can't parse '.' to decimal", ErrInvalidFormat)},
+		{"123.", "", fmt.Errorf("%w: can't parse '123.' to decimal", ErrInvalidFormat)},
+		{"-123.", "", fmt.Errorf("%w: can't parse '-123.' to decimal", ErrInvalidFormat)},
+		{"-.123456", "", fmt.Errorf("%w: can't parse '-.123456' to decimal", ErrInvalidFormat)},
+		{"12c45.123456", "", fmt.Errorf("%w: can't parse '12c45.123456' to decimal", ErrInvalidFormat)},
+		{"1245.-123456", "", fmt.Errorf("%w: can't parse '1245.-123456' to decimal", ErrInvalidFormat)},
+		{"1245.123.456", "", fmt.Errorf("%w: can't parse '1245.123.456' to decimal", ErrInvalidFormat)},
+		{"12345..123456", "", fmt.Errorf("%w: can't parse '12345..123456' to decimal", ErrInvalidFormat)},
+		{"123456.123c456", "", fmt.Errorf("%w: can't parse '123456.123c456' to decimal", ErrInvalidFormat)},
+		{"+.", "", fmt.Errorf("%w: can't parse '+.' to decimal", ErrInvalidFormat)},
+		{"-12345678912345678901.1234567890123456789", "", fmt.Errorf("%w: string length is greater than 40", ErrInvalidFormat)},
+		{"12345678901234567890.123456789", "", ErrOverflow},
+		{"1234567890123456789123456789012345678901", "", ErrOverflow},
+		{"340282366920938463463374607431768211459", "", ErrOverflow},
+		{"1.234567890123456789012348901", "", ErrMaxScale},
+		{"+", "", fmt.Errorf("%w: can't parse '+' to decimal", ErrInvalidFormat)},
+		{"-", "", fmt.Errorf("%w: can't parse '-' to decimal", ErrInvalidFormat)},
 	}
 
 	for _, tc := range testcases {
-		t.Run(tc.s, func(t *testing.T) {
-			d, err := Parse(tc.s)
+		t.Run(tc.input, func(t *testing.T) {
+			d, err := Parse(tc.input)
 			if tc.wantErr != nil {
 				require.Equal(t, tc.wantErr, err)
 				return
 			}
 
 			require.NoError(t, err)
-			if tc.s[0] == '+' {
-				require.Equal(t, tc.s[1:], d.String())
-			} else {
-				require.Equal(t, tc.s, d.String())
-			}
+			require.Equal(t, tc.want, d.String())
+
+			// compare with shopspring/decimal
+			dd, err := decimal.NewFromString(tc.input)
+			require.NoError(t, err)
+			require.Equal(t, dd.String(), d.String())
 		})
 	}
 }
@@ -237,6 +244,7 @@ func TestNewFromFloat64(t *testing.T) {
 		{-0.123, "-0.123", nil},
 		{1, "1", nil},
 		{-1, "-1", nil},
+		{1.00009, "1.00009", nil},
 		{1000000.123456, "1000000.123456", nil},
 		{-1000000.123456, "-1000000.123456", nil},
 		{1.1234567890123456789123, "1.1234567890123457", nil},
@@ -379,7 +387,7 @@ func TestAdd(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.scale)
+			prec := int32(c.Scale())
 			cc := aa.Add(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -424,7 +432,7 @@ func TestAdd64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.scale)
+			prec := int32(c.Scale())
 			cc := aa.Add(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -494,7 +502,7 @@ func TestSub(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.scale)
+			prec := int32(c.Scale())
 			cc := aa.Sub(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -540,7 +548,7 @@ func TestSub64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.scale)
+			prec := int32(c.Scale())
 			cc := aa.Sub(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -601,7 +609,7 @@ func TestMul(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.scale)
+			prec := int32(c.Scale())
 			cc := aa.Mul(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -650,7 +658,7 @@ func TestMul64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.scale)
+			prec := int32(c.Scale())
 			cc := aa.Mul(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -664,6 +672,7 @@ func TestDiv(t *testing.T) {
 		wantErr error
 	}{
 		{"123456.1234567890123456789", "234567.1234567890123456789", nil},
+		{"123456.1234567890123456789", "1", nil},
 		{"-123456.1234567890123456789", "234567.1234567890123456789", nil},
 		{"123456.1234567890123456789", "-234567.1234567890123456789", nil},
 		{"-123456.1234567890123456789", "-234567.1234567890123456789", nil},
@@ -675,6 +684,7 @@ func TestDiv(t *testing.T) {
 		{"1111111111111", "1111.123456789123456789", nil},
 		{"123456789", "1.1234567890123456789", nil},
 		{"2345678901234567899", "1234567890123456789.1234567890123456789", nil},
+		{"0.1234567890123456789", "0.04586201546101", nil},
 		{"1", "1111.123456789123456789", nil},
 		{"1", "1.123456789123456789", nil},
 		{"1", "2", nil},
@@ -683,8 +693,13 @@ func TestDiv(t *testing.T) {
 		{"1", "5", nil},
 		{"123456789123456789.123456789", "3.123456789", nil},
 		{"123456789123456789.123456789", "3", nil},
+		{"9999999999999999999", "1234567890123456789.1234567890123456879", nil},
+		{"9999999999999999999.999999999999999999", "1000000000000000000.1234567890123456789", nil},
+		{"999999999999999999", "0.100000000000001", nil},
 		{"123456789123456789.123456789", "0", ErrDivideByZero},
 		{"1000000000000", "0.0000001", ErrOverflow},
+		{"1234567890123456789.123456789123456789", "0.0000000000000000002", ErrOverflow},
+		{"1234567890123456789.123456789123456789", "0.000000001", ErrOverflow},
 	}
 
 	for _, tc := range testcases {
@@ -697,7 +712,7 @@ func TestDiv(t *testing.T) {
 
 			c, err := a.Div(b)
 			if tc.wantErr != nil {
-				require.EqualError(t, tc.wantErr, err.Error())
+				require.Equal(t, tc.wantErr, err)
 				return
 			}
 
@@ -707,10 +722,251 @@ func TestDiv(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.scale)
-			cc := aa.DivRound(bb, prec+1).Truncate(prec)
+			prec := int32(c.Scale())
+			cc := aa.DivRound(bb, 24).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
+		})
+	}
+}
+
+func TestDiv64(t *testing.T) {
+	testcases := []struct {
+		a       string
+		b       uint64
+		wantErr error
+	}{
+		{"1234567890123456789", 1, nil},
+		{"1234567890123456789", 2, nil},
+		{"123456789012345678.9", 1, nil},
+		{"111111111111", 1111, nil},
+		{"1.1234567890123456789", 123456789, nil},
+		{"-123.456", 123456789, nil},
+		{"1234567890123456789.123456789", 10_000_000_000_000_000_000, nil},
+		{"1234567890123456789.123456789", 123456789, nil},
+		{"1234567890123456789.123456789", math.MaxUint64, nil},
+		{"9999999999999999999.9999999999999999999", 9999999999999999999, nil},
+		{"9999999999999999999.9999999999999999999", 1, nil},
+		{"0.1234567890123456789", 1, nil},
+		{"0.1234567890123456789", 2, nil},
+		{"9999999999999999999", 1, nil},
+		{"9999999999999999999", 0, ErrDivideByZero},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a, func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			c, err := a.Div64(tc.b)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.NewFromUint64(tc.b)
+
+			prec := int32(c.Scale())
+			cc := aa.DivRound(bb, 24).Truncate(prec)
+
+			require.Equal(t, cc.String(), c.String())
+		})
+	}
+}
+
+func TestCmp(t *testing.T) {
+	testcases := []struct {
+		a, b string
+		want int
+	}{
+		{"1234567890123456789", "0", 1},
+		{"123.123", "-123.123", 1},
+		{"-123.123", "123.123", -1},
+		{"-123.123", "-123.123", 0},
+		{"-123.123", "-123.1234567890123456789", 1},
+		{"123.123", "123.1234567890123456789", -1},
+		{"123.123", "123.1230000000000000001", -1},
+		{"-123.123", "-123.1230000000000000001", 1},
+		{"123.1230000000000000002", "123.1230000000000000001", 1},
+		{"-123.1230000000000000002", "-123.1230000000000000001", -1},
+		{"123.1230000000000000002", "123.123000000001", -1},
+		{"-123.1230000000000000002", "-123.123000000001", 1},
+		{"123.123", "123.1230000", 0},
+		{"123.101", "123.1001", 1},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a+"/"+tc.b, func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			b, err := Parse(tc.b)
+			require.NoError(t, err)
+
+			c := a.Cmp(b)
+			require.Equal(t, tc.want, c)
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			cc := aa.Cmp(bb)
+			require.Equal(t, cc, c)
+		})
+	}
+}
+
+func TestSign(t *testing.T) {
+	testcases := []struct {
+		a    string
+		want int
+	}{
+		{"1234567890123456789", 1},
+		{"123.123", 1},
+		{"-123.123", -1},
+		{"-123.1234567890123456789", -1},
+		{"123.1234567890123456789", 1},
+		{"123.1230000000000000001", 1},
+		{"-123.1230000000000000001", -1},
+		{"123.1230000000000000002", 1},
+		{"-123.1230000000000000002", -1},
+		{"123.123000000001", 1},
+		{"-123.123000000001", -1},
+		{"123.1230000", 1},
+		{"123.1001", 1},
+		{"0", 0},
+		{"0.0", 0},
+		{"-0", 0},
+		{"-0.000", 0},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a, func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			c := a.Sign()
+			require.Equal(t, tc.want, c)
+
+			if (a.coef == bint{}) {
+				require.Equal(t, 0, a.Sign())
+				require.True(t, a.IsZero())
+				require.False(t, a.IsNeg())
+				require.False(t, a.IsPos())
+				return
+			}
+
+			// check neg and abs
+			if a.neg {
+				require.True(t, a.IsNeg())
+				require.False(t, a.IsPos())
+				require.Equal(t, a.Neg(), a.Abs())
+			} else {
+				require.True(t, a.IsPos())
+				require.False(t, a.IsNeg())
+				require.Equal(t, a, a.Abs())
+			}
+		})
+	}
+}
+
+func TestRound(t *testing.T) {
+	testcases := []struct {
+		a     string
+		scale uint8
+		want  string
+	}{
+		{"123.456000", 0, "123"},
+		{"123.456000", 1, "123.5"},
+		{"123.456000", 2, "123.46"},
+		{"123.456000", 3, "123.456"},
+		{"123.456000", 4, "123.456"},
+		{"123.456000", 5, "123.456"},
+		{"123.456000", 6, "123.456"},
+		{"123.456000", 7, "123.456"},
+		{"-123.456000", 0, "-123"},
+		{"-123.456000", 1, "-123.5"},
+		{"-123.456000", 2, "-123.46"},
+		{"-123.456000", 3, "-123.456"},
+		{"-123.456000", 4, "-123.456"},
+		{"-123.456000", 5, "-123.456"},
+		{"-123.456000", 6, "-123.456"},
+		{"-123.456000", 7, "-123.456"},
+		{"123.1234567890987654321", 0, "123"},
+		{"123.1234567890987654321", 1, "123.1"},
+		{"123.1234567890987654321", 2, "123.12"},
+		{"123.1234567890987654321", 3, "123.123"},
+		{"123.1234567890987654321", 4, "123.1235"},
+		{"123.1234567890987654321", 5, "123.12346"},
+		{"123.1234567890987654321", 6, "123.123457"},
+		{"123.1234567890987654321", 7, "123.1234568"},
+		{"123.1234567890987654321", 8, "123.12345679"},
+		{"123.1234567890987654321", 9, "123.123456789"},
+		{"123.1234567890987654321", 10, "123.1234567891"},
+		{"123.1234567890987654321", 11, "123.1234567891"},
+		{"123.1234567890987654321", 12, "123.123456789099"},
+		{"123.1234567890987654321", 13, "123.1234567890988"},
+		{"123.1234567890987654321", 14, "123.12345678909877"},
+		{"123.1234567890987654321", 15, "123.123456789098765"},
+		{"123.1234567890987654321", 16, "123.1234567890987654"},
+		{"123.1234567890987654321", 17, "123.12345678909876543"},
+		{"123.1234567890987654321", 18, "123.123456789098765432"},
+		{"123.1234567890987654321", 19, "123.1234567890987654321"},
+		{"123.1234567890987654321", 20, "123.1234567890987654321"},
+		{"-123.1234567890987654321", 0, "-123"},
+		{"-123.1234567890987654321", 1, "-123.1"},
+		{"-123.1234567890987654321", 2, "-123.12"},
+		{"-123.1234567890987654321", 3, "-123.123"},
+		{"-123.1234567890987654321", 4, "-123.1235"},
+		{"-123.1234567890987654321", 5, "-123.12346"},
+		{"-123.1234567890987654321", 6, "-123.123457"},
+		{"-123.1234567890987654321", 7, "-123.1234568"},
+		{"-123.1234567890987654321", 8, "-123.12345679"},
+		{"-123.1234567890987654321", 9, "-123.123456789"},
+		{"-123.1234567890987654321", 10, "-123.1234567891"},
+		{"-123.1234567890987654321", 11, "-123.1234567891"},
+		{"-123.1234567890987654321", 12, "-123.123456789099"},
+		{"-123.1234567890987654321", 13, "-123.1234567890988"},
+		{"-123.1234567890987654321", 14, "-123.12345678909877"},
+		{"-123.1234567890987654321", 15, "-123.123456789098765"},
+		{"-123.1234567890987654321", 16, "-123.1234567890987654"},
+		{"-123.1234567890987654321", 17, "-123.12345678909876543"},
+		{"-123.1234567890987654321", 18, "-123.123456789098765432"},
+		{"-123.1234567890987654321", 19, "-123.1234567890987654321"},
+		{"-123.1234567890987654321", 20, "-123.1234567890987654321"},
+		{"123.12354", 3, "123.124"},
+		{"-123.12354", 3, "-123.124"},
+		{"123.12454", 3, "123.125"},
+		{"-123.12454", 3, "-123.125"},
+		{"123.1235", 3, "123.124"},
+		{"-123.1235", 3, "-123.124"},
+		{"123.1245", 3, "123.124"},
+		{"-123.1245", 3, "-123.124"},
+		{"1.12345", 4, "1.1234"},
+		{"1.12335", 4, "1.1234"},
+		{"1.5", 0, "2"},
+		{"-1.5", 0, "-2"},
+		{"2.5", 0, "2"},
+		{"-2.5", 0, "-2"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s.round(%d)", tc.a, tc.scale), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			a = a.Round(tc.scale)
+			require.Equal(t, tc.want, a.String())
+
+			// cross check with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			aa = aa.RoundBank(int32(tc.scale))
+
+			require.Equal(t, aa.String(), a.String())
 		})
 	}
 }
@@ -746,18 +1002,6 @@ func BenchmarkShopspringString(b *testing.B) {
 	}
 }
 
-func TestShopspringDiv(t *testing.T) {
-	a, err := decimal.NewFromString("1234567890123456789.123")
-	require.NoError(t, err)
-
-	b, err := decimal.NewFromString("3.123456789")
-	require.NoError(t, err)
-
-	c := a.DivRound(b, 20)
-
-	t.Logf("c = %s", c.String())
-}
-
 func BenchmarkMul(b *testing.B) {
 	a, err := Parse("1234567890")
 	require.NoError(b, err)
@@ -785,8 +1029,6 @@ func BenchmarkShopspringMul(b *testing.B) {
 }
 
 func BenchmarkDiv(b *testing.B) {
-	// {"2345678901234567899", "1234567890123456789.1234567890123456789"},
-
 	a, err := Parse("1234567890123456789")
 	require.NoError(b, err)
 
@@ -803,7 +1045,7 @@ func BenchmarkShopspringDiv(b *testing.B) {
 	a, err := decimal.NewFromString("1234567890123456789")
 	require.NoError(b, err)
 
-	bb, err := decimal.NewFromString("1111.123456789123456789")
+	bb, err := decimal.NewFromString("1111.1789")
 	require.NoError(b, err)
 
 	b.ResetTimer()

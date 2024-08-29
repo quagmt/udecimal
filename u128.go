@@ -272,75 +272,75 @@ func (u bint) Rsh(n uint) (s bint) {
 	return
 }
 
-func getTrailingZeros(coef bint) uint8 {
-	var z uint8
-	if coef.hi == 0 {
-		return getTrailingZeros64(coef.lo)
-	}
+// func getTrailingZeros(coef bint) uint8 {
+// 	var z uint8
+// 	if coef.hi == 0 {
+// 		return getTrailingZeros64(coef.lo)
+// 	}
 
-	if _, rem := coef.QuoRem64(1e16); rem == 0 {
-		z = 16
+// 	if _, rem := coef.QuoRem64(1e16); rem == 0 {
+// 		z = 16
 
-		// short path because maxScale is only 19
-		if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
-			z += 2
-		}
+// 		// short path because maxScale is only 19
+// 		if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
+// 			z += 2
+// 		}
 
-		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-			z++
-		}
+// 		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
+// 			z++
+// 		}
 
-		return z
-	}
+// 		return z
+// 	}
 
-	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
-		z = 8
-	}
+// 	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
+// 		z = 8
+// 	}
 
-	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
-		z += 4
-	}
+// 	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
+// 		z += 4
+// 	}
 
-	if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
-		z += 2
-	}
+// 	if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
+// 		z += 2
+// 	}
 
-	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-		z++
-	}
+// 	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
+// 		z++
+// 	}
 
-	return z
-}
+// 	return z
+// }
 
 func getTrailingZeros64(u uint64) uint8 {
 	var z uint8
-	if r := u % 1e16; r == 0 {
+	if u%1e16 == 0 {
 		z = 16
 
-		if r := u % pow10[z+2].lo; r == 0 {
+		if u%pow10[z+2].lo == 0 {
 			z += 2
 		}
 
-		if r := u % pow10[z+1].lo; r == 0 {
+		if u%pow10[z+1].lo == 0 {
 			z++
 		}
 
 		return z
 	}
 
-	if r := u % pow10[8].lo; r == 0 {
+	if u%pow10[8].lo == 0 {
 		z = 8
 	}
 
-	if r := u % pow10[z+4].lo; r == 0 {
+	if u%pow10[z+4].lo == 0 {
 		z += 4
 	}
 
-	if r := u % pow10[z+2].lo; r == 0 {
+	if u%pow10[z+2].lo == 0 {
 		z += 2
 	}
 
-	if r := u % pow10[z+1].lo; r == 0 {
+	if u%pow10[z+1].lo == 0 {
 		z++
 	}
 

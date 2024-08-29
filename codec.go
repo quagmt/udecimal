@@ -6,7 +6,7 @@ func (d Decimal) Scan(value interface{}) error {
 
 func (d Decimal) MarshalText() ([]byte, error) {
 	buf := []byte("0000000000000000000000000000000000000000")
-	n := d.writeToBytes(buf)
+	n := d.writeToBytes(buf, true)
 	return buf[n:], nil
 }
 
