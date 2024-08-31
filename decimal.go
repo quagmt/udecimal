@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"unsafe"
 )
 
 const (
-	MaxScale = 19
+	// maximum scale
+	maxScale = 19
 )
 
 // pre-computed values
@@ -56,7 +56,7 @@ var pow10 = [39]u128{
 
 var (
 	ErrOverflow      = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
-	ErrMaxScale      = fmt.Errorf("scale out of range. Max digits after decimal point is %d", MaxScale)
+	ErrMaxScale      = fmt.Errorf("scale out of range. Max digits after decimal point is %d", maxScale)
 	ErrEmptyString   = fmt.Errorf("parse empty string")
 	ErrInvalidFormat = fmt.Errorf("invalid format")
 	ErrDivideByZero  = fmt.Errorf("can't divide by zero")
@@ -76,17 +76,19 @@ var (
 // Hence, the decimal range is:
 // -9_999_999_999_999_999_999.9_999_999_999_999_999_999 <= D <= 9_999_999_999_999_999_999.9_999_999_999_999_999_999
 type Decimal struct {
-	coef  u128
+	// coef  u128
+	coef  bint
 	neg   bool // true if number is negative
 	scale uint8
 }
 
-// isOverflow return true if the whole or fraction part has more than 19 digits
-func isOverflow(coef u128, scale uint8) bool {
-	// scale = frac digits
-	// whole part has at most 19 digits
-	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
-	return !coef.LessThan(pow10[scale+MaxScale])
+// newDecimal return the decimal
+func newDecimal(neg bool, coef bint, scale uint8) Decimal {
+	// if isOverflow(coef, scale) {
+	// 	return Decimal{}, ErrOverflow
+	// }
+
+	return Decimal{neg: neg, coef: coef, scale: scale}
 }
 
 // NewFromInt64 returns a decimal which equals to coef / 10^scale.
@@ -98,11 +100,11 @@ func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 		coef = -coef
 	}
 
-	if scale > MaxScale {
+	if scale > maxScale {
 		return Decimal{}, ErrMaxScale
 	}
 
-	return newDecimal(neg, u128FromHiLo(0, uint64(coef)), scale)
+	return newDecimal(neg, bintFromU64(uint64(coef)), scale), nil
 }
 
 // MustFromInt64 similars to NewFromInt64, but panics instead of returning error
@@ -155,95 +157,16 @@ func MustFromFloat64(f float64) Decimal {
 //  1. empty/invalid string
 //  2. the number has whole or fraction part greater than 10^19-1
 func Parse(s string) (Decimal, error) {
-	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to decimal", ErrInvalidFormat, s)
-	width := len(s)
-
-	if width == 0 {
+	if len(s) == 0 {
 		return Decimal{}, ErrEmptyString
 	}
 
-	// max width = 1 + 19 + 1 + 19 = 40 (sign + whole + dot + fraction)
-	if width > 40 {
-		return Decimal{}, fmt.Errorf("%w: string length is greater than 40", ErrInvalidFormat)
+	neg, bint, scale, err := parseBint(s)
+	if err != nil {
+		return Decimal{}, err
 	}
 
-	var (
-		pos int
-		neg bool
-	)
-
-	switch s[0] {
-	case '.':
-		return Decimal{}, errInvalidFormat
-	case '-':
-		neg = true
-		pos++
-	case '+':
-		pos++
-	default:
-		// do nothing
-	}
-
-	// prevent "+" or "-"
-	if pos == width {
-		return Decimal{}, errInvalidFormat
-	}
-
-	// prevent "-.123" or "+.123"
-	if s[pos] == '.' {
-		return Decimal{}, errInvalidFormat
-	}
-
-	var (
-		err   error
-		coef  u128
-		scale uint8
-	)
-	for ; pos < width; pos++ {
-		if s[pos] == '.' {
-			// return err if we encounter the '.' more than once
-			if scale != 0 {
-				return Decimal{}, errInvalidFormat
-			}
-
-			scale = uint8(width - pos - 1)
-
-			// prevent "123." or "-123."
-			if scale == 0 {
-				return Decimal{}, errInvalidFormat
-			}
-
-			if scale > MaxScale {
-				return Decimal{}, ErrMaxScale
-			}
-
-			continue
-		}
-
-		if s[pos] < '0' || s[pos] > '9' {
-			return Decimal{}, errInvalidFormat
-		}
-
-		coef, err = coef.Mul64(10)
-		if err != nil {
-			return Decimal{}, err
-		}
-
-		coef, err = coef.Add64(uint64(s[pos] - '0'))
-		if err != nil {
-			return Decimal{}, err
-		}
-	}
-
-	if isOverflow(coef, scale) {
-		return Decimal{}, ErrOverflow
-	}
-
-	if coef.IsZero() {
-		return Zero, nil
-	}
-
-	return newDecimal(neg, coef, scale)
+	return newDecimal(neg, bint, scale), nil
 }
 
 // MustParse parses a number in string to Decimal.
@@ -262,385 +185,373 @@ func MustParse(s string) Decimal {
 // Returns overflow error when:
 //  1. either whole or fration part is greater than 10^19-1
 //  2. coef >= 2^128
-func (d Decimal) Add(e Decimal) (Decimal, error) {
-	dcoef, ecoef := d.coef, e.coef
+// func (d Decimal) Add(e Decimal) Decimal {
+// 	dcoef, ecoef := d.coef, e.coef
 
-	var (
-		scale uint8
-		err   error
-	)
-	switch {
-	case d.scale == e.scale:
-		scale = d.scale
-	case d.scale > e.scale:
-		scale = d.scale
-		// can't overflow because scale is limited to 19
-		// and whole part also has at most 19 digits
-		// keep this check for safety, in case we change the limit in the future
-		ecoef, err = ecoef.Mul(pow10[d.scale-e.scale])
-		if err != nil {
-			return Decimal{}, err
-		}
-	case d.scale < e.scale:
-		scale = e.scale
+// 	var (
+// 		scale uint8
+// 		err   error
+// 	)
+// 	switch {
+// 	case d.scale == e.scale:
+// 		scale = d.scale
+// 	case d.scale > e.scale:
+// 		scale = d.scale
+// 		// can't overflow because scale is limited to 19
+// 		// and whole part also has at most 19 digits
+// 		// keep this check for safety, in case we change the limit in the future
+// 		ecoef = ecoef.Mul(pow10[d.scale-e.scale])
+// 	case d.scale < e.scale:
+// 		scale = e.scale
 
-		dcoef, err = dcoef.Mul(pow10[e.scale-d.scale])
-		if err != nil {
-			return Decimal{}, err
-		}
-	}
+// 		dcoef, err = dcoef.Mul(pow10[e.scale-d.scale])
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
+// 	}
 
-	if d.neg == e.neg {
-		// same sign
-		coef, err := dcoef.Add(ecoef)
-		if err != nil {
-			return Decimal{}, err
-		}
+// 	if d.neg == e.neg {
+// 		// same sign
+// 		coef, err := dcoef.Add(ecoef)
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
 
-		return newDecimal(d.neg, coef, scale)
-	}
+// 		return newDecimal(d.neg, coef, scale)
+// 	}
 
-	// different sign
-	switch dcoef.Cmp(ecoef) {
-	case 1:
-		// dcoef > ecoef, subtract can't overflow
-		coef, _ := dcoef.Sub(ecoef)
-		return newDecimal(d.neg, coef, scale)
-	default:
-		// dcoef <= ecoef
-		coef, _ := ecoef.Sub(dcoef)
-		return newDecimal(e.neg, coef, scale)
-	}
-}
+// 	// different sign
+// 	switch dcoef.Cmp(ecoef) {
+// 	case 1:
+// 		// dcoef > ecoef, subtract can't overflow
+// 		coef, _ := dcoef.Sub(ecoef)
+// 		return newDecimal(d.neg, coef, scale)
+// 	default:
+// 		// dcoef <= ecoef
+// 		coef, _ := ecoef.Sub(dcoef)
+// 		return newDecimal(e.neg, coef, scale)
+// 	}
+// }
 
-// Add64 returns d + e where e is a uint64
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-func (d Decimal) Add64(e uint64) (Decimal, error) {
-	ecoef, err := u128FromHiLo(0, e).Mul(pow10[d.scale])
-	if err != nil {
-		return Decimal{}, err
-	}
+// // Add64 returns d + e where e is a uint64
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// func (d Decimal) Add64(e uint64) (Decimal, error) {
+// 	ecoef, err := u128FromHiLo(0, e).Mul(pow10[d.scale])
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	if d.neg {
-		var (
-			dcoef u128
-			neg   bool
-		)
+// 	if d.neg {
+// 		var (
+// 			dcoef u128
+// 			neg   bool
+// 		)
 
-		if d.coef.GreaterThan(ecoef) {
-			dcoef, err = d.coef.Sub(ecoef)
-			neg = true
-		} else {
-			dcoef, err = ecoef.Sub(d.coef)
-			neg = false
-		}
+// 		if d.coef.GreaterThan(ecoef) {
+// 			dcoef, err = d.coef.Sub(ecoef)
+// 			neg = true
+// 		} else {
+// 			dcoef, err = ecoef.Sub(d.coef)
+// 			neg = false
+// 		}
 
-		if err != nil {
-			return Decimal{}, err
-		}
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
 
-		return newDecimal(neg, dcoef, d.scale)
-	}
+// 		return newDecimal(neg, dcoef, d.scale)
+// 	}
 
-	dcoef, err := d.coef.Add(ecoef)
-	if err != nil {
-		return Decimal{}, err
-	}
+// 	dcoef, err := d.coef.Add(ecoef)
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	return newDecimal(false, dcoef, d.scale)
-}
+// 	return newDecimal(false, dcoef, d.scale)
+// }
 
-// Sub returns d - e
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-func (d Decimal) Sub(e Decimal) (Decimal, error) {
-	dcoef, ecoef := d.coef, e.coef
+// // Sub returns d - e
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// func (d Decimal) Sub(e Decimal) (Decimal, error) {
+// 	dcoef, ecoef := d.coef, e.coef
 
-	var (
-		scale uint8
-		err   error
-	)
+// 	var (
+// 		scale uint8
+// 		err   error
+// 	)
 
-	switch {
-	case d.scale == e.scale:
-		scale = d.scale
-	case d.scale > e.scale:
-		scale = d.scale
+// 	switch {
+// 	case d.scale == e.scale:
+// 		scale = d.scale
+// 	case d.scale > e.scale:
+// 		scale = d.scale
 
-		// can't overflow because scale is limited to 19
-		// and whole part also has at most 19 digits
-		// keep this check for safety, in case we change the limit in the future
-		ecoef, err = ecoef.Mul(pow10[d.scale-e.scale])
-		if err != nil {
-			return Decimal{}, err
-		}
-	case d.scale < e.scale:
-		scale = e.scale
+// 		// can't overflow because scale is limited to 19
+// 		// and whole part also has at most 19 digits
+// 		// keep this check for safety, in case we change the limit in the future
+// 		ecoef, err = ecoef.Mul(pow10[d.scale-e.scale])
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
+// 	case d.scale < e.scale:
+// 		scale = e.scale
 
-		dcoef, err = dcoef.Mul(pow10[e.scale-d.scale])
-		if err != nil {
-			return Decimal{}, err
-		}
-	}
+// 		dcoef, err = dcoef.Mul(pow10[e.scale-d.scale])
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
+// 	}
 
-	if d.neg != e.neg {
-		// different sign
-		coef, err := dcoef.Add(ecoef)
-		if err != nil {
-			return Decimal{}, err
-		}
+// 	if d.neg != e.neg {
+// 		// different sign
+// 		coef, err := dcoef.Add(ecoef)
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
 
-		return newDecimal(d.neg, coef, scale)
-	}
+// 		return newDecimal(d.neg, coef, scale)
+// 	}
 
-	// same sign
-	switch dcoef.Cmp(ecoef) {
-	case 1:
-		// dcoef > ecoef, subtract can't overflow
-		coef, _ := dcoef.Sub(ecoef)
-		return newDecimal(d.neg, coef, scale)
-	default:
-		// dcoef <= ecoef
-		coef, _ := ecoef.Sub(dcoef)
-		return newDecimal(!d.neg, coef, scale)
-	}
-}
+// 	// same sign
+// 	switch dcoef.Cmp(ecoef) {
+// 	case 1:
+// 		// dcoef > ecoef, subtract can't overflow
+// 		coef, _ := dcoef.Sub(ecoef)
+// 		return newDecimal(d.neg, coef, scale)
+// 	default:
+// 		// dcoef <= ecoef
+// 		coef, _ := ecoef.Sub(dcoef)
+// 		return newDecimal(!d.neg, coef, scale)
+// 	}
+// }
 
-// Sub64 returns d - e where e is a uint64
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-func (d Decimal) Sub64(e uint64) (Decimal, error) {
-	ecoef, err := u128FromHiLo(0, e).Mul(pow10[d.scale])
-	if err != nil {
-		return Decimal{}, err
-	}
+// // Sub64 returns d - e where e is a uint64
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// func (d Decimal) Sub64(e uint64) (Decimal, error) {
+// 	ecoef, err := u128FromHiLo(0, e).Mul(pow10[d.scale])
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	if !d.neg {
-		var (
-			dcoef u128
-			neg   bool
-		)
+// 	if !d.neg {
+// 		var (
+// 			dcoef u128
+// 			neg   bool
+// 		)
 
-		if d.coef.GreaterThan(ecoef) {
-			dcoef, err = d.coef.Sub(ecoef)
-			neg = false
-		} else {
-			dcoef, err = ecoef.Sub(d.coef)
-			neg = true
-		}
+// 		if d.coef.GreaterThan(ecoef) {
+// 			dcoef, err = d.coef.Sub(ecoef)
+// 			neg = false
+// 		} else {
+// 			dcoef, err = ecoef.Sub(d.coef)
+// 			neg = true
+// 		}
 
-		if err != nil {
-			return Decimal{}, err
-		}
+// 		if err != nil {
+// 			return Decimal{}, err
+// 		}
 
-		return newDecimal(neg, dcoef, d.scale)
-	}
+// 		return newDecimal(neg, dcoef, d.scale)
+// 	}
 
-	dcoef, err := d.coef.Add(ecoef)
-	if err != nil {
-		return Decimal{}, err
-	}
+// 	dcoef, err := d.coef.Add(ecoef)
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	return newDecimal(true, dcoef, d.scale)
-}
+// 	return newDecimal(true, dcoef, d.scale)
+// }
 
-// Mul returns d * e.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-func (d Decimal) Mul(e Decimal) (Decimal, error) {
-	if e.coef.IsZero() {
-		return Decimal{}, nil
-	}
+// // Mul returns d * e.
+// // If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// func (d Decimal) Mul(e Decimal) (Decimal, error) {
+// 	if e.coef.IsZero() {
+// 		return Decimal{}, nil
+// 	}
 
-	scale := d.scale + e.scale
-	neg := d.neg != e.neg
-	coef := d.coef.MulToU256(e.coef)
+// 	scale := d.scale + e.scale
+// 	neg := d.neg != e.neg
+// 	coef := d.coef.MulToU256(e.coef)
 
-	if scale <= MaxScale {
-		if !coef.carry.IsZero() {
-			return Decimal{}, ErrOverflow
-		}
+// 	if scale <= MaxScale {
+// 		if !coef.carry.IsZero() {
+// 			return Decimal{}, ErrOverflow
+// 		}
 
-		return newDecimal(neg, u128FromHiLo(coef.hi, coef.lo), scale)
-	}
+// 		return newDecimal(neg, u128FromHiLo(coef.hi, coef.lo), scale)
+// 	}
 
-	rcoef, err := coef.quo(pow10[scale-MaxScale])
-	if err != nil {
-		return Decimal{}, err
-	}
+// 	rcoef, err := coef.quo(pow10[scale-MaxScale])
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	return newDecimal(neg, rcoef, MaxScale)
-}
+// 	return newDecimal(neg, rcoef, MaxScale)
+// }
 
-// Mul64 returns d * e where e is a uint64.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-func (d Decimal) Mul64(v uint64) (Decimal, error) {
-	if v == 0 {
-		return Decimal{}, nil
-	}
+// // Mul64 returns d * e where e is a uint64.
+// // If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// func (d Decimal) Mul64(v uint64) (Decimal, error) {
+// 	if v == 0 {
+// 		return Decimal{}, nil
+// 	}
 
-	if v == 1 {
-		return d, nil
-	}
+// 	if v == 1 {
+// 		return d, nil
+// 	}
 
-	coef, err := d.coef.Mul64(v)
-	if err != nil {
-		return Decimal{}, err
-	}
+// 	coef, err := d.coef.Mul64(v)
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	return newDecimal(d.neg, coef, d.scale)
-}
+// 	return newDecimal(d.neg, coef, d.scale)
+// }
 
-// Div returns d / e
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-//
-// Returns divide by zero error when e is zero
-func (d Decimal) Div(e Decimal) (Decimal, error) {
-	if e.coef.IsZero() {
-		return Decimal{}, ErrDivideByZero
-	}
+// // Div returns d / e
+// // If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// //
+// // Returns divide by zero error when e is zero
+// func (d Decimal) Div(e Decimal) (Decimal, error) {
+// 	if e.coef.IsZero() {
+// 		return Decimal{}, ErrDivideByZero
+// 	}
 
-	neg := d.neg != e.neg
+// 	neg := d.neg != e.neg
 
-	// Need to multiply divident with factor
-	// to make sure the total decimal number after the decimal point is MaxScale
-	factor := MaxScale - (d.scale - e.scale)
+// 	// Need to multiply divident with factor
+// 	// to make sure the total decimal number after the decimal point is MaxScale
+// 	factor := MaxScale - (d.scale - e.scale)
 
-	d256 := d.coef.MulToU256(pow10[factor])
-	quo, err := d256.quo(e.coef)
-	if err != nil {
-		return Decimal{}, err
-	}
+// 	d256 := d.coef.MulToU256(pow10[factor])
+// 	quo, err := d256.quo(e.coef)
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	return newDecimal(neg, quo, MaxScale)
-}
+// 	return newDecimal(neg, quo, MaxScale)
+// }
 
-// Div64 returns d / e where e is a uint64
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
-//
-// Returns overflow error when:
-//  1. either whole or fration part is greater than 10^19-1
-//  2. coef >= 2^128
-//
-// Returns divide by zero error when e is zero
-func (d Decimal) Div64(v uint64) (Decimal, error) {
-	if v == 0 {
-		return Decimal{}, ErrDivideByZero
-	}
+// // Div64 returns d / e where e is a uint64
+// // If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// //
+// // Returns overflow error when:
+// //  1. either whole or fration part is greater than 10^19-1
+// //  2. coef >= 2^128
+// //
+// // Returns divide by zero error when e is zero
+// func (d Decimal) Div64(v uint64) (Decimal, error) {
+// 	if v == 0 {
+// 		return Decimal{}, ErrDivideByZero
+// 	}
 
-	d256 := d.coef.MulToU256(pow10[MaxScale-d.scale])
-	quo, _, err := d256.quoRem64Tou128(v)
-	if err != nil {
-		return Decimal{}, err
-	}
+// 	d256 := d.coef.MulToU256(pow10[MaxScale-d.scale])
+// 	quo, _, err := d256.quoRem64Tou128(v)
+// 	if err != nil {
+// 		return Decimal{}, err
+// 	}
 
-	return newDecimal(d.neg, quo, MaxScale)
-}
+// 	return newDecimal(d.neg, quo, MaxScale)
+// }
 
-// newDecimal return the decimal after removing all trailing zeros
-func newDecimal(neg bool, coef u128, scale uint8) (Decimal, error) {
-	if isOverflow(coef, scale) {
-		return Decimal{}, ErrOverflow
-	}
+// // Scale returns decimal scale
+// func (d Decimal) Scale() int {
+// 	return int(d.scale)
+// }
 
-	return Decimal{neg: neg, coef: coef, scale: scale}, nil
-}
+// // cmp compares two decimals d,e and returns:
+// //
+// //	-1 if d < e
+// //	 0 if d == e
+// //	+1 if d > e
+// func (d Decimal) Cmp(e Decimal) int {
+// 	if d.neg && !e.neg {
+// 		return -1
+// 	}
 
-// Scale returns decimal scale
-func (d Decimal) Scale() int {
-	return int(d.scale)
-}
+// 	if !d.neg && e.neg {
+// 		return 1
+// 	}
 
-// cmp compares two decimals d,e and returns:
-//
-//	-1 if d < e
-//	 0 if d == e
-//	+1 if d > e
-func (d Decimal) Cmp(e Decimal) int {
-	if d.neg && !e.neg {
-		return -1
-	}
+// 	// d.neg = e.neg
+// 	if d.neg {
+// 		// both are negative, return the opposite
+// 		return -d.cmpDec(e)
+// 	}
 
-	if !d.neg && e.neg {
-		return 1
-	}
+// 	return d.cmpDec(e)
+// }
 
-	// d.neg = e.neg
-	if d.neg {
-		// both are negative, return the opposite
-		return -d.cmpDec(e)
-	}
+// func (d Decimal) cmpDec(e Decimal) int {
+// 	if d.scale == e.scale {
+// 		return d.coef.Cmp(e.coef)
+// 	}
 
-	return d.cmpDec(e)
-}
+// 	// scale is different
+// 	// e has more fraction digits
+// 	if d.scale < e.scale {
+// 		// d has more fraction digits
+// 		d256 := d.coef.MulToU256(pow10[e.scale-d.scale])
+// 		return d256.Cmp128(e.coef)
+// 	}
 
-func (d Decimal) cmpDec(e Decimal) int {
-	if d.scale == e.scale {
-		return d.coef.Cmp(e.coef)
-	}
+// 	// d has more fraction digits
+// 	// we need to compare d with e * 10^(d.scale - e.scale)
+// 	e256 := e.coef.MulToU256(pow10[d.scale-e.scale])
 
-	// scale is different
-	// e has more fraction digits
-	if d.scale < e.scale {
-		// d has more fraction digits
-		d256 := d.coef.MulToU256(pow10[e.scale-d.scale])
-		return d256.Cmp128(e.coef)
-	}
+// 	// remember to reverse the result because e256.Cmp128(d.coef) returns the opposite
+// 	return -e256.Cmp128(d.coef)
+// }
 
-	// d has more fraction digits
-	// we need to compare d with e * 10^(d.scale - e.scale)
-	e256 := e.coef.MulToU256(pow10[d.scale-e.scale])
+// // Neg returns -d
+// func (d Decimal) Neg() Decimal {
+// 	return Decimal{neg: !d.neg, coef: d.coef, scale: d.scale}
+// }
 
-	// remember to reverse the result because e256.Cmp128(d.coef) returns the opposite
-	return -e256.Cmp128(d.coef)
-}
+// // Abs returns |d|
+// func (d Decimal) Abs() Decimal {
+// 	return Decimal{neg: false, coef: d.coef, scale: d.scale}
+// }
 
-// Neg returns -d
-func (d Decimal) Neg() Decimal {
-	return Decimal{neg: !d.neg, coef: d.coef, scale: d.scale}
-}
+// // Sign returns:
+// //
+// //	-1 if d < 0
+// //	 0 if d == 0
+// //	+1 if d > 0
+// func (d Decimal) Sign() int {
+// 	// check this first
+// 	// because we allow parsing "-0" into decimal, which results in d.neg = true and d.coef = 0
+// 	if d.coef.IsZero() {
+// 		return 0
+// 	}
 
-// Abs returns |d|
-func (d Decimal) Abs() Decimal {
-	return Decimal{neg: false, coef: d.coef, scale: d.scale}
-}
+// 	if d.neg {
+// 		return -1
+// 	}
 
-// Sign returns:
-//
-//	-1 if d < 0
-//	 0 if d == 0
-//	+1 if d > 0
-func (d Decimal) Sign() int {
-	// check this first
-	// because we allow parsing "-0" into decimal, which results in d.neg = true and d.coef = 0
-	if d.coef.IsZero() {
-		return 0
-	}
-
-	if d.neg {
-		return -1
-	}
-
-	return 1
-}
+// 	return 1
+// }
 
 // IsZero returns
 //
@@ -650,194 +561,129 @@ func (d Decimal) IsZero() bool {
 	return d.coef.IsZero()
 }
 
-// IsNeg returns
-//
-//	true if d < 0
-//	false if d >= 0
-func (d Decimal) IsNeg() bool {
-	return d.neg && !d.coef.IsZero()
-}
+// // IsNeg returns
+// //
+// //	true if d < 0
+// //	false if d >= 0
+// func (d Decimal) IsNeg() bool {
+// 	return d.neg && !d.coef.IsZero()
+// }
 
-// IsPos returns
-//
-//	true if d > 0
-//	false if d <= 0
-func (d Decimal) IsPos() bool {
-	return !d.neg && !d.coef.IsZero()
-}
+// // IsPos returns
+// //
+// //	true if d > 0
+// //	false if d <= 0
+// func (d Decimal) IsPos() bool {
+// 	return !d.neg && !d.coef.IsZero()
+// }
 
-// String returns the string representation of the decimal.
-// Trailing zeros will be removed.
-func (d Decimal) String() string {
-	if d.IsZero() {
-		return "0"
-	}
+// // RoundBank uses half up to even (banker's rounding) to round the decimal to the specified scale.
+// //
+// //	Examples:
+// //	Round(1.12345, 4) = 1.1234
+// //	Round(1.12335, 4) = 1.1234
+// //	Round(1.5, 0) = 2
+// //	Roung(-1.5, 0) = -2
+// func (d Decimal) RoundBank(scale uint8) (Decimal, error) {
+// 	if scale >= d.scale {
+// 		return d, nil
+// 	}
 
-	// max 40 bytes: 1 sign + 19 whole + 1 dot + 19 fraction
-	buf := []byte("0000000000000000000000000000000000000000")
-	n := d.writeToBytes(buf, true)
+// 	factor := pow10[d.scale-scale]
+// 	lo := factor.lo / 2
 
-	return unsafeBytesToString(buf[n:])
-}
+// 	q, r := d.coef.QuoRem64(factor.lo)
+// 	if lo < r || (lo == r && q.lo%2 == 1) {
+// 		q, _ = q.Add64(1)
+// 	}
 
-func (d Decimal) writeToBytes(b []byte, trimTrailingZeros bool) int {
-	if d.coef.IsZero() {
-		return len(b) - 1
-	}
+// 	return newDecimal(d.neg, q, scale)
+// }
 
-	quo, rem := d.coef.QuoRem64(pow10[d.scale].lo)
-	l := len(b)
-	n := 0
-	scale := d.scale
+// // RoundHAZ rounds the decimal to the specified scale using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
+// //
+// //	Examples:
+// //	Round(1.12345, 4) = 1.1235
+// //	Round(1.12335, 4) = 1.1234
+// //	Round(1.5, 0) = 2
+// //	Round(-1.5, 0) = -2
+// func (d Decimal) RoundHAZ(scale uint8) (Decimal, error) {
+// 	if scale >= d.scale {
+// 		return d, nil
+// 	}
 
-	if rem != 0 {
-		if trimTrailingZeros {
-			// remove trailing zeros, e.g. 1.2300 -> 1.23
-			// both scale and rem will be adjusted
-			zeros := getTrailingZeros64(rem)
-			rem /= pow10[zeros].lo
-			scale -= zeros
-		}
+// 	factor := pow10[d.scale-scale]
+// 	lo := factor.lo / 2
 
-		for ; rem != 0; rem /= 10 {
-			n++
-			b[l-n] += byte(rem % 10)
-		}
+// 	q, r := d.coef.QuoRem64(factor.lo)
+// 	if lo <= r {
+// 		q, _ = q.Add64(1)
+// 	}
 
-		b[l-1-int(scale)] = '.'
-		n = int(scale + 1)
-	}
+// 	return newDecimal(d.neg, q, scale)
+// }
 
-	qlo := quo.lo
-	if qlo != 0 {
-		for ; qlo != 0; qlo /= 10 {
-			n++
-			b[l-n] += byte(qlo % 10)
-		}
-	} else {
-		// quo is zero, so we need to print at least one zero
-		n++
-	}
+// // RoundHTZ rounds the decimal to the specified scale using HALF TOWARD ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero).
+// //
+// //	Examples:
+// //	Round(1.12345, 4) = 1.1234
+// //	Round(1.12335, 4) = 1.1233
+// //	Round(1.5, 0) = 1
+// //	Round(-1.5, 0) = -1
+// func (d Decimal) RoundHTZ(scale uint8) (Decimal, error) {
+// 	if scale >= d.scale {
+// 		return d, nil
+// 	}
 
-	if d.neg {
-		n++
-		b[l-n] = '-'
-	}
+// 	factor := pow10[d.scale-scale]
+// 	lo := factor.lo / 2
 
-	return l - n
-}
+// 	q, r := d.coef.QuoRem64(factor.lo)
+// 	if lo < r {
+// 		q, _ = q.Add64(1)
+// 	}
 
-func unsafeBytesToString(b []byte) string {
-	return unsafe.String(unsafe.SliceData(b), len(b))
-}
+// 	return newDecimal(d.neg, q, scale)
+// }
 
-// RoundBank uses half up to even (banker's rounding) to round the decimal to the specified scale.
-//
-//	Examples:
-//	Round(1.12345, 4) = 1.1234
-//	Round(1.12335, 4) = 1.1234
-//	Round(1.5, 0) = 2
-//	Roung(-1.5, 0) = -2
-func (d Decimal) RoundBank(scale uint8) (Decimal, error) {
-	if scale >= d.scale {
-		return d, nil
-	}
+// // Floor returns the largest integer value less than or equal to d.
+// //
+// //	Examples:
+// //	Floor(1.12345) = 1
+// //	Floor(1.12335) = 1
+// //	Floor(1.5, 0) = 1
+// //	Floor(-1.5, 0) = -2
+// func (d Decimal) Floor() (Decimal, error) {
+// 	q, r := d.coef.QuoRem64(pow10[d.scale].lo)
+// 	if d.neg && r != 0 {
+// 		q, _ = q.Add64(1)
+// 	}
 
-	factor := pow10[d.scale-scale]
-	lo := factor.lo / 2
+// 	return newDecimal(d.neg, q, 0)
+// }
 
-	q, r := d.coef.QuoRem64(factor.lo)
-	if lo < r || (lo == r && q.lo%2 == 1) {
-		q, _ = q.Add64(1)
-	}
+// // Ceil returns the smallest integer value greater than or equal to d.
+// //
+// //	Examples:
+// //	Ceil(1.12345, 4) = 1.1235
+// //	Ceil(1.12335, 4) = 1.1234
+// //	Ceil(1.5, 0) = 2
+// //	Ceil(-1.5, 0) = -1
+// func (d Decimal) Ceil() (Decimal, error) {
+// 	q, r := d.coef.QuoRem64(pow10[d.scale].lo)
+// 	if !d.neg && r != 0 {
+// 		q, _ = q.Add64(1)
+// 	}
 
-	return newDecimal(d.neg, q, scale)
-}
-
-// RoundHAZ rounds the decimal to the specified scale using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
-//
-//	Examples:
-//	Round(1.12345, 4) = 1.1235
-//	Round(1.12335, 4) = 1.1234
-//	Round(1.5, 0) = 2
-//	Round(-1.5, 0) = -2
-func (d Decimal) RoundHAZ(scale uint8) (Decimal, error) {
-	if scale >= d.scale {
-		return d, nil
-	}
-
-	factor := pow10[d.scale-scale]
-	lo := factor.lo / 2
-
-	q, r := d.coef.QuoRem64(factor.lo)
-	if lo <= r {
-		q, _ = q.Add64(1)
-	}
-
-	return newDecimal(d.neg, q, scale)
-}
-
-// RoundHTZ rounds the decimal to the specified scale using HALF TOWARD ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero).
-//
-//	Examples:
-//	Round(1.12345, 4) = 1.1234
-//	Round(1.12335, 4) = 1.1233
-//	Round(1.5, 0) = 1
-//	Round(-1.5, 0) = -1
-func (d Decimal) RoundHTZ(scale uint8) (Decimal, error) {
-	if scale >= d.scale {
-		return d, nil
-	}
-
-	factor := pow10[d.scale-scale]
-	lo := factor.lo / 2
-
-	q, r := d.coef.QuoRem64(factor.lo)
-	if lo < r {
-		q, _ = q.Add64(1)
-	}
-
-	return newDecimal(d.neg, q, scale)
-}
-
-// Floor returns the largest integer value less than or equal to d.
-//
-//	Examples:
-//	Floor(1.12345) = 1
-//	Floor(1.12335) = 1
-//	Floor(1.5, 0) = 1
-//	Floor(-1.5, 0) = -2
-func (d Decimal) Floor() (Decimal, error) {
-	q, r := d.coef.QuoRem64(pow10[d.scale].lo)
-	if d.neg && r != 0 {
-		q, _ = q.Add64(1)
-	}
-
-	return newDecimal(d.neg, q, 0)
-}
-
-// Ceil returns the smallest integer value greater than or equal to d.
-//
-//	Examples:
-//	Ceil(1.12345, 4) = 1.1235
-//	Ceil(1.12335, 4) = 1.1234
-//	Ceil(1.5, 0) = 2
-//	Ceil(-1.5, 0) = -1
-func (d Decimal) Ceil() (Decimal, error) {
-	q, r := d.coef.QuoRem64(pow10[d.scale].lo)
-	if !d.neg && r != 0 {
-		q, _ = q.Add64(1)
-	}
-
-	return newDecimal(d.neg, q, 0)
-}
+// 	return newDecimal(d.neg, q, 0)
+// }
 
 // FMA (fused multiply-add) returns d*e + f in an efficient way
 // and prevents intermediate rounding errors.
-func (d Decimal) FMA(e Decimal, f Decimal) (Decimal, error) {
-	// TODO: improve this
-	return Decimal{}, nil
-}
+// func (d Decimal) FMA(e Decimal, f Decimal) (Decimal, error) {
+// 	// TODO: improve this
+// 	return Decimal{}, nil
+// }
 
 // func (d Decimal) Pow(e int) (Decimal, error) {
 // 	if e == 0 {

@@ -139,14 +139,12 @@ func (u U256) quo(v u128) (u128, error) {
 	vq := v.MulToU256(tq)
 
 	// Some pre-conditions:
-	// We only allow u128 to have 38-digits max, then:
-	// max(u) = (10^38-1) * 10^19 = 10^58 - 10^19 < 2^190 --> u < 2^190
-	//
+	// u < 2^192, v < 2^128
 	// max(v*k) = u * [2^(64-n) - 1]/2^(127-n) (with n is v's leading zeros, 1 <= n <= 63)
-	// --> max(v*k) = u / 2^63 < 2^190 / 2^63
-	// --> v*k < 2^127
+	// --> max(v*k) = u / 2^64 < 2^192 / 2^64
+	// --> v*k < 2^128
 	// vqu = vq - u = (q+k)*v - (q*v + r) = k*v - r
-	// with v*k < 2^127 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
+	// with v*k < 2^128 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
 	if vq.cmp(u) <= 0 {
 		// vq <= u means tq = q
 		return tq, nil

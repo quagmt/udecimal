@@ -18,6 +18,24 @@ func (u u128) IsZero() bool {
 	return u == u128{}
 }
 
+func newU128(hi, lo uint64) (u128, error) {
+	u := u128{hi: hi, lo: lo}
+	if u.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return u, nil
+}
+
+// isOverflow returns true if coef is greater than or equal to 10^38
+// coef should be less than 10^38 to take advantage of 128-bits unsigned integer
+func (u u128) isOverflow() bool {
+	// scale = frac digits
+	// whole part has at most 19 digits
+	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
+	return !u.LessThan(pow10[38])
+}
+
 // Cmp compares u, v and returns:
 //
 //	-1 if u < v
@@ -66,7 +84,7 @@ func (u u128) Add(v u128) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return u128{hi: hi, lo: lo}, nil
+	return newU128(hi, lo)
 }
 
 // Add64 returns u+v.
@@ -77,7 +95,7 @@ func (u u128) Add64(v uint64) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return u128{hi: hi, lo: lo}, nil
+	return newU128(hi, lo)
 }
 
 func (u u128) Sub(v u128) (u128, error) {
@@ -88,7 +106,7 @@ func (u u128) Sub(v u128) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return u128{hi: hi, lo: lo}, nil
+	return newU128(hi, lo)
 }
 
 // Sub64 returns u-v.
@@ -99,7 +117,7 @@ func (u u128) Sub64(v uint64) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return u128{hi: hi, lo: lo}, nil
+	return newU128(hi, lo)
 }
 
 func (u u128) Mul64(v uint64) (u128, error) {
@@ -110,7 +128,7 @@ func (u u128) Mul64(v uint64) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return u128{hi: hi, lo: lo}, nil
+	return newU128(hi, lo)
 }
 
 func (u u128) Mul(v u128) (u128, error) {
@@ -136,7 +154,7 @@ func (u u128) Mul(v u128) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return u128{hi: hi, lo: lo}, nil
+	return newU128(hi, lo)
 }
 
 func (u u128) MulToU256(v u128) U256 {
@@ -247,6 +265,7 @@ func (u u128) String() string {
 	if u.IsZero() {
 		return "0"
 	}
+
 	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
 	for i := len(buf); ; i -= 19 {
 		q, r := u.QuoRem64(1e19) // largest power of 10 that fits in a uint64
