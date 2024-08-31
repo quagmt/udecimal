@@ -852,7 +852,7 @@ func TestSign(t *testing.T) {
 			c := a.Sign()
 			require.Equal(t, tc.want, c)
 
-			if (a.coef == bint{}) {
+			if (a.coef == u128{}) {
 				require.Equal(t, 0, a.Sign())
 				require.True(t, a.IsZero())
 				require.False(t, a.IsNeg())

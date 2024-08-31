@@ -12,7 +12,7 @@ const (
 )
 
 // pre-computed values
-var pow10 = [39]bint{
+var pow10 = [39]u128{
 	{lo: 1},                                  // 10^0
 	{lo: 10},                                 // 10^1
 	{lo: 1e2},                                // 10^2
@@ -76,13 +76,13 @@ var (
 // Hence, the decimal range is:
 // -9_999_999_999_999_999_999.9_999_999_999_999_999_999 <= D <= 9_999_999_999_999_999_999.9_999_999_999_999_999_999
 type Decimal struct {
-	coef  bint
+	coef  u128
 	neg   bool // true if number is negative
 	scale uint8
 }
 
 // isOverflow return true if the whole or fraction part has more than 19 digits
-func isOverflow(coef bint, scale uint8) bool {
+func isOverflow(coef u128, scale uint8) bool {
 	// scale = frac digits
 	// whole part has at most 19 digits
 	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
@@ -102,7 +102,7 @@ func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 		return Decimal{}, ErrMaxScale
 	}
 
-	return newDecimal(neg, bintFromHiLo(0, uint64(coef)), scale)
+	return newDecimal(neg, u128FromHiLo(0, uint64(coef)), scale)
 }
 
 // MustFromInt64 similars to NewFromInt64, but panics instead of returning error
@@ -196,7 +196,7 @@ func Parse(s string) (Decimal, error) {
 
 	var (
 		err   error
-		coef  bint
+		coef  u128
 		scale uint8
 	)
 	for ; pos < width; pos++ {
@@ -319,14 +319,14 @@ func (d Decimal) Add(e Decimal) (Decimal, error) {
 //  1. either whole or fration part is greater than 10^19-1
 //  2. coef >= 2^128
 func (d Decimal) Add64(e uint64) (Decimal, error) {
-	ecoef, err := bintFromHiLo(0, e).Mul(pow10[d.scale])
+	ecoef, err := u128FromHiLo(0, e).Mul(pow10[d.scale])
 	if err != nil {
 		return Decimal{}, err
 	}
 
 	if d.neg {
 		var (
-			dcoef bint
+			dcoef u128
 			neg   bool
 		)
 
@@ -417,14 +417,14 @@ func (d Decimal) Sub(e Decimal) (Decimal, error) {
 //  1. either whole or fration part is greater than 10^19-1
 //  2. coef >= 2^128
 func (d Decimal) Sub64(e uint64) (Decimal, error) {
-	ecoef, err := bintFromHiLo(0, e).Mul(pow10[d.scale])
+	ecoef, err := u128FromHiLo(0, e).Mul(pow10[d.scale])
 	if err != nil {
 		return Decimal{}, err
 	}
 
 	if !d.neg {
 		var (
-			dcoef bint
+			dcoef u128
 			neg   bool
 		)
 
@@ -471,7 +471,7 @@ func (d Decimal) Mul(e Decimal) (Decimal, error) {
 			return Decimal{}, ErrOverflow
 		}
 
-		return newDecimal(neg, bintFromHiLo(coef.hi, coef.lo), scale)
+		return newDecimal(neg, u128FromHiLo(coef.hi, coef.lo), scale)
 	}
 
 	rcoef, err := coef.quo(pow10[scale-MaxScale])
@@ -547,7 +547,7 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 	}
 
 	d256 := d.coef.MulToU256(pow10[MaxScale-d.scale])
-	quo, _, err := d256.quoRem64ToBint(v)
+	quo, _, err := d256.quoRem64Tou128(v)
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -556,7 +556,7 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 }
 
 // newDecimal return the decimal after removing all trailing zeros
-func newDecimal(neg bool, coef bint, scale uint8) (Decimal, error) {
+func newDecimal(neg bool, coef u128, scale uint8) (Decimal, error) {
 	if isOverflow(coef, scale) {
 		return Decimal{}, ErrOverflow
 	}
