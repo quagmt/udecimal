@@ -731,25 +731,16 @@ func unsafeBytesToString(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-// func unsafeStringToBytes(s string) []byte {
-// 	// unsafe.StringData output is unspecified for empty string input so always
-// 	// return nil.
-// 	if len(s) == 0 {
-// 		return nil
-// 	}
-
-// 	return unsafe.Slice(unsafe.StringData(s), len(s))
-// }
-
-// Round uses half up to even (banker's rounding) to round the decimal to the specified scale.
+// RoundBank uses half up to even (banker's rounding) to round the decimal to the specified scale.
 //
 //	Examples:
 //	Round(1.12345, 4) = 1.1234
 //	Round(1.12335, 4) = 1.1234
 //	Round(1.5, 0) = 2
-func (d Decimal) Round(scale uint8) Decimal {
+//	Roung(-1.5, 0) = -2
+func (d Decimal) RoundBank(scale uint8) (Decimal, error) {
 	if scale >= d.scale {
-		return d
+		return d, nil
 	}
 
 	factor := pow10[d.scale-scale]
@@ -760,7 +751,85 @@ func (d Decimal) Round(scale uint8) Decimal {
 		q, _ = q.Add64(1)
 	}
 
-	return Decimal{neg: d.neg, coef: q, scale: scale}
+	return newDecimal(d.neg, q, scale)
+}
+
+// RoundHAZ rounds the decimal to the specified scale using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
+//
+//	Examples:
+//	Round(1.12345, 4) = 1.1235
+//	Round(1.12335, 4) = 1.1234
+//	Round(1.5, 0) = 2
+//	Round(-1.5, 0) = -2
+func (d Decimal) RoundHAZ(scale uint8) (Decimal, error) {
+	if scale >= d.scale {
+		return d, nil
+	}
+
+	factor := pow10[d.scale-scale]
+	lo := factor.lo / 2
+
+	q, r := d.coef.QuoRem64(factor.lo)
+	if lo <= r {
+		q, _ = q.Add64(1)
+	}
+
+	return newDecimal(d.neg, q, scale)
+}
+
+// RoundHTZ rounds the decimal to the specified scale using HALF TOWARD ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero).
+//
+//	Examples:
+//	Round(1.12345, 4) = 1.1234
+//	Round(1.12335, 4) = 1.1233
+//	Round(1.5, 0) = 1
+//	Round(-1.5, 0) = -1
+func (d Decimal) RoundHTZ(scale uint8) (Decimal, error) {
+	if scale >= d.scale {
+		return d, nil
+	}
+
+	factor := pow10[d.scale-scale]
+	lo := factor.lo / 2
+
+	q, r := d.coef.QuoRem64(factor.lo)
+	if lo < r {
+		q, _ = q.Add64(1)
+	}
+
+	return newDecimal(d.neg, q, scale)
+}
+
+// Floor returns the largest integer value less than or equal to d.
+//
+//	Examples:
+//	Floor(1.12345) = 1
+//	Floor(1.12335) = 1
+//	Floor(1.5, 0) = 1
+//	Floor(-1.5, 0) = -2
+func (d Decimal) Floor() (Decimal, error) {
+	q, r := d.coef.QuoRem64(pow10[d.scale].lo)
+	if d.neg && r != 0 {
+		q, _ = q.Add64(1)
+	}
+
+	return newDecimal(d.neg, q, 0)
+}
+
+// Ceil returns the smallest integer value greater than or equal to d.
+//
+//	Examples:
+//	Ceil(1.12345, 4) = 1.1235
+//	Ceil(1.12335, 4) = 1.1234
+//	Ceil(1.5, 0) = 2
+//	Ceil(-1.5, 0) = -1
+func (d Decimal) Ceil() (Decimal, error) {
+	q, r := d.coef.QuoRem64(pow10[d.scale].lo)
+	if !d.neg && r != 0 {
+		q, _ = q.Add64(1)
+	}
+
+	return newDecimal(d.neg, q, 0)
 }
 
 // FMA (fused multiply-add) returns d*e + f in an efficient way
