@@ -18,15 +18,6 @@ func (u u128) IsZero() bool {
 	return u == u128{}
 }
 
-func newU128(hi, lo uint64) (u128, error) {
-	u := u128{hi: hi, lo: lo}
-	if u.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return u, nil
-}
-
 // isOverflow returns true if coef is greater than or equal to 10^38
 // coef should be less than 10^38 to take advantage of 128-bits unsigned integer
 func (u u128) isOverflow() bool {
@@ -34,6 +25,15 @@ func (u u128) isOverflow() bool {
 	// whole part has at most 19 digits
 	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
 	return !u.LessThan(pow10[38])
+}
+
+func newU128(hi, lo uint64) (u128, error) {
+	u := u128{hi: hi, lo: lo}
+	if u.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return u, nil
 }
 
 // Cmp compares u, v and returns:
@@ -304,45 +304,52 @@ func (u u128) ToBigInt() *big.Int {
 	return new(big.Int).SetBytes(bytes)
 }
 
-// func getTrailingZeros(coef u128) uint8 {
-// 	var z uint8
-// 	if coef.hi == 0 {
-// 		return getTrailingZeros64(coef.lo)
-// 	}
+func getTrailingZeros(coef u128) uint8 {
+	var z uint8
+	if coef.hi == 0 {
+		return getTrailingZeros64(coef.lo)
+	}
 
-// 	if _, rem := coef.QuoRem64(1e16); rem == 0 {
-// 		z = 16
+	// u128 has 38 digits at most
+	// division by 10^16 first to simplify the calculation
+	adjusted, rem := coef.QuoRem64(1e16)
+	if rem == 0 {
+		z += 16
+	}
 
-// 		// short path because maxScale is only 19
-// 		if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
-// 			z += 2
-// 		}
+	if _, rem := adjusted.QuoRem64(1e16); rem == 0 {
+		z = 16
 
-// 		if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-// 			z++
-// 		}
+		// short path because maxScale is only 19
+		if _, rem := adjusted.QuoRem64(pow10[z+2].lo); rem == 0 {
+			z += 2
+		}
 
-// 		return z
-// 	}
+		if _, rem := adjusted.QuoRem64(pow10[z+1].lo); rem == 0 {
+			z++
+		}
 
-// 	if _, rem := coef.QuoRem64(pow10[8].lo); rem == 0 {
-// 		z = 8
-// 	}
+		return z
+	}
 
-// 	if _, rem := coef.QuoRem64(pow10[z+4].lo); rem == 0 {
-// 		z += 4
-// 	}
+	if _, rem := adjusted.QuoRem64(pow10[8].lo); rem == 0 {
+		z = 8
+	}
 
-// 	if _, rem := coef.QuoRem64(pow10[z+2].lo); rem == 0 {
-// 		z += 2
-// 	}
+	if _, rem := adjusted.QuoRem64(pow10[z+4].lo); rem == 0 {
+		z += 4
+	}
 
-// 	if _, rem := coef.QuoRem64(pow10[z+1].lo); rem == 0 {
-// 		z++
-// 	}
+	if _, rem := adjusted.QuoRem64(pow10[z+2].lo); rem == 0 {
+		z += 2
+	}
 
-// 	return z
-// }
+	if _, rem := adjusted.QuoRem64(pow10[z+1].lo); rem == 0 {
+		z++
+	}
+
+	return z
+}
 
 func getTrailingZeros64(u uint64) uint8 {
 	var z uint8

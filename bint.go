@@ -6,17 +6,21 @@ import (
 )
 
 var (
-	zero = big.NewInt(0)
+	bigZero = big.NewInt(0)
+	bigOne  = big.NewInt(1)
 )
 
+// bint stores the whole decimal number, without the decimal place
+// the value is always positive, even though fallback is big.Int
 type bint struct {
 	// flag to indicate if the value is overflow and stored in big.Int
 	overflow bool
 
-	// use for storing small number, with high performance
+	// use for storing small number, with high performance and zero allocation
+	// Value range from -10^38 + 1 < u128 < 10^38 - 1
 	u128 u128
 
-	// fall back
+	// fall back, in case the value is our of u128 range
 	bigInt *big.Int
 }
 
@@ -45,7 +49,15 @@ func (u bint) IsZero() bool {
 		return u.u128.IsZero()
 	}
 
-	return u.bigInt.Cmp(zero) == 0
+	return u.bigInt.Cmp(bigZero) == 0
+}
+
+func (u bint) Cmp(v bint) int {
+	if !u.overflow && !v.overflow {
+		return u.u128.Cmp(v.u128)
+	}
+
+	return u.GetBig().Cmp(v.GetBig())
 }
 
 func parseBint(s string) (bool, bint, uint8, error) {
@@ -122,10 +134,14 @@ func parseBint(s string) (bool, bint, uint8, error) {
 		return false, bint{}, 0, ErrMaxScale
 	}
 
-	// strconv.ParseInt is faster than new(big.Int).SetString so this is just a shortcut for strings we know won't overflow
 	dValue := new(big.Int)
 	_, ok := dValue.SetString(intString, 10)
 	if !ok {
+		return false, bint{}, 0, errInvalidFormat
+	}
+
+	// the value should always be positive, as we already extracted the sign
+	if dValue.Sign() == -1 {
 		return false, bint{}, 0, errInvalidFormat
 	}
 
@@ -215,6 +231,11 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 	return neg, bint{u128: coef}, scale, nil
 }
 
+// GT returns true if u > v
+func (u bint) GT(v bint) bool {
+	return u.Cmp(v) == 1
+}
+
 func (u bint) Add(v bint) bint {
 	if !u.overflow && !v.overflow {
 		c, err := u.u128.Add(v.u128)
@@ -228,8 +249,27 @@ func (u bint) Add(v bint) bint {
 	return bintFromBigInt(new(big.Int).Add(u.GetBig(), v.GetBig()))
 }
 
+func (u bint) Sub(v bint) (bint, error) {
+	if !u.overflow && !v.overflow {
+		c, err := u.u128.Sub(v.u128)
+		if err == nil {
+			return bint{u128: c}, nil
+		}
+	}
+
+	uBig := u.GetBig()
+	vBig := v.GetBig()
+
+	// make sure the result is always positive
+	if uBig.Cmp(vBig) < 0 {
+		return bint{}, ErrOverflow
+	}
+
+	return bintFromBigInt(new(big.Int).Sub(uBig, vBig)), nil
+}
+
 func (u bint) Mul(v bint) bint {
-	if !u.overflow && v.overflow {
+	if !u.overflow && !v.overflow {
 		c, err := u.u128.Mul(v.u128)
 		if err == nil {
 			return bint{u128: c}

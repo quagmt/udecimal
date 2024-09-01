@@ -1,7 +1,6 @@
 package udecimal
 
 import (
-	"strings"
 	"unsafe"
 )
 
@@ -42,15 +41,8 @@ func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
 	// NOTE(vadim): this cast to int will cause bugs if d.exp == INT_MIN
 	// and you are on a 32-bit machine. Won't fix this super-edge case.
 	dExpInt := int(d.scale)
-	if len(str) > dExpInt {
-		intPart = str[:len(str)-dExpInt]
-		fractionalPart = str[len(str)-dExpInt:]
-	} else {
-		intPart = "0"
-
-		num0s := dExpInt - len(str)
-		fractionalPart = strings.Repeat("0", num0s) + str
-	}
+	intPart = str[:len(str)-dExpInt]
+	fractionalPart = str[len(str)-dExpInt:]
 
 	if trimTrailingZeros {
 		i := len(fractionalPart) - 1
@@ -78,38 +70,49 @@ func (d Decimal) stringU128(trimTrailingZeros bool) string {
 	// max 40 bytes: 1 sign + 19 whole + 1 dot + 19 fraction
 	buf := []byte("0000000000000000000000000000000000000000")
 
-	quo, rem := d.coef.u128.QuoRem64(pow10[d.scale].lo)
+	quo, rem, _ := d.coef.u128.QuoRem(pow10[d.scale])
 	l := len(buf)
 	n := 0
 	scale := d.scale
 
-	if rem != 0 {
+	if !rem.IsZero() {
 		if trimTrailingZeros {
 			// remove trailing zeros, e.g. 1.2300 -> 1.23
 			// both scale and rem will be adjusted
-			zeros := getTrailingZeros64(rem)
-			rem /= pow10[zeros].lo
+			zeros := getTrailingZeros(rem)
+			rem, _, _ = rem.QuoRem(pow10[zeros])
 			scale -= zeros
 		}
 
-		for ; rem != 0; rem /= 10 {
+		for {
+			q, r := rem.QuoRem64(10)
 			n++
-			buf[l-n] += byte(rem % 10)
+			buf[l-n] += byte(r)
+			if q.IsZero() {
+				break
+			}
+
+			rem = q
 		}
 
 		buf[l-1-int(scale)] = '.'
 		n = int(scale + 1)
 	}
 
-	qlo := quo.lo
-	if qlo != 0 {
-		for ; qlo != 0; qlo /= 10 {
-			n++
-			buf[l-n] += byte(qlo % 10)
-		}
-	} else {
+	if quo.IsZero() {
 		// quo is zero, so we need to print at least one zero
 		n++
+	} else {
+		for {
+			q, r := quo.QuoRem64(10)
+			n++
+			buf[l-n] += byte(r)
+			if q.IsZero() {
+				break
+			}
+
+			quo = q
+		}
 	}
 
 	if d.neg {
@@ -119,53 +122,6 @@ func (d Decimal) stringU128(trimTrailingZeros bool) string {
 
 	return unsafeBytesToString(buf[l-n:])
 }
-
-// func (d Decimal) writeToBytes(b []byte, trimTrailingZeros bool) int {
-// 	if d.coef.IsZero() {
-// 		return len(b) - 1
-// 	}
-
-// 	quo, rem := d.coef.u128.QuoRem64(pow10[d.scale].lo)
-// 	l := len(b)
-// 	n := 0
-// 	scale := d.scale
-
-// 	if rem != 0 {
-// 		if trimTrailingZeros {
-// 			// remove trailing zeros, e.g. 1.2300 -> 1.23
-// 			// both scale and rem will be adjusted
-// 			zeros := getTrailingZeros64(rem)
-// 			rem /= pow10[zeros].lo
-// 			scale -= zeros
-// 		}
-
-// 		for ; rem != 0; rem /= 10 {
-// 			n++
-// 			b[l-n] += byte(rem % 10)
-// 		}
-
-// 		b[l-1-int(scale)] = '.'
-// 		n = int(scale + 1)
-// 	}
-
-// 	qlo := quo.lo
-// 	if qlo != 0 {
-// 		for ; qlo != 0; qlo /= 10 {
-// 			n++
-// 			b[l-n] += byte(qlo % 10)
-// 		}
-// 	} else {
-// 		// quo is zero, so we need to print at least one zero
-// 		n++
-// 	}
-
-// 	if d.neg {
-// 		n++
-// 		b[l-n] = '-'
-// 	}
-
-// 	return l - n
-// }
 
 func unsafeBytesToString(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
