@@ -4,21 +4,6 @@ import (
 	"unsafe"
 )
 
-// func (d Decimal) Scan(value interface{}) error {
-// 	return nil
-// }
-
-// func (d Decimal) MarshalText() ([]byte, error) {
-// 	buf := []byte("0000000000000000000000000000000000000000")
-// 	n := d.writeToBytes(buf, true)
-// 	return buf[n:], nil
-// }
-
-// func (d Decimal) UnmarshalText(text []byte) error {
-
-// 	return nil
-// }
-
 // String returns the string representation of the decimal.
 // Trailing zeros will be removed.
 func (d Decimal) String() string {
@@ -70,29 +55,23 @@ func (d Decimal) stringU128(trimTrailingZeros bool) string {
 	// max 40 bytes: 1 sign + 19 whole + 1 dot + 19 fraction
 	buf := []byte("0000000000000000000000000000000000000000")
 
-	quo, rem, _ := d.coef.u128.QuoRem(pow10[d.scale])
+	quo, rem := d.coef.u128.QuoRem64(pow10[d.scale].lo) // max scale is 19, so we can safely use QuoRem64
 	l := len(buf)
 	n := 0
 	scale := d.scale
 
-	if !rem.IsZero() {
+	if rem != 0 {
 		if trimTrailingZeros {
 			// remove trailing zeros, e.g. 1.2300 -> 1.23
 			// both scale and rem will be adjusted
-			zeros := getTrailingZeros(rem)
-			rem, _, _ = rem.QuoRem(pow10[zeros])
+			zeros := getTrailingZeros64(rem)
+			rem /= pow10[zeros].lo
 			scale -= zeros
 		}
 
-		for {
-			q, r := rem.QuoRem64(10)
+		for ; rem != 0; rem /= 10 {
 			n++
-			buf[l-n] += byte(r)
-			if q.IsZero() {
-				break
-			}
-
-			rem = q
+			buf[l-n] += byte(rem % 10)
 		}
 
 		buf[l-1-int(scale)] = '.'
@@ -104,7 +83,7 @@ func (d Decimal) stringU128(trimTrailingZeros bool) string {
 		n++
 	} else {
 		for {
-			q, r := quo.QuoRem64(10)
+			q, r := quoRem64(quo, 10)
 			n++
 			buf[l-n] += byte(r)
 			if q.IsZero() {
@@ -123,6 +102,29 @@ func (d Decimal) stringU128(trimTrailingZeros bool) string {
 	return unsafeBytesToString(buf[l-n:])
 }
 
+func quoRem64(u u128, v uint64) (q u128, r uint64) {
+	if u.hi == 0 {
+		return u128{lo: u.lo / v}, u.lo % v
+	}
+
+	return u.QuoRem64(v)
+}
+
 func unsafeBytesToString(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
+
+// func (d Decimal) Scan(value interface{}) error {
+// 	return nil
+// }
+
+// func (d Decimal) MarshalText() ([]byte, error) {
+// 	buf := []byte("0000000000000000000000000000000000000000")
+// 	n := d.writeToBytes(buf, true)
+// 	return buf[n:], nil
+// }
+
+// func (d Decimal) UnmarshalText(text []byte) error {
+
+// 	return nil
+// }

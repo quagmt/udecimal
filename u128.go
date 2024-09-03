@@ -61,12 +61,19 @@ func (u u128) Cmp(v u128) int {
 	}
 }
 
-func (u u128) GreaterThan(v u128) bool {
-	if u.hi > v.hi || (u.hi == v.hi && u.lo > v.lo) {
-		return true
+func (u u128) Cmp64(v uint64) int {
+	if u.hi != 0 {
+		return 1
 	}
 
-	return false
+	switch {
+	case u.lo < v:
+		return -1
+	case u.lo > v:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func (u u128) LessThan(v u128) bool {
@@ -132,7 +139,7 @@ func (u u128) Mul64(v uint64) (u128, error) {
 }
 
 func (u u128) Mul(v u128) (u128, error) {
-	if u.hi&v.hi != 0 {
+	if u.hi != 0 && v.hi != 0 {
 		return u128{}, ErrOverflow
 	}
 
@@ -140,21 +147,8 @@ func (u u128) Mul(v u128) (u128, error) {
 		return u.Mul64(v.lo)
 	}
 
-	p0, p1 := bits.Mul64(u.hi, v.lo)
-	p2, p3 := bits.Mul64(u.lo, v.hi)
-
-	if p0 != 0 || p2 != 0 {
-		return u128{}, ErrOverflow
-	}
-
-	hi, lo := bits.Mul64(u.lo, v.lo)
-	hi, c0 := bits.Add64(hi, p1, 0)
-	hi, c1 := bits.Add64(hi, p3, 0)
-	if c1&c0 != 0 {
-		return u128{}, ErrOverflow
-	}
-
-	return newU128(hi, lo)
+	// u.hi == 0
+	return v.Mul64(u.lo)
 }
 
 func (u u128) MulToU256(v u128) U256 {
@@ -304,53 +298,8 @@ func (u u128) ToBigInt() *big.Int {
 	return new(big.Int).SetBytes(bytes)
 }
 
-func getTrailingZeros(coef u128) uint8 {
-	var z uint8
-	if coef.hi == 0 {
-		return getTrailingZeros64(coef.lo)
-	}
-
-	// u128 has 38 digits at most
-	// division by 10^16 first to simplify the calculation
-	adjusted, rem := coef.QuoRem64(1e16)
-	if rem == 0 {
-		z += 16
-	}
-
-	if _, rem := adjusted.QuoRem64(1e16); rem == 0 {
-		z = 16
-
-		// short path because maxScale is only 19
-		if _, rem := adjusted.QuoRem64(pow10[z+2].lo); rem == 0 {
-			z += 2
-		}
-
-		if _, rem := adjusted.QuoRem64(pow10[z+1].lo); rem == 0 {
-			z++
-		}
-
-		return z
-	}
-
-	if _, rem := adjusted.QuoRem64(pow10[8].lo); rem == 0 {
-		z = 8
-	}
-
-	if _, rem := adjusted.QuoRem64(pow10[z+4].lo); rem == 0 {
-		z += 4
-	}
-
-	if _, rem := adjusted.QuoRem64(pow10[z+2].lo); rem == 0 {
-		z += 2
-	}
-
-	if _, rem := adjusted.QuoRem64(pow10[z+1].lo); rem == 0 {
-		z++
-	}
-
-	return z
-}
-
+// getTrailingZeros64 returns the number of trailing zeros in u
+// NOTE: this only works when maxScale is 19
 func getTrailingZeros64(u uint64) uint8 {
 	var z uint8
 	if u%1e16 == 0 {
@@ -368,7 +317,7 @@ func getTrailingZeros64(u uint64) uint8 {
 	}
 
 	if u%pow10[8].lo == 0 {
-		z = 8
+		z += 8
 	}
 
 	if u%pow10[z+4].lo == 0 {

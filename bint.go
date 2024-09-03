@@ -110,28 +110,27 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	for i := 0; i < vLen; i++ {
 		if value[i] == '.' {
 			if pIndex > -1 {
+				// input has more than 1 decimal point
 				return false, bint{}, 0, errInvalidFormat
 			}
 			pIndex = i
 		}
 	}
 
-	if pIndex == -1 {
-		// There is no decimal point, we can just parse the original string as
-		// an int
+	switch {
+	case pIndex == -1:
+		// There is no decimal point, we can just parse the original string as an int
 		intString = value
-	} else {
-		if pIndex+1 < vLen {
-			intString = value[:pIndex] + value[pIndex+1:]
-		} else {
-			intString = value[:pIndex]
-		}
-
+	case pIndex >= vLen-1:
+		// prevent "123." or "-123."
+		return false, bint{}, 0, errInvalidFormat
+	default:
+		intString = value[:pIndex] + value[pIndex+1:]
 		scale = len(value[pIndex+1:])
 	}
 
-	if scale > maxScale {
-		return false, bint{}, 0, ErrMaxScale
+	if scale > int(defaultScale) {
+		return false, bint{}, 0, ErrScaleOutOfRange
 	}
 
 	dValue := new(big.Int)
@@ -198,8 +197,8 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 				return false, bint{}, 0, errInvalidFormat
 			}
 
-			if scale > maxScale {
-				return false, bint{}, 0, ErrMaxScale
+			if scale > defaultScale {
+				return false, bint{}, 0, ErrScaleOutOfRange
 			}
 
 			continue
@@ -224,9 +223,9 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 		return false, bint{}, 0, nil
 	}
 
-	if coef.isOverflow() {
-		return false, bint{}, 0, ErrOverflow
-	}
+	// if coef.isOverflow() {
+	// 	return false, bint{}, 0, ErrOverflow
+	// }
 
 	return neg, bint{u128: coef}, scale, nil
 }

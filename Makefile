@@ -1,5 +1,5 @@
 bench:
-	@go test -bench BenchmarkString -benchmem -memprofile mem.out -cpuprofile cpu.out -run NONE
+	@go test -bench BenchmarkGovaluesDiv -benchmem -memprofile mem.out -cpuprofile cpu.out -run NONE
  
 lint:
 	@golangci-lint run ./... -v

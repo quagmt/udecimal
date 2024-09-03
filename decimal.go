@@ -7,9 +7,26 @@ import (
 	"strconv"
 )
 
-const (
-	maxScale = 19
+var (
+	// defaultScale is the default number of digits after the decimal point
+	// if not specified
+	defaultScale uint8 = 19
+
+	// maxScale is the maximum number of digits after the decimal point
+	maxScale uint8 = 19
 )
+
+func SetDefaultScale(scale uint8) {
+	if scale > maxScale {
+		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale))
+	}
+
+	if scale == 0 {
+		panic("scale must be greater than 0")
+	}
+
+	defaultScale = scale
+}
 
 // pre-computed values
 var pow10 = [39]u128{
@@ -55,11 +72,11 @@ var pow10 = [39]u128{
 }
 
 var (
-	ErrOverflow      = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
-	ErrMaxScale      = fmt.Errorf("scale out of range. Max digits after decimal point is %d", maxScale)
-	ErrEmptyString   = fmt.Errorf("parse empty string")
-	ErrInvalidFormat = fmt.Errorf("invalid format")
-	ErrDivideByZero  = fmt.Errorf("can't divide by zero")
+	ErrOverflow        = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
+	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
+	ErrEmptyString     = fmt.Errorf("parse empty string")
+	ErrInvalidFormat   = fmt.Errorf("invalid format")
+	ErrDivideByZero    = fmt.Errorf("can't divide by zero")
 )
 
 var (
@@ -99,8 +116,8 @@ func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 		coef = -coef
 	}
 
-	if scale > maxScale {
-		return Decimal{}, ErrMaxScale
+	if scale > defaultScale {
+		return Decimal{}, ErrScaleOutOfRange
 	}
 
 	return newDecimal(neg, bintFromU64(uint64(coef)), scale), nil
@@ -154,7 +171,7 @@ func MustFromFloat64(f float64) Decimal {
 //
 // Returns error if:
 //  1. empty/invalid string
-//  2. the number has whole or fraction part greater than 10^19-1
+//  2. the number has more than 19 digits after the decimal point
 func Parse(s string) (Decimal, error) {
 	if len(s) == 0 {
 		return Decimal{}, ErrEmptyString
@@ -304,7 +321,7 @@ func (d Decimal) Sub64(e uint64) Decimal {
 }
 
 // Mul returns d * e.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// The result will have at most defaultScale digits after the decimal point.
 func (d Decimal) Mul(e Decimal) Decimal {
 	if e.coef.IsZero() {
 		return Decimal{}
@@ -323,12 +340,12 @@ func (d Decimal) Mul(e Decimal) Decimal {
 	eBig := e.coef.GetBig()
 
 	dBig = dBig.Mul(dBig, eBig)
-	if scale <= maxScale {
+	if scale <= defaultScale {
 		return newDecimal(neg, bintFromBigInt(dBig), scale)
 	}
 
-	q, _ := new(big.Int).QuoRem(dBig, pow10[scale-maxScale].ToBigInt(), new(big.Int))
-	return newDecimal(neg, bintFromBigInt(q), maxScale)
+	q, _ := new(big.Int).QuoRem(dBig, pow10[scale-defaultScale].ToBigInt(), new(big.Int))
+	return newDecimal(neg, bintFromBigInt(q), defaultScale)
 }
 
 func tryMulU128(d, e Decimal, neg bool, scale uint8) (Decimal, error) {
@@ -338,7 +355,7 @@ func tryMulU128(d, e Decimal, neg bool, scale uint8) (Decimal, error) {
 
 	rcoef := d.coef.u128.MulToU256(e.coef.u128)
 
-	if scale <= maxScale {
+	if scale <= defaultScale {
 		if !rcoef.carry.IsZero() {
 			return Decimal{}, ErrOverflow
 		}
@@ -346,16 +363,16 @@ func tryMulU128(d, e Decimal, neg bool, scale uint8) (Decimal, error) {
 		return newDecimal(neg, bintFromU128(u128{hi: rcoef.hi, lo: rcoef.lo}), scale), nil
 	}
 
-	q, err := rcoef.quo(pow10[scale-maxScale])
+	q, err := rcoef.quo(pow10[scale-defaultScale])
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bintFromU128(q), maxScale), nil
+	return newDecimal(neg, bintFromU128(q), defaultScale), nil
 }
 
 // Mul64 returns d * e where e is a uint64.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// The result will have at most defaultScale digits after the decimal point.
 func (d Decimal) Mul64(v uint64) Decimal {
 	if v == 0 {
 		return Decimal{}
@@ -395,8 +412,8 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 	}
 
 	// Need to multiply divident with factor
-	// to make sure the total decimal number after the decimal point is MaxScale
-	factor := maxScale - (d.scale - e.scale)
+	// to make sure the total decimal number after the decimal point is defaultScale
+	factor := defaultScale - (d.scale - e.scale)
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
@@ -404,7 +421,7 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 
 	dBig = dBig.Mul(dBig, pow10[factor].ToBigInt())
 	dBig = dBig.Div(dBig, eBig)
-	return newDecimal(neg, bintFromBigInt(dBig), maxScale), nil
+	return newDecimal(neg, bintFromBigInt(dBig), defaultScale), nil
 }
 
 func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
@@ -413,8 +430,8 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	}
 
 	// Need to multiply divident with factor
-	// to make sure the total decimal number after the decimal point is MaxScale
-	factor := maxScale - (d.scale - e.scale)
+	// to make sure the total decimal number after the decimal point is defaultScale
+	factor := defaultScale - (d.scale - e.scale)
 
 	d256 := d.coef.u128.MulToU256(pow10[factor])
 	quo, err := d256.quo(e.coef.u128)
@@ -422,7 +439,7 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bintFromU128(quo), maxScale), nil
+	return newDecimal(neg, bintFromU128(quo), defaultScale), nil
 }
 
 // Div64 returns d / e where e is a uint64
@@ -438,19 +455,19 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 	}
 
 	if !d.coef.overflow {
-		d256 := d.coef.u128.MulToU256(pow10[maxScale-d.scale])
+		d256 := d.coef.u128.MulToU256(pow10[defaultScale-d.scale])
 		quo, _, err := d256.quoRem64Tou128(v)
 		if err == nil {
-			return newDecimal(d.neg, bintFromU128(quo), maxScale), nil
+			return newDecimal(d.neg, bintFromU128(quo), defaultScale), nil
 		}
 	}
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
-	dBig = dBig.Mul(dBig, pow10[maxScale-d.scale].ToBigInt())
+	dBig = dBig.Mul(dBig, pow10[defaultScale-d.scale].ToBigInt())
 	dBig = dBig.Div(dBig, new(big.Int).SetUint64(v))
 
-	return newDecimal(d.neg, bintFromBigInt(dBig), maxScale), nil
+	return newDecimal(d.neg, bintFromBigInt(dBig), defaultScale), nil
 }
 
 // Scale returns decimal scale
@@ -634,13 +651,13 @@ func (d Decimal) RoundHAZ(scale uint8) Decimal {
 		return d
 	}
 
-	factor := pow10[d.scale-scale] // as maxScale = 19, factor < 10^19 --> factor.hi = 0
-	lo := factor.lo / 2
+	factor := pow10[d.scale-scale]
+	lo, _ := factor.QuoRem64(2)
 
 	if !d.coef.overflow {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
-		if lo <= r {
+		if lo.Cmp64(r) <= 0 {
 			q, err = q.Add64(1)
 		}
 
@@ -653,7 +670,7 @@ func (d Decimal) RoundHAZ(scale uint8) Decimal {
 	dBig := d.coef.GetBig()
 	q, r := new(big.Int).QuoRem(dBig, factor.ToBigInt(), new(big.Int))
 
-	loBig := new(big.Int).SetUint64(lo)
+	loBig := lo.ToBigInt()
 	if r.Cmp(loBig) >= 0 {
 		q.Add(q, bigOne)
 	}
@@ -674,12 +691,12 @@ func (d Decimal) RoundHTZ(scale uint8) Decimal {
 	}
 
 	factor := pow10[d.scale-scale]
-	lo := factor.lo / 2
+	lo, _ := factor.QuoRem64(2)
 
 	if !d.coef.overflow {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
-		if lo < r {
+		if lo.Cmp64(r) < 0 {
 			q, err = q.Add64(1)
 		}
 
@@ -692,7 +709,7 @@ func (d Decimal) RoundHTZ(scale uint8) Decimal {
 	dBig := d.coef.GetBig()
 	q, r := new(big.Int).QuoRem(dBig, factor.ToBigInt(), new(big.Int))
 
-	loBig := new(big.Int).SetUint64(lo)
+	loBig := lo.ToBigInt()
 	if r.Cmp(loBig) > 0 {
 		q.Add(q, bigOne)
 	}
