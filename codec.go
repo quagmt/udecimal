@@ -20,12 +20,16 @@ func (d Decimal) String() string {
 
 func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
 	str := d.coef.bigInt.String()
+	dExpInt := int(d.scale)
+	if dExpInt > len(str) {
+		// pad with zeros
+		l := len(str)
+		for i := 0; i < dExpInt-l; i++ {
+			str = "0" + str
+		}
+	}
 
 	var intPart, fractionalPart string
-
-	// NOTE(vadim): this cast to int will cause bugs if d.exp == INT_MIN
-	// and you are on a 32-bit machine. Won't fix this super-edge case.
-	dExpInt := int(d.scale)
 	intPart = str[:len(str)-dExpInt]
 	fractionalPart = str[len(str)-dExpInt:]
 
@@ -40,6 +44,10 @@ func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
 	}
 
 	number := intPart
+	if number == "" {
+		number = "0"
+	}
+
 	if len(fractionalPart) > 0 {
 		number += "." + fractionalPart
 	}

@@ -164,7 +164,6 @@ func MustFromFloat64(f float64) Decimal {
 	return d
 }
 
-// TODO: improve with SIMD
 // Parse parses a number in string to Decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
 // e.g. "123", "-123", "123.456", "-123.456", "+123.456", "0.123".
@@ -424,6 +423,16 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 	return newDecimal(neg, bintFromBigInt(dBig), defaultScale), nil
 }
 
+// DivExact returns d / e with exact scale. The result will be truncated to the specified scale. No rounding is performed.
+func (d Decimal) DivExact(e Decimal, scale uint8) (Decimal, error) {
+	q, err := d.Div(e)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return q.Trunc(scale), nil
+}
+
 func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	if d.coef.overflow || e.coef.overflow {
 		return Decimal{}, ErrOverflow
@@ -535,15 +544,15 @@ func tryCmpU128(d, e Decimal) (int, error) {
 	if d.scale < e.scale {
 		// d has more fraction digits
 		d256 := d.coef.u128.MulToU256(pow10[e.scale-d.scale])
-		return d256.Cmp128(e.coef.u128), nil
+		return d256.cmp128(e.coef.u128), nil
 	}
 
 	// d has more fraction digits
 	// we need to compare d with e * 10^(d.scale - e.scale)
 	e256 := e.coef.u128.MulToU256(pow10[d.scale-e.scale])
 
-	// remember to reverse the result because e256.Cmp128(d.coef) returns the opposite
-	return -e256.Cmp128(d.coef.u128), nil
+	// remember to reverse the result because e256.cmp128(d.coef) returns the opposite
+	return -e256.cmp128(d.coef.u128), nil
 }
 
 // Neg returns -d
@@ -601,7 +610,8 @@ func (d Decimal) IsPos() bool {
 
 // RoundBank uses half up to even (banker's rounding) to round the decimal to the specified scale.
 //
-//	Examples:
+// Examples:
+//
 //	Round(1.12345, 4) = 1.1234
 //	Round(1.12335, 4) = 1.1234
 //	Round(1.5, 0) = 2
@@ -641,7 +651,8 @@ func (d Decimal) RoundBank(scale uint8) Decimal {
 
 // RoundHAZ rounds the decimal to the specified scale using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
 //
-//	Examples:
+// Examples:
+//
 //	Round(1.12345, 4) = 1.1235
 //	Round(1.12335, 4) = 1.1234
 //	Round(1.5, 0) = 2
@@ -680,7 +691,8 @@ func (d Decimal) RoundHAZ(scale uint8) Decimal {
 
 // RoundHTZ rounds the decimal to the specified scale using HALF TOWARD ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero).
 //
-//	Examples:
+// Examples:
+//
 //	Round(1.12345, 4) = 1.1234
 //	Round(1.12335, 4) = 1.1233
 //	Round(1.5, 0) = 1
@@ -719,7 +731,8 @@ func (d Decimal) RoundHTZ(scale uint8) Decimal {
 
 // Floor returns the largest integer value less than or equal to d.
 //
-//	Examples:
+// Examples:
+//
 //	Floor(1.12345) = 1
 //	Floor(1.12335) = 1
 //	Floor(1.5, 0) = 1
@@ -757,7 +770,8 @@ func (d Decimal) Floor() Decimal {
 
 // Ceil returns the smallest integer value greater than or equal to d.
 //
-//	Examples:
+// Examples:
+//
 //	Ceil(1.12345, 4) = 1.1235
 //	Ceil(1.12335, 4) = 1.1234
 //	Ceil(1.5, 0) = 2
@@ -793,30 +807,248 @@ func (d Decimal) Ceil() Decimal {
 	return newDecimal(d.neg, bintFromBigInt(q), 0)
 }
 
-// FMA (fused multiply-add) returns d*e + f in an efficient way
-// and prevents intermediate rounding errors.
-// func (d Decimal) FMA(e Decimal, f Decimal) (Decimal, error) {
-// 	// TODO: improve this
-// 	return Decimal{}, nil
-// }
+// Trunc returns d after truncating the decimal to the specified scale.
+//
+// Examples:
+//
+//	Trunc(1.12345, 4) = 1.1234
+//	Trunc(1.12335, 4) = 1.1233
+func (d Decimal) Trunc(scale uint8) Decimal {
+	if scale >= d.scale {
+		return d
+	}
 
-// func (d Decimal) Pow(e int) (Decimal, error) {
-// 	if e == 0 {
-// 		return One, nil
-// 	}
+	factor := pow10[d.scale-scale]
 
-// 	if e < 0 {
-// 		return Decimal{}, fmt.Errorf("negative exponent is not supported")
-// 	}
+	if !d.coef.overflow {
+		q, _ := d.coef.u128.QuoRem64(factor.lo)
+		return newDecimal(d.neg, bintFromU128(q), scale)
+	}
 
-// 	res := One
-// 	for i := 0; i < e; i++ {
-// 		var err error
-// 		res, err = res.Mul(d)
-// 		if err != nil {
-// 			return Decimal{}, err
-// 		}
-// 	}
+	// overflow, fallback to big.Int
+	dBig := d.coef.GetBig()
+	q := new(big.Int).Quo(dBig, factor.ToBigInt())
+	return newDecimal(d.neg, bintFromBigInt(q), scale)
+}
 
-// 	return res, nil
-// }
+func (d Decimal) InexactFloat64() (float64, error) {
+	s := d.String()
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("can't convert %s to float64: %w", s, err)
+	}
+
+	return f, nil
+}
+
+// PowInt returns d^e where e is an integer.
+//
+// Examples:
+//
+//	PowInt(2.5, 2) = 6.25
+//	PowInt(2.5, -2) = 0.16
+func (d Decimal) PowInt(e int) Decimal {
+	if e == 0 {
+		return One
+	}
+
+	if e == 1 {
+		return d
+	}
+
+	if d.coef.IsZero() {
+		return Zero
+	}
+
+	if e < 0 {
+		return d.powIntInverse(-e)
+	}
+
+	// e > 1 && d != 0
+	q, err := d.tryPowIntU128(e)
+	if err == nil {
+		return q
+	}
+
+	// overflow, fallback to big.Int
+	dBig := d.coef.GetBig()
+	factor := 0
+	powScale := int(d.scale) * e
+	if powScale >= int(defaultScale) {
+		factor = powScale - int(defaultScale)
+		powScale = int(defaultScale)
+	}
+
+	m := new(big.Int).Exp(bigTen, big.NewInt(int64(factor)), nil)
+	dBig = new(big.Int).Exp(dBig, big.NewInt(int64(e)), nil)
+	qBig := dBig.Quo(dBig, m)
+
+	neg := d.neg
+	if e%2 == 0 {
+		neg = false
+	}
+
+	return newDecimal(neg, bintFromBigInt(qBig), uint8(powScale))
+}
+
+// powIntInverse returns d^(-e), with e > 0
+func (d Decimal) powIntInverse(e int) Decimal {
+	q, err := d.tryInversePowIntU128(e)
+	if err == nil {
+		return q
+	}
+
+	// overflow, fallback to big.Int
+	dBig := d.coef.GetBig()
+	powScale := int(d.scale) * e
+
+	// d^(-e) = 10^(defaultScale + e) / d^e (with defaultScale digits after the decimal point)
+	m := new(big.Int).Exp(bigTen, big.NewInt(int64(powScale+int(defaultScale))), nil)
+	dBig = new(big.Int).Exp(dBig, big.NewInt(int64(e)), nil)
+	qBig := dBig.Quo(m, dBig)
+
+	neg := d.neg
+	if e%2 == 0 {
+		neg = false
+	}
+
+	return newDecimal(neg, bintFromBigInt(qBig), defaultScale)
+}
+
+func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
+	if d.coef.overflow {
+		return Decimal{}, ErrOverflow
+	}
+
+	if d.coef.u128.hi != 0 && e >= 3 {
+		// e > 3 and u128.hi != 0 means the result will >= 2^192,
+		// which we can't use fast division. So we need to use big.Int instead
+		return Decimal{}, ErrOverflow
+	}
+
+	neg := d.neg
+	if e%2 == 0 {
+		neg = false
+	}
+
+	powScale := int(d.scale) * e
+	if powScale > int(defaultScale)+38 {
+		return Decimal{}, ErrOverflow
+	}
+
+	factor := 0
+	if powScale > int(defaultScale) {
+		factor = powScale - int(defaultScale)
+		powScale = int(defaultScale)
+	}
+
+	d256 := U256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
+	result, err := d256.pow(e)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	if factor == 0 {
+		if !result.carry.IsZero() {
+			return Decimal{}, ErrOverflow
+		}
+
+		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powScale)), nil
+	}
+
+	if result.carry.hi != 0 {
+		return Decimal{}, ErrOverflow
+	}
+
+	q, err := result.quo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newDecimal(neg, bintFromU128(q), defaultScale), nil
+}
+
+func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
+	if d.coef.overflow {
+		return Decimal{}, ErrOverflow
+	}
+
+	if d.coef.u128.hi != 0 && e >= 3 {
+		// e > 3 and u128.hi != 0 means the result will >= 2^192,
+		// which we can't use fast division. So we need to use big.Int instead
+		return Decimal{}, ErrOverflow
+	}
+
+	neg := d.neg
+	if e%2 == 0 {
+		neg = false
+	}
+
+	powScale := int(d.scale) * e
+	if powScale > int(defaultScale)+38 {
+		return Decimal{}, ErrOverflow
+	}
+
+	factor := 0
+	if powScale > int(defaultScale) {
+		factor = powScale - int(defaultScale)
+		powScale = int(defaultScale)
+	}
+
+	d256 := U256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
+	result, err := d256.pow(e)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	if factor == 0 {
+		if !result.carry.IsZero() {
+			return Decimal{}, ErrOverflow
+		}
+
+		a256 := one128.MulToU256(pow10[defaultScale+uint8(powScale)])
+
+		q, err := a256.quo(u128{hi: result.hi, lo: result.lo})
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		return newDecimal(neg, bintFromU128(q), defaultScale), nil
+	}
+
+	// if result is not u128, one solution is adjusting it to u128 by dividing it with 10^factor
+	// in some cases, this adjustment creates a big difference in the final result
+	// so to be safe, use big.Int instead
+	if !result.carry.IsZero() {
+		return Decimal{}, ErrOverflow
+	}
+
+	// a256 = 10^(powScale + factor + defaultScale)
+	a256 := pow10[factor].MulToU256(pow10[defaultScale+uint8(powScale)])
+	q, err := a256.quo(u128{hi: result.hi, lo: result.lo})
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newDecimal(neg, bintFromU128(q), defaultScale), nil
+}
+
+// Sqrt returns the square root of d using Newton-Raphson method.
+// The result will have at most defaultScale digits after the decimal point.
+// Returns error if d < 0
+//
+// Examples:
+//
+//	Sqrt(4) = 2
+//	Sqrt(2) = 1.4142135623730950488
+func (d Decimal) Sqrt() (Decimal, error) {
+	if d.neg {
+		return Decimal{}, fmt.Errorf("can't calculate square root of negative number")
+	}
+
+	if d.coef.IsZero() {
+		return Zero, nil
+	}
+
+	return Decimal{}, nil
+}

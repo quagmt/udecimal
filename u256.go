@@ -1,6 +1,7 @@
 package udecimal
 
 import (
+	"fmt"
 	"math/bits"
 )
 
@@ -50,7 +51,7 @@ func (u U256) cmp(v U256) int {
 //	+1 when u > v
 //	 0 when u = v
 //	-1 when u < v
-func (u U256) Cmp128(v u128) int {
+func (u U256) cmp128(v u128) int {
 	if !u.carry.IsZero() {
 		return 1
 	}
@@ -58,7 +59,45 @@ func (u U256) Cmp128(v u128) int {
 	return u128FromHiLo(u.hi, u.lo).Cmp(v)
 }
 
-func (u U256) Sub(v U256) (U256, error) {
+func (u U256) pow(e int) (U256, error) {
+	if e <= 0 {
+		return U256{}, fmt.Errorf("invalid exponent %d. Must be greater than 0", e)
+	}
+
+	result := U256{lo: 1}
+	var err error
+
+	for ; e > 0; e >>= 1 {
+		if e&1 == 1 {
+			// if we encounter bit 1, then result *= (d256)^(2^i)
+			if (!result.carry.IsZero() && !u.carry.IsZero()) ||
+				(!result.carry.IsZero() && u.hi != 0) ||
+				(!u.carry.IsZero() && result.hi != 0) {
+				return U256{}, ErrOverflow
+			}
+
+			if result.carry.IsZero() {
+				result, err = u.Mul128(u128{lo: result.lo, hi: result.hi})
+			} else {
+				result, err = result.Mul128(u128{lo: u.lo, hi: u.hi})
+			}
+
+			if err != nil {
+				return U256{}, err
+			}
+		}
+
+		// d256 = (d256)^2 each time
+		u, err = u.Mul128(u128{lo: u.lo, hi: u.hi})
+		if err != nil {
+			return U256{}, err
+		}
+	}
+
+	return result, nil
+}
+
+func (u U256) sub(v U256) (U256, error) {
 	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
 	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
 
@@ -75,7 +114,7 @@ func (u U256) Sub(v U256) (U256, error) {
 	return U256{lo: lo, hi: hi, carry: c1}, nil
 }
 
-func (u U256) Rsh(n uint) (v U256) {
+func (u U256) rsh(n uint) (v U256) {
 	switch {
 	case n < 64:
 		v.carry = u.carry.Rsh(n)
@@ -100,13 +139,28 @@ func (u U256) Rsh(n uint) (v U256) {
 	return
 }
 
+func (u U256) Mul128(v u128) (U256, error) {
+	a := u128FromHiLo(u.hi, u.lo).MulToU256(v)
+	b, err := u.carry.mulRaw(v)
+	if err != nil {
+		return U256{}, err
+	}
+
+	c, err := a.carry.addRaw(b)
+	if err != nil {
+		return U256{}, err
+	}
+
+	return U256{hi: a.hi, lo: a.lo, carry: c}, nil
+}
+
 // Quo only returns quotient of u/v
-// The implementation follows Hacker's Delight multiword division algorithm
+// Fast divsion for U192 divided by U128 using Hacker's Delight multiword division algorithm
 // with some constraints regarding max coef and scale value, including:
 //
 //	max(coef) = 10^38-1
 //	max(scale) = 19
-//	max(whole_part) = 10^19-1
+//	max(u) = 2^192-1
 func (u U256) quo(v u128) (u128, error) {
 	if u.carry.IsZero() {
 		q, _, err := u128FromHiLo(u.hi, u.lo).QuoRem(v)
@@ -127,7 +181,7 @@ func (u U256) quo(v u128) (u128, error) {
 	// 1 <= n <= 63 (as u128 < 10^38)
 	n := uint(bits.LeadingZeros64(v.hi))
 	v1 := v.Lsh(n)
-	u1 := u.Rsh(64 - n)
+	u1 := u.rsh(64 - n)
 
 	// let q are final quotient and remainder and tq = q + k (k >= 0)
 	// calculate 'trial quotient' tq (q <= tq < q + 2^64)
@@ -150,7 +204,7 @@ func (u U256) quo(v u128) (u128, error) {
 		return tq, nil
 	}
 
-	vqu, err := vq.Sub(u)
+	vqu, err := vq.sub(u)
 	if err != nil {
 		return u128{}, err
 	}

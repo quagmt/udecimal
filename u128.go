@@ -6,6 +6,10 @@ import (
 	"math/bits"
 )
 
+var (
+	one128 = u128{lo: 1}
+)
+
 // u128 (big unsigned-integer) is a 128-bits unsigned integer
 // represents by two 64-bits unsigned integer
 // value = hi*2^64 + lo
@@ -14,6 +18,7 @@ type u128 struct {
 	lo uint64
 }
 
+// IsZero returns true if u is zero
 func (u u128) IsZero() bool {
 	return u == u128{}
 }
@@ -85,13 +90,26 @@ func (u u128) LessThan(v u128) bool {
 }
 
 func (u u128) Add(v u128) (u128, error) {
+	q, err := u.addRaw(v)
+	if err != nil {
+		return u128{}, err
+	}
+
+	if q.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return q, nil
+}
+
+func (u u128) addRaw(v u128) (u128, error) {
 	lo, carry := bits.Add64(u.lo, v.lo, 0)
 	hi, carry := bits.Add64(u.hi, v.hi, carry)
 	if carry != 0 {
 		return u128{}, ErrOverflow
 	}
 
-	return newU128(hi, lo)
+	return u128{hi: hi, lo: lo}, nil
 }
 
 // Add64 returns u+v.
@@ -128,6 +146,19 @@ func (u u128) Sub64(v uint64) (u128, error) {
 }
 
 func (u u128) Mul64(v uint64) (u128, error) {
+	q, err := u.mul64Raw(v)
+	if err != nil {
+		return u128{}, err
+	}
+
+	if q.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return q, nil
+}
+
+func (u u128) mul64Raw(v uint64) (u128, error) {
 	hi, lo := bits.Mul64(u.lo, v)
 	p0, p1 := bits.Mul64(u.hi, v)
 	hi, c0 := bits.Add64(hi, p1, 0)
@@ -135,7 +166,7 @@ func (u u128) Mul64(v uint64) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return newU128(hi, lo)
+	return u128{hi: hi, lo: lo}, nil
 }
 
 func (u u128) Mul(v u128) (u128, error) {
@@ -149,6 +180,20 @@ func (u u128) Mul(v u128) (u128, error) {
 
 	// u.hi == 0
 	return v.Mul64(u.lo)
+}
+
+// raw version of Mul, doesn't check custom overflow condition
+func (u u128) mulRaw(v u128) (u128, error) {
+	if u.hi != 0 && v.hi != 0 {
+		return u128{}, ErrOverflow
+	}
+
+	if v.hi == 0 {
+		return u.mul64Raw(v.lo)
+	}
+
+	// u.hi == 0
+	return v.mul64Raw(u.lo)
 }
 
 func (u u128) MulToU256(v u128) U256 {

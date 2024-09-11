@@ -8,6 +8,7 @@ import (
 var (
 	bigZero = big.NewInt(0)
 	bigOne  = big.NewInt(1)
+	bigTen  = big.NewInt(10)
 )
 
 // bint stores the whole decimal number, without the decimal place
