@@ -77,6 +77,7 @@ var (
 	ErrEmptyString     = fmt.Errorf("parse empty string")
 	ErrInvalidFormat   = fmt.Errorf("invalid format")
 	ErrDivideByZero    = fmt.Errorf("can't divide by zero")
+	ErrSqrtNegative    = fmt.Errorf("can't calculate square root of negative number")
 )
 
 var (
@@ -1043,12 +1044,64 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 //	Sqrt(2) = 1.4142135623730950488
 func (d Decimal) Sqrt() (Decimal, error) {
 	if d.neg {
-		return Decimal{}, fmt.Errorf("can't calculate square root of negative number")
+		return Decimal{}, ErrSqrtNegative
 	}
 
 	if d.coef.IsZero() {
 		return Zero, nil
 	}
 
-	return Decimal{}, nil
+	if d.Cmp(One) == 0 {
+		return One, nil
+	}
+
+	if !d.coef.overflow {
+		q, err := d.sqrtU128()
+		if err == nil {
+			return q, nil
+		}
+	}
+
+	// overflow, fallback to big.Int
+	dBig := d.coef.GetBig()
+	factor := 2*defaultScale - d.scale
+	coef := dBig.Mul(dBig, pow10[factor].ToBigInt())
+	return newDecimal(false, bintFromBigInt(coef.Sqrt(coef)), defaultScale), nil
+}
+
+func (d Decimal) sqrtU128() (Decimal, error) {
+	factor := 2*defaultScale - d.scale
+
+	coef := d.coef.u128.MulToU256(pow10[factor])
+	if coef.carry.hi != 0 {
+		return Decimal{}, ErrOverflow
+	}
+
+	bitLen := uint(coef.bitLen()) // bitLen < 192
+
+	// initial guess = 2^((bitLen + 1) / 2) ≥ √coef
+	x := one128.Lsh((bitLen + 1) / 2)
+
+	// Newton-Raphson method
+	for {
+		// calculate x1 = (x + coef/x) / 2
+		y, err := coef.quo(x)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		x1, err := x.Add(y)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		x1 = x1.Rsh(1)
+		if x1.Cmp(x) == 0 {
+			break
+		}
+
+		x = x1
+	}
+
+	return newDecimal(false, bintFromU128(x), defaultScale), nil
 }

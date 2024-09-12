@@ -32,15 +32,6 @@ func (u u128) isOverflow() bool {
 	return !u.LessThan(pow10[38])
 }
 
-func newU128(hi, lo uint64) (u128, error) {
-	u := u128{hi: hi, lo: lo}
-	if u.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return u, nil
-}
-
 // Cmp compares u, v and returns:
 //
 //	-1 if u < v
@@ -114,16 +105,42 @@ func (u u128) addRaw(v u128) (u128, error) {
 
 // Add64 returns u+v.
 func (u u128) Add64(v uint64) (u128, error) {
+	q, err := u.add64Raw(v)
+	if err != nil {
+		return u128{}, err
+	}
+
+	if q.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return q, nil
+}
+
+func (u u128) add64Raw(v uint64) (u128, error) {
 	lo, carry := bits.Add64(u.lo, v, 0)
 	hi, carry := bits.Add64(u.hi, 0, carry)
 	if carry != 0 {
 		return u128{}, ErrOverflow
 	}
 
-	return newU128(hi, lo)
+	return u128{hi: hi, lo: lo}, nil
 }
 
 func (u u128) Sub(v u128) (u128, error) {
+	q, err := u.subRaw(v)
+	if err != nil {
+		return u128{}, err
+	}
+
+	if q.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return q, nil
+}
+
+func (u u128) subRaw(v u128) (u128, error) {
 	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
 	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
 	if borrow != 0 {
@@ -131,18 +148,31 @@ func (u u128) Sub(v u128) (u128, error) {
 		return u128{}, ErrOverflow
 	}
 
-	return newU128(hi, lo)
+	return u128{hi: hi, lo: lo}, nil
 }
 
 // Sub64 returns u-v.
 func (u u128) Sub64(v uint64) (u128, error) {
+	q, err := u.sub64Raw(v)
+	if err != nil {
+		return u128{}, err
+	}
+
+	if q.isOverflow() {
+		return u128{}, ErrOverflow
+	}
+
+	return q, nil
+}
+
+func (u u128) sub64Raw(v uint64) (u128, error) {
 	lo, borrow := bits.Sub64(u.lo, v, 0)
 	hi, borrow := bits.Sub64(u.hi, 0, borrow)
 	if borrow != 0 {
 		return u128{}, ErrOverflow
 	}
 
-	return newU128(hi, lo)
+	return u128{hi: hi, lo: lo}, nil
 }
 
 func (u u128) Mul64(v uint64) (u128, error) {
@@ -252,23 +282,23 @@ func (u u128) QuoRem(v u128) (q, r u128, err error) {
 		}
 
 		q = u128FromU64(tq)
-		vq, err := v.Mul64(tq)
+		vq, err := v.mul64Raw(tq)
 		if err != nil {
 			return q, r, err
 		}
 
-		r, err = u.Sub(vq)
+		r, err = u.subRaw(vq)
 		if err != nil {
 			return q, r, err
 		}
 
 		if r.Cmp(v) >= 0 {
-			q, err = q.Add64(1)
+			q, err = q.add64Raw(1)
 			if err != nil {
 				return q, r, err
 			}
 
-			r, err = r.Sub(v)
+			r, err = r.subRaw(v)
 			if err != nil {
 				return q, r, err
 			}

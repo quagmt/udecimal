@@ -15,6 +15,22 @@ type U256 struct {
 	carry u128
 }
 
+func (u U256) bitLen() int {
+	if u.carry.hi != 0 {
+		return 192 + bits.Len64(u.carry.hi)
+	}
+
+	if u.carry.lo != 0 {
+		return 128 + bits.Len64(u.carry.lo)
+	}
+
+	if u.hi != 0 {
+		return 64 + bits.Len64(u.hi)
+	}
+
+	return bits.Len64(u.lo)
+}
+
 // for debugging
 // func (u U256) PrintBit() string {
 // 	b1 := strconv.FormatUint(u.carry.hi, 2)

@@ -1,6 +1,6 @@
 module github.com/quagmt/udecimal
 
-go 1.22.5
+go 1.23
 
 require (
 	github.com/shopspring/decimal v1.4.0

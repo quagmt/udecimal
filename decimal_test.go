@@ -1749,6 +1749,70 @@ func TestPowIntRandom(t *testing.T) {
 	}
 }
 
+func TestSqrt(t *testing.T) {
+	testcases := []struct {
+		a       string
+		want    string
+		wantErr error
+	}{
+		{"10000000000", "100000", nil},
+		{"3", "1.7320508075688772935", nil},
+		{"-1", "", ErrSqrtNegative},
+		{"0", "0", nil},
+		{"1", "1", nil},
+		{"2", "1.4142135623730950488", nil},
+		{"1000", "31.6227766016837933199", nil},
+		{"31.6227766016837933199", "5.6234132519034908039", nil},
+		{"4", "2", nil},
+		{"12345678901234567890.1234567890123456789", "3513641828.8201442531112223816", nil},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("sqrt(%s)", tc.a), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			a, err = a.Sqrt()
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, a.String())
+
+			// cross check with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			aa, err = aa.PowWithPrecision(decimal.RequireFromString("0.5"), int32(a.scale)+4)
+			require.NoError(t, err)
+
+			a1 := decimal.RequireFromString(a.String()).Sub(aa).Truncate(int32(a.scale))
+			require.True(t, a1.IsZero())
+		})
+	}
+}
+
+func TestRandomSqrt(t *testing.T) {
+	// from 0.1 to 100
+	for i := 1; i <= 1000; i++ {
+		input := fmt.Sprintf("%f", float64(i)/10)
+
+		a, err := Parse(input)
+		require.NoError(t, err)
+
+		a, err = a.Sqrt()
+		require.NoError(t, err)
+
+		// cross check with shopspring/decimal
+		aa := decimal.RequireFromString(input)
+		aa, err = aa.PowWithPrecision(decimal.RequireFromString("0.5"), int32(a.scale)+4)
+		require.NoError(t, err)
+
+		a1 := decimal.RequireFromString(a.String()).Sub(aa).Truncate(int32(a.scale))
+		require.True(t, a1.IsZero())
+	}
+}
+
 func BenchmarkString(b *testing.B) {
 	a, err := Parse("1234567890123456789.1234567890123456789")
 	require.NoError(b, err)
@@ -1818,5 +1882,15 @@ func BenchmarkShopspringDiv(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		a.Div(bb)
+	}
+}
+
+func BenchmarkPow(b *testing.B) {
+	a, err := Parse("12.46")
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a.PowInt(10)
 	}
 }
