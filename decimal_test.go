@@ -37,9 +37,11 @@ func TestParse(t *testing.T) {
 		input, want string
 		wantErr     error
 	}{
+		{"0.0000123456", "0.0000123456", nil},
+		{"-0.0000123456", "-0.0000123456", nil},
+		{"123.456000", "123.456", nil},
 		{"1234567890123456789012345678901234567890", "1234567890123456789012345678901234567890", nil},
 		{"-12345678912345678901.1234567890123456789", "-12345678912345678901.1234567890123456789", nil},
-		{"123.456000", "123.456", nil},
 		{"123.0000", "123", nil},
 		{"0.123", "0.123", nil},
 		{"-0.123", "-0.123", nil},
@@ -1847,7 +1849,7 @@ func TestInexactFloat64(t *testing.T) {
 }
 
 func BenchmarkString(b *testing.B) {
-	a, err := Parse("1234567890123456789.1234567890123456789")
+	a, err := Parse("12345.12345")
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -1857,7 +1859,7 @@ func BenchmarkString(b *testing.B) {
 }
 
 func BenchmarkShopspringString(b *testing.B) {
-	a, err := decimal.NewFromString("1234567890123456789.1234567890123456789")
+	a, err := decimal.NewFromString("12345.12345")
 	require.NoError(b, err)
 
 	b.ResetTimer()
