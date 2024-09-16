@@ -1813,6 +1813,39 @@ func TestRandomSqrt(t *testing.T) {
 	}
 }
 
+func TestInexactFloat64(t *testing.T) {
+	testcases := []struct {
+		a    string
+		want float64
+	}{
+		{"0", 0},
+		{"1", 1},
+		{"1.12345", 1.12345},
+		{"-1.12345", -1.12345},
+		{"123456789.123456789", 123456789.123456789},
+		{"-123456789.123456789", -123456789.123456789},
+		{"1234567890123456789.1234567890123456789", 1234567890123456789.1234567890123456789},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("inexactFloat64(%s)", tc.a), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			got, err := a.InexactFloat64()
+			require.NoError(t, err)
+
+			require.Equal(t, tc.want, got)
+
+			// cross check with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			got1, _ := aa.Float64()
+
+			require.Equal(t, got1, got)
+		})
+	}
+}
+
 func BenchmarkString(b *testing.B) {
 	a, err := Parse("1234567890123456789.1234567890123456789")
 	require.NoError(b, err)

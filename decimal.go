@@ -156,6 +156,7 @@ func NewFromFloat64(f float64) (Decimal, error) {
 	return d, nil
 }
 
+// MustFromFloat64 similars to NewFromFloat64, but panics instead of returning error
 func MustFromFloat64(f float64) Decimal {
 	d, err := NewFromFloat64(f)
 	if err != nil {
@@ -163,6 +164,14 @@ func MustFromFloat64(f float64) Decimal {
 	}
 
 	return d
+}
+
+// InexactFloat64 returns the float64 representation of the decimal.
+// The result may not be 100% accurate due to the limitation of float64 (less decimal precision).
+// Caution: this method will not return the exact number if the decimal is too large.
+// e.g. 123456789012345678901234567890123456789.9999999999999999999 -> 123456789012345680000000000000000000000
+func (d Decimal) InexactFloat64() (float64, error) {
+	return strconv.ParseFloat(d.String(), 64)
 }
 
 // Parse parses a number in string to Decimal.
@@ -830,16 +839,6 @@ func (d Decimal) Trunc(scale uint8) Decimal {
 	dBig := d.coef.GetBig()
 	q := new(big.Int).Quo(dBig, factor.ToBigInt())
 	return newDecimal(d.neg, bintFromBigInt(q), scale)
-}
-
-func (d Decimal) InexactFloat64() (float64, error) {
-	s := d.String()
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0, fmt.Errorf("can't convert %s to float64: %w", s, err)
-	}
-
-	return f, nil
 }
 
 // PowInt returns d^e where e is an integer.
