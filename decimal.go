@@ -14,6 +14,12 @@ var (
 
 	// maxScale is the maximum number of digits after the decimal point
 	maxScale uint8 = 19
+
+	// maxStrLen is the maximum length of string input when using Parse/MustParse
+	// set it to 200 so string length value can fit in 1 byte (for MarshalBinary).
+	// Also such that big number (more than 200 digits) is unrealistic in financial system
+	// which this library is mainly designed for
+	maxStrLen = 200
 )
 
 func SetDefaultScale(scale uint8) {
@@ -75,6 +81,7 @@ var (
 	ErrOverflow        = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
 	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
 	ErrEmptyString     = fmt.Errorf("parse empty string")
+	ErrMaxStrLen       = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
 	ErrInvalidFormat   = fmt.Errorf("invalid format")
 	ErrDivideByZero    = fmt.Errorf("can't divide by zero")
 	ErrSqrtNegative    = fmt.Errorf("can't calculate square root of negative number")
@@ -89,10 +96,6 @@ var (
 // The number is represented as a coefficient and a scale.
 //
 // Number = coef / 10^(scale)
-//
-// For efficiency, both whole and fractional parts can only have 19 digits at most.
-// Hence, the decimal range is:
-// -9_999_999_999_999_999_999.9_999_999_999_999_999_999 <= D <= 9_999_999_999_999_999_999.9_999_999_999_999_999_999
 type Decimal struct {
 	coef  bint
 	neg   bool // true if number is negative
@@ -101,10 +104,6 @@ type Decimal struct {
 
 // newDecimal return the decimal
 func newDecimal(neg bool, coef bint, scale uint8) Decimal {
-	// if isOverflow(coef, scale) {
-	// 	return Decimal{}, ErrOverflow
-	// }
-
 	return Decimal{neg: neg, coef: coef, scale: scale}
 }
 
@@ -168,8 +167,8 @@ func MustFromFloat64(f float64) Decimal {
 
 // InexactFloat64 returns the float64 representation of the decimal.
 // The result may not be 100% accurate due to the limitation of float64 (less decimal precision).
-// Caution: this method will not return the exact number if the decimal is too large.
-// e.g. 123456789012345678901234567890123456789.9999999999999999999 -> 123456789012345680000000000000000000000
+// !Caution: this method will not return the exact number if the decimal is too large.
+// !e.g. 123456789012345678901234567890123456789.9999999999999999999 -> 123456789012345680000000000000000000000
 func (d Decimal) InexactFloat64() (float64, error) {
 	return strconv.ParseFloat(d.String(), 64)
 }
@@ -563,6 +562,28 @@ func tryCmpU128(d, e Decimal) (int, error) {
 
 	// remember to reverse the result because e256.cmp128(d.coef) returns the opposite
 	return -e256.cmp128(d.coef.u128), nil
+}
+
+// Rescale returns the decimal with the new scale only if the new scale is greater than the current scale.
+// Useful when you want to increase the scale of the decimal.
+//
+// Example:
+//
+//	d := MustParse("123.456")
+//	d.Rescale(5) // 123.45600
+func (d Decimal) Rescale(scale uint8) Decimal {
+	if scale > maxScale {
+		scale = maxScale
+	}
+
+	if scale <= d.scale {
+		return d
+	}
+
+	diff := scale - d.scale
+	coef := d.coef.Mul(bintFromU128(pow10[diff]))
+
+	return newDecimal(d.neg, coef, scale)
 }
 
 // Neg returns -d

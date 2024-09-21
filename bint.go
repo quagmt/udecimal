@@ -62,6 +62,10 @@ func (u bint) Cmp(v bint) int {
 }
 
 func parseBint(s string) (bool, bint, uint8, error) {
+	if len(s) > maxStrLen {
+		return false, bint{}, 0, ErrMaxStrLen
+	}
+
 	// if s has less than 40 characters, it can fit into u128
 	if len(s) <= 40 {
 		neg, bint, scale, err := parseBintFromU128(s)
@@ -223,10 +227,6 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 	if coef.IsZero() {
 		return false, bint{}, 0, nil
 	}
-
-	// if coef.isOverflow() {
-	// 	return false, bint{}, 0, ErrOverflow
-	// }
 
 	return neg, bint{u128: coef}, scale, nil
 }

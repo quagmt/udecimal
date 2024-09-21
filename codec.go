@@ -1,7 +1,15 @@
 package udecimal
 
 import (
+	"encoding/binary"
+	"fmt"
+	"math/big"
+	"math/bits"
 	"unsafe"
+)
+
+var (
+	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
 )
 
 // String returns the string representation of the decimal.
@@ -16,6 +24,19 @@ func (d Decimal) String() string {
 	}
 
 	return d.stringBigInt(true)
+}
+
+// StringFixed returns the string representation of the decimal with fixed scale.
+// Trailing zeros will not be removed.
+// Special case: if the decimal is zero, it will return "0" regardless of the scale.
+func (d Decimal) StringFixed(scale uint8) string {
+	d1 := d.Rescale(scale)
+
+	if !d1.coef.overflow {
+		return d1.stringU128(false)
+	}
+
+	return d1.stringBigInt(false)
 }
 
 func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
@@ -90,7 +111,7 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 	var buf []byte
 	if trimTrailingZeros {
 		// if d.scale > byteLen, that means we need to allocate upto d.scale to cover all the zeros of the fraction part
-		// e.g. 0.00000123, scale = 8, byteLen = 3 --> we need to allocate 8 bytes
+		// e.g. 0.00000123, scale = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
 		if byteLen <= d.scale {
 			byteLen = d.scale + 1 // 1 for zero in the whole part
 		}
@@ -131,7 +152,7 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 	}
 
 	if quo.IsZero() {
-		// quo is zero, so we need to print at least one zero
+		// quo is zero, we need to print at least one zero
 		n++
 		buf[l-n] = '0'
 	} else {
@@ -186,6 +207,129 @@ func (d *Decimal) UnmarshalText(text []byte) error {
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler interface.
+// Binary format: [overflow + neg] [scale] [total bytes] [coef]
+//
+// e.g. -1.2345
+// 1st byte: 0b0001_0000 (overflow = true, neg = false)
+// 2nd byte: 0b0000_0100 (scale = 4)
+// 3rd byte: 0b0000_1101 (total bytes = 11)
+// 4th-11th bytes: 0x0000_0000_0000_3039 (coef = 12345, only stores the lo part)
+//
+// e.g. 1234567890123456789.1234567890123456789
+// 1st byte: 0b0000_0000 (overflow = false, neg = false)
+// 2nd byte: 0b0001_0011 (scale = 19)
+// 3rd byte: 0b0001_0011 (total bytes = 19)
+// 4th-11th bytes: 0x0949_b0f6_f002_3313 (coef.hi)
+// 12th-19th bytes: 0xd3b5_05f9_b5f1_8115 (coef.lo)
 func (d Decimal) MarshalBinary() ([]byte, error) {
-	return nil, nil
+	if !d.coef.overflow {
+		return d.marshalBinaryU128()
+	}
+
+	return d.marshalBinaryBigInt()
+}
+
+func (d Decimal) marshalBinaryU128() ([]byte, error) {
+	coef := d.coef.u128
+	totalBytes := 19
+
+	if coef.hi == 0 {
+		totalBytes = 11
+	}
+
+	buf := make([]byte, totalBytes)
+	var neg int
+	if d.neg {
+		neg = 1
+	}
+
+	// overflow + neg with overflow = false (always 0)
+	buf[0] = byte(neg)
+	buf[1] = byte(d.scale)
+	buf[2] = byte(totalBytes)
+
+	if coef.hi != 0 {
+		copyUint64ToBytes(buf[3:], coef.hi)
+		copyUint64ToBytes(buf[11:], coef.lo)
+	} else {
+		copyUint64ToBytes(buf[3:], coef.lo)
+	}
+
+	return buf, nil
+}
+
+func copyUint64ToBytes(b []byte, n uint64) {
+	// use big endian to make it consistent with big.Int.FillBytes, which also uses big endian
+	binary.BigEndian.PutUint64(b, n)
+}
+
+func (d *Decimal) UnmarshalBinary(data []byte) error {
+	overflow := data[0] >> 4 & 1
+	if overflow == 0 {
+		return d.unmarshalBinaryU128(data)
+	}
+
+	return d.unmarshalBinaryBigInt(data)
+}
+
+func (d *Decimal) unmarshalBinaryU128(data []byte) error {
+	d.neg = data[0]&1 == 1
+	d.scale = data[1]
+	d.coef.overflow = false
+
+	totalBytes := data[2]
+
+	// for u128, totalBytes must be 11 or 19
+	if totalBytes != 11 && totalBytes != 19 {
+		return ErrInvalidBinaryData
+	}
+
+	coef := u128{}
+	if totalBytes == 11 {
+		coef.lo = binary.BigEndian.Uint64(data[3:])
+	} else {
+		coef.hi = binary.BigEndian.Uint64(data[3:])
+		coef.lo = binary.BigEndian.Uint64(data[11:])
+	}
+
+	d.coef.u128 = coef
+	return nil
+}
+
+func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
+	var neg int
+	if d.neg {
+		neg = 1
+	}
+
+	if d.coef.bigInt == nil {
+		return nil, ErrInvalidBinaryData
+	}
+
+	words := d.coef.bigInt.Bits()
+	totalBytes := 3 + len(words)*(bits.UintSize/8)
+	buf := make([]byte, totalBytes)
+
+	// overflow + neg with overflow = true (always 1)
+	buf[0] = byte(1<<4 | neg)
+	buf[1] = byte(d.scale)
+	buf[2] = byte(totalBytes)
+	d.coef.bigInt.FillBytes(buf[3:])
+
+	return buf, nil
+}
+
+func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
+	d.neg = data[0]&1 == 1
+	d.coef.overflow = true
+	d.scale = data[1]
+
+	totalBytes := data[2]
+
+	if totalBytes < 3 {
+		return ErrInvalidBinaryData
+	}
+
+	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
+	return nil
 }

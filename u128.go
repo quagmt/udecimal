@@ -184,6 +184,8 @@ func (u u128) sub64Raw(v uint64) (u128, error) {
 	return u128{hi: hi, lo: lo}, nil
 }
 
+// Mul64 returns u*v.
+// Return overflow if the result is greater than 10^38-1
 func (u u128) Mul64(v uint64) (u128, error) {
 	q, err := u.mul64Raw(v)
 	if err != nil {
@@ -372,9 +374,6 @@ func (u u128) Rsh(n uint) (s u128) {
 }
 
 func (u u128) ToBigInt() *big.Int {
-	// return new(big.Int).SetUint64(u.lo).Lsh(new(big.Int).SetUint64(u.hi), 64)
-
-	// use this instead of above because it's faster
 	bytes := make([]byte, 16)
 	binary.BigEndian.PutUint64(bytes, u.hi)
 	binary.BigEndian.PutUint64(bytes[8:], u.lo)
