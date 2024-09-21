@@ -107,7 +107,27 @@ func newDecimal(neg bool, coef bint, scale uint8) Decimal {
 	return Decimal{neg: neg, coef: coef, scale: scale}
 }
 
-// NewFromInt64 returns a decimal which equals to coef / 10^scale.
+// NewFromUint64 returns a decimal which equals to coef / 10^scale and coef is an uint64
+// Trailing zeros wll be removed and the scale will also be adjusted
+func NewFromUint64(coef uint64, scale uint8) (Decimal, error) {
+	if scale > defaultScale {
+		return Decimal{}, ErrScaleOutOfRange
+	}
+
+	return newDecimal(false, bintFromU64(coef), scale), nil
+}
+
+// MustFromUint64 similars to NewFromUint64, but panics instead of returning error
+func MustFromUint64(coef uint64, scale uint8) Decimal {
+	d, err := NewFromUint64(coef, scale)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
+// NewFromInt64 returns a decimal which equals to coef / 10^scale and coef is an int64
 // Trailing zeros wll be removed and the scale will also be adjusted
 func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 	var neg bool
@@ -143,7 +163,7 @@ func MustFromInt64(coef int64, scale uint8) Decimal {
 //  2. error when parsing float to string and then to decimal
 func NewFromFloat64(f float64) (Decimal, error) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return Decimal{}, fmt.Errorf("%w: can't parse float '%v' to decimal", ErrInvalidFormat, f)
+		return Decimal{}, fmt.Errorf("%w: can't parse float '%v' to Decimal", ErrInvalidFormat, f)
 	}
 
 	s := strconv.FormatFloat(f, 'f', -1, 64)

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -110,6 +112,179 @@ func TestMarshalBinary(t *testing.T) {
 			require.NoError(t, decoder.Decode(&c))
 
 			require.Equal(t, a, c)
+		})
+	}
+}
+
+func TestScan(t *testing.T) {
+	testcases := []struct {
+		in      any
+		want    Decimal
+		wantErr error
+	}{
+		{int(0), MustParse("0"), nil},
+		{int(-1234567), MustParse("-1234567"), nil},
+		{int32(1), MustParse("1"), nil},
+		{int64(0), MustParse("0"), nil},
+		{int64(1), MustParse("1"), nil},
+		{uint64(1234567890123456789), MustParse("1234567890123456789"), nil},
+		{int64(-1), MustParse("-1"), nil},
+		{float64(1.123), MustParse("1.123"), nil},
+		{float64(-1.123), MustParse("-1.123"), nil},
+		{"123.123", MustParse("123.123"), nil},
+		{[]byte("123456789.123456789"), MustParse("123456789.123456789"), nil},
+		{[]byte("-123456789.123456789"), MustParse("-123456789.123456789"), nil},
+		{"-12345678901234567890123456789.1234567890123456789", MustParse("-12345678901234567890123456789.1234567890123456789"), nil},
+		{nil, Decimal{}, fmt.Errorf("can't scan nil to Decimal")},
+		{byte('a'), Decimal{}, fmt.Errorf("can't scan uint8 to Decimal: uint8 is not supported")},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%v", tc.in), func(t *testing.T) {
+			var d Decimal
+			err := d.Scan(tc.in)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, d)
+
+			// test that the value is the same after scanning
+			val, err := d.Value()
+			require.NoError(t, err)
+
+			require.Equal(t, tc.want.String(), val)
+		})
+	}
+}
+
+func TestNullScan(t *testing.T) {
+	testcases := []struct {
+		in      any
+		want    NullDecimal
+		wantErr error
+	}{
+		{int(0), NullDecimal{Valid: true, Decimal: MustParse("0")}, nil},
+		{int(-1234567), NullDecimal{Valid: true, Decimal: MustParse("-1234567")}, nil},
+		{int32(1), NullDecimal{Valid: true, Decimal: MustParse("1")}, nil},
+		{int64(0), NullDecimal{Valid: true, Decimal: MustParse("0")}, nil},
+		{int64(1), NullDecimal{Valid: true, Decimal: MustParse("1")}, nil},
+		{uint64(1234567890123456789), NullDecimal{Valid: true, Decimal: MustParse("1234567890123456789")}, nil},
+		{int64(-1), NullDecimal{Valid: true, Decimal: MustParse("-1")}, nil},
+		{float64(1.123), NullDecimal{Valid: true, Decimal: MustParse("1.123")}, nil},
+		{float64(-1.123), NullDecimal{Valid: true, Decimal: MustParse("-1.123")}, nil},
+		{"123.123", NullDecimal{Valid: true, Decimal: MustParse("123.123")}, nil},
+		{[]byte("123456789.123456789"), NullDecimal{Valid: true, Decimal: MustParse("123456789.123456789")}, nil},
+		{[]byte("-123456789.123456789"), NullDecimal{Valid: true, Decimal: MustParse("-123456789.123456789")}, nil},
+		{"-12345678901234567890123456789.1234567890123456789", NullDecimal{Valid: true, Decimal: MustParse("-12345678901234567890123456789.1234567890123456789")}, nil},
+		{nil, NullDecimal{Valid: false}, nil},
+		{byte('a'), NullDecimal{Valid: false}, fmt.Errorf("can't scan uint8 to Decimal: uint8 is not supported")},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%v", tc.in), func(t *testing.T) {
+			var d NullDecimal
+			err := d.Scan(tc.in)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, d)
+
+			// test that the value is the same after scanning
+			val, err := d.Value()
+			require.NoError(t, err)
+
+			if !d.Valid {
+				require.Nil(t, val)
+				return
+			}
+
+			require.Equal(t, tc.want.Decimal.String(), val)
+		})
+	}
+}
+
+func TestDynamodbMarshal(t *testing.T) {
+	testcases := []struct {
+		in string
+	}{
+		{"0"},
+		{"1"},
+		{"-1"},
+		{"123456789.123456789"},
+		{"-123456789.123456789"},
+		{"0.000000001"},
+		{"-0.000000001"},
+		{"123.123"},
+		{"-123.123"},
+		{"12345678901234567890123456789.1234567890123456789"},
+		{"-12345678901234567890123456789.1234567890123456789"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			d := MustParse(tc.in)
+
+			av, err := d.MarshalDynamoDBAttributeValue()
+			require.NoError(t, err)
+
+			avN, ok := av.(*types.AttributeValueMemberN)
+			require.True(t, ok)
+
+			require.Equal(t, tc.in, avN.Value)
+		})
+	}
+}
+
+func TestDynamodbUnmarshal(t *testing.T) {
+	testcases := []struct {
+		in      types.AttributeValue
+		want    Decimal
+		wantErr error
+	}{
+		{&types.AttributeValueMemberN{Value: "0"}, MustParse("0"), nil},
+		{&types.AttributeValueMemberN{Value: "1"}, MustParse("1"), nil},
+		{&types.AttributeValueMemberN{Value: "-1"}, MustParse("-1"), nil},
+		{&types.AttributeValueMemberN{Value: "123456789.123456789"}, MustParse("123456789.123456789"), nil},
+		{&types.AttributeValueMemberN{Value: "-123456789.123456789"}, MustParse("-123456789.123456789"), nil},
+		{&types.AttributeValueMemberN{Value: "0.000000001"}, MustParse("0.000000001"), nil},
+		{&types.AttributeValueMemberN{Value: "-0.000000001"}, MustParse("-0.000000001"), nil},
+		{&types.AttributeValueMemberN{Value: "123.123"}, MustParse("123.123"), nil},
+		{&types.AttributeValueMemberN{Value: "-123.123"}, MustParse("-123.123"), nil},
+		{&types.AttributeValueMemberN{Value: "12345678901234567890123456789.1234567890123456789"}, MustParse("12345678901234567890123456789.1234567890123456789"), nil},
+		{&types.AttributeValueMemberN{Value: "-12345678901234567890123456789.1234567890123456789"}, MustParse("-12345678901234567890123456789.1234567890123456789"), nil},
+		{&types.AttributeValueMemberS{Value: "0"}, MustParse("0"), nil},
+		{&types.AttributeValueMemberS{Value: "1"}, MustParse("1"), nil},
+		{&types.AttributeValueMemberS{Value: "-1"}, MustParse("-1"), nil},
+		{&types.AttributeValueMemberS{Value: "123456789.123456789"}, MustParse("123456789.123456789"), nil},
+		{&types.AttributeValueMemberS{Value: "-123456789.123456789"}, MustParse("-123456789.123456789"), nil},
+		{&types.AttributeValueMemberS{Value: "0.000000001"}, MustParse("0.000000001"), nil},
+		{&types.AttributeValueMemberS{Value: "-0.000000001"}, MustParse("-0.000000001"), nil},
+		{&types.AttributeValueMemberS{Value: "123.123"}, MustParse("123.123"), nil},
+		{&types.AttributeValueMemberS{Value: "-123.123"}, MustParse("-123.123"), nil},
+		{&types.AttributeValueMemberS{Value: "12345678901234567890123456789.1234567890123456789"}, MustParse("12345678901234567890123456789.1234567890123456789"), nil},
+		{&types.AttributeValueMemberS{Value: "-12345678901234567890123456789.1234567890123456789"}, MustParse("-12345678901234567890123456789.1234567890123456789"), nil},
+		{&types.AttributeValueMemberBOOL{Value: true}, Decimal{}, fmt.Errorf("can't unmarshal %T to Decimal: %T is not supported", &types.AttributeValueMemberBOOL{}, &types.AttributeValueMemberBOOL{})},
+		{&types.AttributeValueMemberN{Value: "a"}, Decimal{}, fmt.Errorf("invalid format: can't parse 'a' to Decimal")},
+		{&types.AttributeValueMemberS{Value: "a"}, Decimal{}, fmt.Errorf("invalid format: can't parse 'a' to Decimal")},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%v", tc.in), func(t *testing.T) {
+			var d Decimal
+			err := d.UnmarshalDynamoDBAttributeValue(tc.in)
+			if tc.wantErr != nil {
+				require.EqualError(t, tc.wantErr, err.Error())
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, d)
 		})
 	}
 }

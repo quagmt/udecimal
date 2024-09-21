@@ -79,28 +79,28 @@ func TestParse(t *testing.T) {
 		{"340282366920938463463374607431768211459", "340282366920938463463374607431768211459", nil},
 		{"340282366920938463463374607431768211459.123", "340282366920938463463374607431768211459.123", nil},
 		{"+340282366920938463463374607431768211459", "340282366920938463463374607431768211459", nil},
-		{"340282366920938463463374607431768211459.", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.' to decimal", ErrInvalidFormat)},
-		{"--340282366920938463463374607431768211459", "", fmt.Errorf("%w: can't parse '--340282366920938463463374607431768211459' to decimal", ErrInvalidFormat)},
-		{".1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '.1234567890123456789012345678901234567890123456' to decimal", ErrInvalidFormat)},
-		{"+.1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '+.1234567890123456789012345678901234567890123456' to decimal", ErrInvalidFormat)},
-		{"-.1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '-.1234567890123456789012345678901234567890123456' to decimal", ErrInvalidFormat)},
-		{"1.12345678901234567890123.45678901234567890123456", "", fmt.Errorf("%w: can't parse '1.12345678901234567890123.45678901234567890123456' to decimal", ErrInvalidFormat)},
-		{"340282366920938463463374607431768211459.123+--", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.123+--' to decimal", ErrInvalidFormat)},
+		{"340282366920938463463374607431768211459.", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.' to Decimal", ErrInvalidFormat)},
+		{"--340282366920938463463374607431768211459", "", fmt.Errorf("%w: can't parse '--340282366920938463463374607431768211459' to Decimal", ErrInvalidFormat)},
+		{".1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '.1234567890123456789012345678901234567890123456' to Decimal", ErrInvalidFormat)},
+		{"+.1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '+.1234567890123456789012345678901234567890123456' to Decimal", ErrInvalidFormat)},
+		{"-.1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '-.1234567890123456789012345678901234567890123456' to Decimal", ErrInvalidFormat)},
+		{"1.12345678901234567890123.45678901234567890123456", "", fmt.Errorf("%w: can't parse '1.12345678901234567890123.45678901234567890123456' to Decimal", ErrInvalidFormat)},
+		{"340282366920938463463374607431768211459.123+--", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.123+--' to Decimal", ErrInvalidFormat)},
 		{"1.234567890123456789012348901", "", ErrScaleOutOfRange},
 		{"1.123456789012345678912345678901234567890123456", "", ErrScaleOutOfRange},
 		{"", "", ErrEmptyString},
-		{".", "", fmt.Errorf("%w: can't parse '.' to decimal", ErrInvalidFormat)},
-		{"123.", "", fmt.Errorf("%w: can't parse '123.' to decimal", ErrInvalidFormat)},
-		{"-123.", "", fmt.Errorf("%w: can't parse '-123.' to decimal", ErrInvalidFormat)},
-		{"-.123456", "", fmt.Errorf("%w: can't parse '-.123456' to decimal", ErrInvalidFormat)},
-		{"12c45.123456", "", fmt.Errorf("%w: can't parse '12c45.123456' to decimal", ErrInvalidFormat)},
-		{"1245.-123456", "", fmt.Errorf("%w: can't parse '1245.-123456' to decimal", ErrInvalidFormat)},
-		{"1245.123.456", "", fmt.Errorf("%w: can't parse '1245.123.456' to decimal", ErrInvalidFormat)},
-		{"12345..123456", "", fmt.Errorf("%w: can't parse '12345..123456' to decimal", ErrInvalidFormat)},
-		{"123456.123c456", "", fmt.Errorf("%w: can't parse '123456.123c456' to decimal", ErrInvalidFormat)},
-		{"+.", "", fmt.Errorf("%w: can't parse '+.' to decimal", ErrInvalidFormat)},
-		{"+", "", fmt.Errorf("%w: can't parse '+' to decimal", ErrInvalidFormat)},
-		{"-", "", fmt.Errorf("%w: can't parse '-' to decimal", ErrInvalidFormat)},
+		{".", "", fmt.Errorf("%w: can't parse '.' to Decimal", ErrInvalidFormat)},
+		{"123.", "", fmt.Errorf("%w: can't parse '123.' to Decimal", ErrInvalidFormat)},
+		{"-123.", "", fmt.Errorf("%w: can't parse '-123.' to Decimal", ErrInvalidFormat)},
+		{"-.123456", "", fmt.Errorf("%w: can't parse '-.123456' to Decimal", ErrInvalidFormat)},
+		{"12c45.123456", "", fmt.Errorf("%w: can't parse '12c45.123456' to Decimal", ErrInvalidFormat)},
+		{"1245.-123456", "", fmt.Errorf("%w: can't parse '1245.-123456' to Decimal", ErrInvalidFormat)},
+		{"1245.123.456", "", fmt.Errorf("%w: can't parse '1245.123.456' to Decimal", ErrInvalidFormat)},
+		{"12345..123456", "", fmt.Errorf("%w: can't parse '12345..123456' to Decimal", ErrInvalidFormat)},
+		{"123456.123c456", "", fmt.Errorf("%w: can't parse '123456.123c456' to Decimal", ErrInvalidFormat)},
+		{"+.", "", fmt.Errorf("%w: can't parse '+.' to Decimal", ErrInvalidFormat)},
+		{"+", "", fmt.Errorf("%w: can't parse '+' to Decimal", ErrInvalidFormat)},
+		{"-", "", fmt.Errorf("%w: can't parse '-' to Decimal", ErrInvalidFormat)},
 	}
 
 	for _, tc := range testcases {
@@ -152,15 +152,15 @@ func TestMustParse(t *testing.T) {
 		{"340282366920938463463374607431768211459", nil},
 		{"1.234567890123456789012348901", ErrScaleOutOfRange},
 		{"", ErrEmptyString},
-		{".", fmt.Errorf("%w: can't parse '.' to decimal", ErrInvalidFormat)},
-		{"123.", fmt.Errorf("%w: can't parse '123.' to decimal", ErrInvalidFormat)},
-		{"-123.", fmt.Errorf("%w: can't parse '-123.' to decimal", ErrInvalidFormat)},
-		{"-.123456", fmt.Errorf("%w: can't parse '-.123456' to decimal", ErrInvalidFormat)},
-		{"12c45.123456", fmt.Errorf("%w: can't parse '12c45.123456' to decimal", ErrInvalidFormat)},
-		{"12345..123456", fmt.Errorf("%w: can't parse '12345..123456' to decimal", ErrInvalidFormat)},
-		{"+.", fmt.Errorf("%w: can't parse '+.' to decimal", ErrInvalidFormat)},
-		{"+", fmt.Errorf("%w: can't parse '+' to decimal", ErrInvalidFormat)},
-		{"-", fmt.Errorf("%w: can't parse '-' to decimal", ErrInvalidFormat)},
+		{".", fmt.Errorf("%w: can't parse '.' to Decimal", ErrInvalidFormat)},
+		{"123.", fmt.Errorf("%w: can't parse '123.' to Decimal", ErrInvalidFormat)},
+		{"-123.", fmt.Errorf("%w: can't parse '-123.' to Decimal", ErrInvalidFormat)},
+		{"-.123456", fmt.Errorf("%w: can't parse '-.123456' to Decimal", ErrInvalidFormat)},
+		{"12c45.123456", fmt.Errorf("%w: can't parse '12c45.123456' to Decimal", ErrInvalidFormat)},
+		{"12345..123456", fmt.Errorf("%w: can't parse '12345..123456' to Decimal", ErrInvalidFormat)},
+		{"+.", fmt.Errorf("%w: can't parse '+.' to Decimal", ErrInvalidFormat)},
+		{"+", fmt.Errorf("%w: can't parse '+' to Decimal", ErrInvalidFormat)},
+		{"-", fmt.Errorf("%w: can't parse '-' to Decimal", ErrInvalidFormat)},
 	}
 
 	for _, tc := range testcases {
@@ -271,6 +271,81 @@ func TestMustFromInt64(t *testing.T) {
 	}
 }
 
+func TestNewFromUint64(t *testing.T) {
+	testcases := []struct {
+		input   uint64
+		scale   uint8 // scale of decimal
+		s       string
+		wantErr error
+	}{
+		{0, 0, "0", nil},
+		{0, 1, "0", nil},
+		{0, 19, "0", nil},
+		{1000000000000000000, 0, "1000000000000000000", nil},
+		{10000, 4, "1", nil},
+		{10000, 5, "0.1", nil},
+		{123456000, 6, "123.456", nil},
+		{0, 20, "0", ErrScaleOutOfRange},
+		{0, 41, "0", ErrScaleOutOfRange},
+		{1, 0, "1", nil},
+		{1, 5, "0.00001", nil},
+		{1, 19, "0.0000000000000000001", nil},
+		{math.MaxUint64, 0, "18446744073709551615", nil},
+		{math.MaxUint64, 19, "1.8446744073709551615", nil},
+	}
+
+	for _, tc := range testcases {
+		t.Run(strconv.FormatUint(tc.input, 10), func(t *testing.T) {
+			d, err := NewFromUint64(tc.input, tc.scale)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.s, d.String())
+		})
+	}
+}
+
+func TestMustFromUint64(t *testing.T) {
+	testcases := []struct {
+		input   uint64
+		scale   uint8 // scale of decimal
+		s       string
+		wantErr error
+	}{
+		{0, 0, "0", nil},
+		{0, 1, "0", nil},
+		{0, 19, "0", nil},
+		{1000000000000000000, 0, "1000000000000000000", nil},
+		{10000, 4, "1", nil},
+		{10000, 5, "0.1", nil},
+		{123456000, 6, "123.456", nil},
+		{0, 20, "0", ErrScaleOutOfRange},
+		{0, 41, "0", ErrScaleOutOfRange},
+		{1, 0, "1", nil},
+		{1, 5, "0.00001", nil},
+		{1, 19, "0.0000000000000000001", nil},
+		{math.MaxUint64, 0, "18446744073709551615", nil},
+		{math.MaxUint64, 19, "1.8446744073709551615", nil},
+	}
+
+	for _, tc := range testcases {
+		t.Run(strconv.FormatUint(tc.input, 10), func(t *testing.T) {
+			if tc.wantErr != nil {
+				require.PanicsWithError(t, tc.wantErr.Error(), func() {
+					_ = MustFromUint64(tc.input, tc.scale)
+				})
+				return
+			}
+
+			d := MustFromUint64(tc.input, tc.scale)
+			require.Equal(t, tc.s, d.String())
+		})
+	}
+}
+
 func TestNewFromFloat64(t *testing.T) {
 	testcases := []struct {
 		input   float64
@@ -290,9 +365,9 @@ func TestNewFromFloat64(t *testing.T) {
 		{-1.1234567890123456789, "-1.1234567890123457", nil},
 		{123.123000, "123.123", nil},
 		{-123.123000, "-123.123", nil},
-		{math.NaN(), "0", fmt.Errorf("%w: can't parse float 'NaN' to decimal", ErrInvalidFormat)},
-		{math.Inf(1), "0", fmt.Errorf("%w: can't parse float '+Inf' to decimal", ErrInvalidFormat)},
-		{math.Inf(-1), "0", fmt.Errorf("%w: can't parse float '-Inf' to decimal", ErrInvalidFormat)},
+		{math.NaN(), "0", fmt.Errorf("%w: can't parse float 'NaN' to Decimal", ErrInvalidFormat)},
+		{math.Inf(1), "0", fmt.Errorf("%w: can't parse float '+Inf' to Decimal", ErrInvalidFormat)},
+		{math.Inf(-1), "0", fmt.Errorf("%w: can't parse float '-Inf' to Decimal", ErrInvalidFormat)},
 	}
 
 	for i, tc := range testcases {
@@ -327,9 +402,9 @@ func TestMustFromFloat64(t *testing.T) {
 		{-1.1234567890123456789, "-1.1234567890123457", nil},
 		{123.123000, "123.123", nil},
 		{-123.123000, "-123.123", nil},
-		{math.NaN(), "0", fmt.Errorf("%w: can't parse float 'NaN' to decimal", ErrInvalidFormat)},
-		{math.Inf(1), "0", fmt.Errorf("%w: can't parse float '+Inf' to decimal", ErrInvalidFormat)},
-		{math.Inf(-1), "0", fmt.Errorf("%w: can't parse float '-Inf' to decimal", ErrInvalidFormat)},
+		{math.NaN(), "0", fmt.Errorf("%w: can't parse float 'NaN' to Decimal", ErrInvalidFormat)},
+		{math.Inf(1), "0", fmt.Errorf("%w: can't parse float '+Inf' to Decimal", ErrInvalidFormat)},
+		{math.Inf(-1), "0", fmt.Errorf("%w: can't parse float '-Inf' to Decimal", ErrInvalidFormat)},
 	}
 
 	for _, tc := range testcases {

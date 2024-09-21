@@ -1,11 +1,14 @@
 package udecimal
 
 import (
+	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
 	"math/big"
 	"math/bits"
 	"unsafe"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 var (
@@ -331,5 +334,114 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 	}
 
 	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
+	return nil
+}
+
+// Scan implements sql.Scanner interface.
+func (d *Decimal) Scan(src any) error {
+	var err error
+	switch v := src.(type) {
+	case []byte:
+		*d, err = Parse(string(v))
+	case string:
+		*d, err = Parse(v)
+	case uint64:
+		*d, err = NewFromUint64(v, 0)
+	case int64:
+		*d, err = NewFromInt64(v, 0)
+	case int:
+		*d, err = NewFromInt64(int64(v), 0)
+	case int32:
+		*d, err = NewFromInt64(int64(v), 0)
+	case float64:
+		*d, err = NewFromFloat64(v)
+	case nil:
+		err = fmt.Errorf("can't scan nil to Decimal")
+	default:
+		err = fmt.Errorf("can't scan %T to Decimal: %T is not supported", src, src)
+	}
+
+	return err
+}
+
+// Value implements driver.Valuer interface.
+func (d Decimal) Value() (driver.Value, error) {
+	return d.String(), nil
+}
+
+// NullDecimal is a nullable Decimal.
+type NullDecimal struct {
+	Decimal Decimal
+	Valid   bool
+}
+
+// Scan implements sql.Scanner interface.
+func (d *NullDecimal) Scan(src any) error {
+	if src == nil {
+		d.Decimal, d.Valid = Decimal{}, false
+		return nil
+	}
+
+	var err error
+	switch v := src.(type) {
+	case []byte:
+		d.Decimal, err = Parse(string(v))
+	case string:
+		d.Decimal, err = Parse(v)
+	case uint64:
+		d.Decimal, err = NewFromUint64(v, 0)
+	case int64:
+		d.Decimal, err = NewFromInt64(v, 0)
+	case int:
+		d.Decimal, err = NewFromInt64(int64(v), 0)
+	case int32:
+		d.Decimal, err = NewFromInt64(int64(v), 0)
+	case float64:
+		d.Decimal, err = NewFromFloat64(v)
+	default:
+		err = fmt.Errorf("can't scan %T to Decimal: %T is not supported", src, src)
+	}
+
+	d.Valid = err == nil
+	return err
+}
+
+// Value implements driver.Valuer interface.
+func (d NullDecimal) Value() (driver.Value, error) {
+	if !d.Valid {
+		return nil, nil
+	}
+
+	return d.Decimal.String(), nil
+}
+
+// MarshalDynamoDBAttributeValue implements the Marshaler interface
+// It supports marshalling udec.UDecimal to dynamoDB number (N)
+func (d Decimal) MarshalDynamoDBAttributeValue() (types.AttributeValue, error) {
+	return &types.AttributeValueMemberN{Value: d.String()}, nil
+}
+
+// UnmarshalDynamoDBAttributeValue implements the Unmarshaler interface
+// It supports unmarshalling from both N and S types to udec.UDecimal
+func (d *Decimal) UnmarshalDynamoDBAttributeValue(av types.AttributeValue) error {
+	switch av := av.(type) {
+	case *types.AttributeValueMemberN:
+		dec, err := Parse(av.Value)
+		if err != nil {
+			return err
+		}
+
+		*d = dec
+	case *types.AttributeValueMemberS:
+		dec, err := Parse(av.Value)
+		if err != nil {
+			return err
+		}
+
+		*d = dec
+	default:
+		return fmt.Errorf("can't unmarshal %T to Decimal: %T is not supported", av, av)
+	}
+
 	return nil
 }

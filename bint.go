@@ -77,7 +77,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	}
 
 	// parse into big.Int
-	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to decimal", ErrInvalidFormat, s)
+	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
 
 	var (
 		width      = len(s)
@@ -153,7 +153,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 }
 
 func parseBintFromU128(s string) (bool, bint, uint8, error) {
-	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to decimal", ErrInvalidFormat, s)
+	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
 	width := len(s)
 
 	var (
