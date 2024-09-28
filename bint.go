@@ -39,7 +39,7 @@ func bintFromU64(u uint64) bint {
 
 func (u bint) GetBig() *big.Int {
 	if u.overflow {
-		return u.bigInt
+		return new(big.Int).Set(u.bigInt)
 	}
 
 	return u.u128.ToBigInt()
@@ -149,6 +149,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 		return false, bint{}, 0, errInvalidFormat
 	}
 
+	// nolint: gosec
 	return neg, bintFromBigInt(dValue), uint8(scale), nil
 }
 
@@ -195,6 +196,7 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 				return false, bint{}, 0, errInvalidFormat
 			}
 
+			// nolint: gosec
 			scale = uint8(width - pos - 1)
 
 			// prevent "123." or "-123."

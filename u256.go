@@ -3,6 +3,7 @@ package udecimal
 import (
 	"fmt"
 	"math/bits"
+	"strconv"
 )
 
 // U256 represents a 256-bits unsigned integer
@@ -32,22 +33,28 @@ func (u U256) bitLen() int {
 }
 
 // for debugging
-// func (u U256) PrintBit() string {
-// 	b1 := strconv.FormatUint(u.carry.hi, 2)
-// 	b2 := strconv.FormatUint(u.carry.lo, 2)
-// 	b3 := strconv.FormatUint(u.hi, 2)
-// 	b4 := strconv.FormatUint(u.lo, 2)
+func (u U256) PrintBit() {
+	b1 := strconv.FormatUint(u.carry.hi, 2)
+	b2 := strconv.FormatUint(u.carry.lo, 2)
+	b3 := strconv.FormatUint(u.hi, 2)
+	b4 := strconv.FormatUint(u.lo, 2)
 
-// 	return fmt.Sprintf("%s.%s.%s.%s", apz(b1), apz(b2), apz(b3), apz(b4))
-// }
+	fmt.Printf("%s.%s.%s.%s\n", apz(b1), apz(b2), apz(b3), apz(b4))
+}
 
-// func apz(s string) string {
-// 	for range 64 - len(s) {
-// 		s = "0" + s
-// 	}
+func apz(s string) string {
+	if len(s) == 64 {
+		return s
+	}
 
-// 	return s
-// }
+	l := len(s)
+
+	for range 64 - l {
+		s = "0" + s
+	}
+
+	return s
+}
 
 // Compare 2 U256, returns:
 //
@@ -107,6 +114,11 @@ func (u U256) pow(e int) (U256, error) {
 		u, err = u.Mul128(u128{lo: u.lo, hi: u.hi})
 		if err != nil {
 			return U256{}, err
+		}
+
+		// if there's a carry, next iteration will overflow
+		if !u.carry.IsZero() {
+			return U256{}, ErrOverflow
 		}
 	}
 
@@ -177,7 +189,12 @@ func (u U256) Mul128(v u128) (U256, error) {
 //	max(coef) = 10^38-1
 //	max(scale) = 19
 //	max(u) = 2^192-1
-func (u U256) quo(v u128) (u128, error) {
+func (u U256) fastQuo(v u128) (u128, error) {
+	// if u >= 2^192, the quotient might won't fit in 128-bits number (overflow).
+	if u.carry.hi != 0 {
+		return u128{}, ErrOverflow
+	}
+
 	if u.carry.IsZero() {
 		q, _, err := u128FromHiLo(u.hi, u.lo).QuoRem(v)
 		return q, err
@@ -188,61 +205,125 @@ func (u U256) quo(v u128) (u128, error) {
 		return q, err
 	}
 
-	// if u >= 2^192, the quotient won't fit in 128-bits number (overflow).
-	// Put in both here and inside QuoRem64, in case we call QuoRem64 directly
-	if u.carry.hi != 0 {
-		return u128{}, ErrOverflow
-	}
+	// Let q be the final quotient and tq be the 'trial quotient'
+	// The trial quotient tq is defined as tq = q + k, where k is a correction factor.
+	// Here's how we determine k using the following steps:
 
-	// 1 <= n <= 63 (as u128 < 10^38)
+	// 1. Compute the trial quotient tq as tq = [u1 / v1], where:
+	//    - u1 = [u / 2^(64 - shift)]
+	//    - v1 = [v / 2^(64 - shift)]
+	//    (This follows the Hacker's Delight multiword division algorithm)
+	// 2. Calculate vq = v * tq
+	// 3. If vq <= u, then q = tq
+	// 4. If vq > u, compute the difference vqu = vq - u, which can be expressed as:
+	//    vqu = v * (q + k) - (vq + r) = v * k - r = v * (k1 + 1) - r = v * k1 + v - r
+	// 5. Determine k1 as k1 = [vqu / v] and adjust k1 if necessary
+	//
+	// However, given that u < 2^192 and v < 2^128, and 0 <= k <= 2^64, it's possible for v * k to exceed 2^128,
+	// causing an overflow in vqu.
+	// To mitigate this, we need to find the minimum k.
+	// If even the minimum k leads to v * k > 2^128, we fall back to big.Int division
+	// due to the lack of a fast algorithm for dividing U192 by U128.
+	//
+	// tq = [u1 / v1] = [u / (v - rem(v, 2^(64 - n))]
+	// The minimum k is achieved when tq is minimized, which happens when rem(v, 2^(64 - n)) is minimized,
+	// --> 2^(64 - n) being minimized --> n should be maximized.
+	// n is the number of leading zeros in v, so 0 <= n <= 63.
+	// Technically, using n = 63 provides the optimal k.
+
+	// However, when n = 63:
+	// - u1 = [u / 2^(64 - 63)] = u >> 1
+	// - v1 = [v / 2^(64 - 63)] = v >> 1
+	// And if u1 is U192 and v1 is U128, we cannot find tq = [u1 / v1],
+	// since there's no U192/U128 division algorithm currently available.
+	//
+	// What we do have are fast algorithms for U192/U64 or U128/U128 division.
+	// Therefore, we can only compute tq by adjusting u and v to fit either U128/U128 or U192/U64 divisions.
+	// This might not be optimal, but it's the best we can achieve for now.
+	// If we later find a fast U192/U128 division algorithm, we can improve this process.
+	//
+	// As previously mentioned, if after finding the minimum k, v * k still exceeds 2^128,
+	// we will fall back to big.Int division.
+	//
+	// Although this method is not optimal (at the moment), it's still 10 - 15x faster and guarantees zero allocations
+	// compared to big.Int division in most cases where numbers are not too big.
+
+	// nolint: gosec
 	n := uint(bits.LeadingZeros64(v.hi))
-	v1 := v.Lsh(n)
-	u1 := u.rsh(64 - n)
 
-	// let q are final quotient and remainder and tq = q + k (k >= 0)
-	// calculate 'trial quotient' tq (q <= tq < q + 2^64)
-	tq, _, err := u1.quoRem64Tou128(v1.hi)
-	if err != nil {
-		return u128{}, err
+	// nolint: gosec
+	m := uint(bits.LeadingZeros64(u.carry.lo))
+
+	var (
+		v1, tq u128
+		u1     U256
+		err    error
+	)
+
+	if n >= m {
+		v1 = v.Lsh(n)
+		u1 = u.rsh(64 - n)
+		tq, _, err = u1.quoRem64Tou128(v1.hi)
+		if err != nil {
+			return u128{}, err
+		}
+	} else {
+		// n < m
+		v1 = v.Rsh(64 - m)
+		u1 = u.rsh(64 - m)
+
+		tq, _, err = u128FromHiLo(u1.hi, u1.lo).QuoRem(v1)
+		if err != nil {
+			return u128{}, err
+		}
 	}
 
 	vq := v.MulToU256(tq)
 
-	// Some pre-conditions:
-	// u < 2^192, v < 2^128
-	// max(v*k) = u * [2^(64-n) - 1]/2^(127-n) (with n is v's leading zeros, 1 <= n <= 63)
-	// --> max(v*k) = u / 2^64 < 2^192 / 2^64
-	// --> v*k < 2^128
-	// vqu = vq - u = (q+k)*v - (q*v + r) = k*v - r
-	// with v*k < 2^128 --> vqu < 2^128 and can be represented by a 128-bit uint (no overflow)
+	// let k = 1 + [(u*rem(v, 2^(64-n))) / (v*(v-rem(v, 2^(64-n)))]
+	// vq = v*tq = v(q + k)
 	if vq.cmp(u) <= 0 {
 		// vq <= u means tq = q
 		return tq, nil
 	}
 
+	// vqu = vq - u = v*(q+k) - (vq + r) = v*k - r
 	vqu, err := vq.sub(u)
 	if err != nil {
 		return u128{}, err
 	}
 
-	// techically this can't happen, just put it here to do fuzz test and cross-check with other libs
-	if vqu.carry.hi&vqu.carry.lo != 0 {
+	if !vqu.carry.IsZero() {
 		return u128{}, ErrOverflow
 	}
 
+	vqu128 := u128FromHiLo(vqu.hi, vqu.lo)
+
 	// k1 = k - 1
-	k1, _, err := u128FromHiLo(vqu.hi, vqu.lo).QuoRem(v)
+	// vqu = v*k - r = v*(k1 + 1) - r = v*k1 + v - r
+	// k1 <= [vqu / v] <= k1 + 1
+	k1, _, err := vqu128.QuoRem(v)
 	if err != nil {
 		return u128{}, err
 	}
 
-	// adjust the result, with tq = q_final + k = q_final + (k1 + 1) --> q_final = tq - (k1 + 1)
+	// adjust k1
+	vqu1, err := v.Mul(k1)
+	if err != nil {
+		return u128{}, err
+	}
+
+	// if [vqu / v] = k1 + 1, then we don't have to adjust because final k = k1 + 1
+	// if [vqu / v] = k1, then final k = k1 + 1
+	if vqu1.Cmp(vqu128) < 0 {
+		k1, err = k1.Add64(1)
+		if err != nil {
+			return u128{}, err
+		}
+	}
+
+	// final q = tq - k
 	tq, err = tq.Sub(k1)
-	if err != nil {
-		return u128{}, err
-	}
-
-	tq, err = tq.Sub64(1)
 	if err != nil {
 		return u128{}, err
 	}
@@ -262,11 +343,6 @@ func (u U256) quo(v u128) (u128, error) {
 //	u = q*v + r
 //	Return overflow if the result q doesn't fit in a u128
 func (u U256) quoRem64Tou128(v uint64) (u128, uint64, error) {
-	// obvious case that the result won't fit in 128-bits number
-	if u.carry.hi != 0 {
-		return u128{}, 0, ErrOverflow
-	}
-
 	if u.carry.lo == 0 {
 		q, r := u128FromHiLo(u.hi, u.lo).QuoRem64(v)
 		return q, r, nil

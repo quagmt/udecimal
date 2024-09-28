@@ -22,18 +22,6 @@ var (
 	maxStrLen = 200
 )
 
-func SetDefaultScale(scale uint8) {
-	if scale > maxScale {
-		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale))
-	}
-
-	if scale == 0 {
-		panic("scale must be greater than 0")
-	}
-
-	defaultScale = scale
-}
-
 // pre-computed values
 var pow10 = [39]u128{
 	{lo: 1},                                  // 10^0
@@ -77,6 +65,29 @@ var pow10 = [39]u128{
 	{lo: 687_399_551_400_673_280, hi: 5_421_010_862_427_522_170}, // 10^38
 }
 
+var pow10Big = [20]*big.Int{
+	big.NewInt(1),        // 10^0
+	big.NewInt(10),       // 10^1
+	big.NewInt(1e2),      // 10^2
+	big.NewInt(1e3),      // 10^3
+	big.NewInt(1e4),      // 10^4
+	big.NewInt(1e5),      // 10^5
+	big.NewInt(1e6),      // 10^6
+	big.NewInt(1e7),      // 10^7
+	big.NewInt(1e8),      // 10^8
+	big.NewInt(1e9),      // 10^9
+	big.NewInt(1e10),     // 10^10
+	big.NewInt(1e11),     // 10^11
+	big.NewInt(1e12),     // 10^12
+	big.NewInt(1e13),     // 10^13
+	big.NewInt(1e14),     // 10^14
+	big.NewInt(1e15),     // 10^15
+	big.NewInt(1e16),     // 10^16
+	big.NewInt(1e17),     // 10^17
+	big.NewInt(1e18),     // 10^18
+	pow10[19].ToBigInt(), // 10^19
+}
+
 var (
 	ErrOverflow        = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
 	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
@@ -88,8 +99,9 @@ var (
 )
 
 var (
-	Zero = Decimal{}
-	One  = MustFromInt64(1, 0)
+	Zero    = Decimal{}
+	One     = MustFromInt64(1, 0)
+	OneUint = MustFromUint64(1, 19)
 )
 
 // Decimal represents a fixed-point decimal number.
@@ -102,8 +114,39 @@ type Decimal struct {
 	scale uint8
 }
 
+func SetDefaultScale(scale uint8) {
+	if scale > maxScale {
+		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale))
+	}
+
+	if scale == 0 {
+		panic("scale must be greater than 0")
+	}
+
+	defaultScale = scale
+}
+
+func NewFromHiLo(neg bool, hi uint64, lo uint64, scale uint8) (Decimal, error) {
+	if scale > defaultScale {
+		return Decimal{}, ErrScaleOutOfRange
+	}
+
+	coef := u128{hi: hi, lo: lo}
+	return newDecimal(neg, bintFromU128(coef), scale), nil
+}
+
 // newDecimal return the decimal
 func newDecimal(neg bool, coef bint, scale uint8) Decimal {
+	// double check to make sure the whole part is not greater than 10^19
+	// if coef is not overflow, the decimal range is:
+	// [-9_999_999_999_999_999_999.9_999_999_999_999_999_999 <= d <= 9_999_999_999_999_999_999.9_999_999_999_999_999_999]
+	if !coef.overflow && !coef.u128.LessThan(pow10[38]) {
+		// if not, convert coef to big.Int
+		coef.overflow = true
+		coef.bigInt = coef.u128.ToBigInt()
+		coef.u128 = u128{}
+	}
+
 	return Decimal{neg: neg, coef: coef, scale: scale}
 }
 
@@ -140,6 +183,7 @@ func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 		return Decimal{}, ErrScaleOutOfRange
 	}
 
+	// nolint: gosec
 	return newDecimal(neg, bintFromU64(uint64(coef)), scale), nil
 }
 
@@ -382,16 +426,17 @@ func tryMulU128(d, e Decimal, neg bool, scale uint8) (Decimal, error) {
 	}
 
 	rcoef := d.coef.u128.MulToU256(e.coef.u128)
-
 	if scale <= defaultScale {
 		if !rcoef.carry.IsZero() {
 			return Decimal{}, ErrOverflow
 		}
 
-		return newDecimal(neg, bintFromU128(u128{hi: rcoef.hi, lo: rcoef.lo}), scale), nil
+		coef := u128{hi: rcoef.hi, lo: rcoef.lo}
+
+		return newDecimal(neg, bintFromU128(coef), scale), nil
 	}
 
-	q, err := rcoef.quo(pow10[scale-defaultScale])
+	q, err := rcoef.fastQuo(pow10[scale-defaultScale])
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -472,7 +517,7 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	factor := defaultScale - (d.scale - e.scale)
 
 	d256 := d.coef.u128.MulToU256(pow10[factor])
-	quo, err := d256.quo(e.coef.u128)
+	quo, err := d256.fastQuo(e.coef.u128)
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -502,8 +547,8 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
-	dBig = dBig.Mul(dBig, pow10[defaultScale-d.scale].ToBigInt())
-	dBig = dBig.Div(dBig, new(big.Int).SetUint64(v))
+	dBig.Mul(dBig, pow10[defaultScale-d.scale].ToBigInt())
+	dBig.Div(dBig, new(big.Int).SetUint64(v))
 
 	return newDecimal(d.neg, bintFromBigInt(dBig), defaultScale), nil
 }
@@ -882,6 +927,143 @@ func (d Decimal) Trunc(scale uint8) Decimal {
 	return newDecimal(d.neg, bintFromBigInt(q), scale)
 }
 
+func (d Decimal) trimTrailingZeros() Decimal {
+	if d.coef.overflow {
+		zeros := trailingZerosBigInt(d.coef.bigInt)
+
+		var (
+			dBig  = d.coef.GetBig()
+			scale uint8
+		)
+
+		if zeros == 0 {
+			return newDecimal(d.neg, bintFromBigInt(dBig), d.scale)
+		}
+
+		if zeros >= d.scale {
+			dBig.Div(dBig, pow10[d.scale].ToBigInt())
+			scale = 0
+		} else {
+			scale = d.scale - uint8(zeros)
+			dBig.Div(dBig, pow10[zeros].ToBigInt())
+		}
+
+		return newDecimal(d.neg, bintFromBigInt(dBig), scale)
+	}
+
+	zeros := trailingZerosU128(d.coef.u128)
+	if zeros == 0 {
+		return newDecimal(d.neg, bintFromU128(d.coef.u128), d.scale)
+	}
+
+	var (
+		coef  u128
+		scale uint8
+	)
+
+	if zeros >= d.scale {
+		coef, _, _ = d.coef.u128.QuoRem(pow10[d.scale])
+		scale = 0
+	} else {
+		scale = d.scale - zeros
+		coef, _, _ = d.coef.u128.QuoRem(pow10[zeros])
+	}
+
+	d.coef = bintFromU128(coef)
+	d.scale = scale
+	return d
+}
+
+func trailingZerosBigInt(n *big.Int) uint8 {
+	var (
+		zeros uint8
+		z, m  = new(big.Int), new(big.Int)
+	)
+
+	_, m = z.QuoRem(n, pow10Big[16], m)
+	if m.Cmp(bigZero) == 0 {
+		zeros += 16
+
+		// shortcut because maxScale = 19
+		_, m = z.QuoRem(n, pow10Big[zeros+2], m)
+		if m.Cmp(bigZero) == 0 {
+			zeros += 2
+		}
+
+		_, m = z.QuoRem(n, pow10Big[zeros+1], m)
+		if m.Cmp(bigZero) == 0 {
+			zeros++
+		}
+
+		return zeros
+	}
+
+	_, m = z.QuoRem(n, pow10Big[8], m)
+	if m.Cmp(bigZero) == 0 {
+		zeros += 8
+	}
+
+	_, m = z.QuoRem(n, pow10Big[zeros+4], m)
+	if m.Cmp(bigZero) == 0 {
+		zeros += 4
+	}
+
+	_, m = z.QuoRem(n, pow10Big[zeros+2], m)
+	if m.Cmp(bigZero) == 0 {
+		zeros += 2
+	}
+
+	_, m = z.QuoRem(n, pow10Big[zeros+1], m)
+	if m.Cmp(bigZero) == 0 {
+		zeros++
+	}
+
+	return zeros
+}
+
+func trailingZerosU128(n u128) uint8 {
+	var zeros uint8
+
+	_, rem := n.QuoRem64(1e16)
+	if rem == 0 {
+		zeros += 16
+
+		_, rem = n.QuoRem64(pow10[zeros+2].lo)
+		if rem == 0 {
+			zeros += 2
+		}
+
+		_, rem = n.QuoRem64(pow10[zeros+1].lo)
+		if rem == 0 {
+			zeros++
+		}
+
+		return zeros
+	}
+
+	_, rem = n.QuoRem64(1e8)
+	if rem == 0 {
+		zeros += 8
+	}
+
+	_, rem = n.QuoRem64(pow10[zeros+4].lo)
+	if rem == 0 {
+		zeros += 4
+	}
+
+	_, rem = n.QuoRem64(pow10[zeros+2].lo)
+	if rem == 0 {
+		zeros += 2
+	}
+
+	_, rem = n.QuoRem64(pow10[zeros+1].lo)
+	if rem == 0 {
+		zeros++
+	}
+
+	return zeros
+}
+
 // PowInt returns d^e where e is an integer.
 //
 // Examples:
@@ -889,6 +1071,11 @@ func (d Decimal) Trunc(scale uint8) Decimal {
 //	PowInt(2.5, 2) = 6.25
 //	PowInt(2.5, -2) = 0.16
 func (d Decimal) PowInt(e int) Decimal {
+	// check 0 first to avoid 0^0 = 1
+	if d.coef.IsZero() {
+		return Zero
+	}
+
 	if e == 0 {
 		return One
 	}
@@ -897,24 +1084,23 @@ func (d Decimal) PowInt(e int) Decimal {
 		return d
 	}
 
-	if d.coef.IsZero() {
-		return Zero
-	}
+	// rescale fist to remove trailing zeros
+	dTrim := d.trimTrailingZeros()
 
 	if e < 0 {
-		return d.powIntInverse(-e)
+		return dTrim.powIntInverse(-e)
 	}
 
 	// e > 1 && d != 0
-	q, err := d.tryPowIntU128(e)
+	q, err := dTrim.tryPowIntU128(e)
 	if err == nil {
 		return q
 	}
 
 	// overflow, fallback to big.Int
-	dBig := d.coef.GetBig()
+	dBig := dTrim.coef.GetBig()
 	factor := 0
-	powScale := int(d.scale) * e
+	powScale := int(dTrim.scale) * e
 	if powScale >= int(defaultScale) {
 		factor = powScale - int(defaultScale)
 		powScale = int(defaultScale)
@@ -929,6 +1115,7 @@ func (d Decimal) PowInt(e int) Decimal {
 		neg = false
 	}
 
+	// nolint: gosec
 	return newDecimal(neg, bintFromBigInt(qBig), uint8(powScale))
 }
 
@@ -994,6 +1181,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 			return Decimal{}, ErrOverflow
 		}
 
+		// nolint: gosec
 		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powScale)), nil
 	}
 
@@ -1001,7 +1189,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		return Decimal{}, ErrOverflow
 	}
 
-	q, err := result.quo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
+	q, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -1047,9 +1235,10 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 			return Decimal{}, ErrOverflow
 		}
 
+		// nolint: gosec
 		a256 := one128.MulToU256(pow10[defaultScale+uint8(powScale)])
 
-		q, err := a256.quo(u128{hi: result.hi, lo: result.lo})
+		q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 		if err != nil {
 			return Decimal{}, err
 		}
@@ -1065,8 +1254,9 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	}
 
 	// a256 = 10^(powScale + factor + defaultScale)
+	// nolint: gosec
 	a256 := pow10[factor].MulToU256(pow10[defaultScale+uint8(powScale)])
-	q, err := a256.quo(u128{hi: result.hi, lo: result.lo})
+	q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -1117,6 +1307,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 		return Decimal{}, ErrOverflow
 	}
 
+	// nolint: gosec
 	bitLen := uint(coef.bitLen()) // bitLen < 192
 
 	// initial guess = 2^((bitLen + 1) / 2) ≥ √coef
@@ -1125,7 +1316,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 	// Newton-Raphson method
 	for {
 		// calculate x1 = (x + coef/x) / 2
-		y, err := coef.quo(x)
+		y, err := coef.fastQuo(x)
 		if err != nil {
 			return Decimal{}, err
 		}
