@@ -2061,7 +2061,7 @@ func TestPowInt(t *testing.T) {
 	}
 }
 
-func TestPowIntRandom(t *testing.T) {
+func TestRandomPow(t *testing.T) {
 	inputs := []string{
 		"0.1234",
 		"-0.1234",
@@ -2214,87 +2214,5 @@ func TestInexactFloat64(t *testing.T) {
 
 			require.Equal(t, got1, got)
 		})
-	}
-}
-
-func BenchmarkString(b *testing.B) {
-	a, err := Parse("12345.12345")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for range b.N {
-		_ = a.String()
-	}
-}
-
-func BenchmarkShopspringString(b *testing.B) {
-	a, err := decimal.NewFromString("12345.12345")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for range b.N {
-		_ = a.String()
-	}
-}
-
-func BenchmarkMul(b *testing.B) {
-	a, err := Parse("1234567890")
-	require.NoError(b, err)
-
-	bb, err := Parse("1111.123456789123456789")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for range b.N {
-		a.Mul(bb)
-	}
-}
-
-func BenchmarkShopspringMul(b *testing.B) {
-	a, err := decimal.NewFromString("1234567890")
-	require.NoError(b, err)
-
-	bb, err := decimal.NewFromString("1111.123456789123456789")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for range b.N {
-		a.Mul(bb)
-	}
-}
-
-func BenchmarkDiv(b *testing.B) {
-	a, err := Parse("1234567890123456789.1234567890123456789")
-	require.NoError(b, err)
-
-	bb, err := Parse("1494.186269970473681015")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for range b.N {
-		_, _ = a.Div(bb)
-	}
-}
-
-func BenchmarkShopspringDiv(b *testing.B) {
-	a, err := decimal.NewFromString("1234567890123456789.1234567890123456879")
-	require.NoError(b, err)
-
-	bb, err := decimal.NewFromString("1111.1789")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for range b.N {
-		a.Div(bb)
-	}
-}
-
-func BenchmarkPow(b *testing.B) {
-	a, err := Parse("12.46")
-	require.NoError(b, err)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		a.PowInt(10)
 	}
 }

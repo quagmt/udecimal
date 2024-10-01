@@ -61,6 +61,10 @@ func (u bint) Cmp(v bint) int {
 	return u.GetBig().Cmp(v.GetBig())
 }
 
+func errInvalidFormat(s string) error {
+	return fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
+}
+
 func parseBint(s string) (bool, bint, uint8, error) {
 	if len(s) > maxStrLen {
 		return false, bint{}, 0, ErrMaxStrLen
@@ -77,8 +81,6 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	}
 
 	// parse into big.Int
-	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
-
 	var (
 		width      = len(s)
 		intString  string
@@ -89,7 +91,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 
 	switch s[0] {
 	case '.':
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	case '-':
 		neg = true
 		value = s[1:]
@@ -102,12 +104,12 @@ func parseBint(s string) (bool, bint, uint8, error) {
 
 	// prevent "+" or "-"
 	if pos == width {
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
 	// prevent "-.123" or "+.123"
 	if s[pos] == '.' {
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
 	pIndex := -1
@@ -116,7 +118,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 		if value[i] == '.' {
 			if pIndex > -1 {
 				// input has more than 1 decimal point
-				return false, bint{}, 0, errInvalidFormat
+				return false, bint{}, 0, errInvalidFormat(s)
 			}
 			pIndex = i
 		}
@@ -128,7 +130,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 		intString = value
 	case pIndex >= vLen-1:
 		// prevent "123." or "-123."
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	default:
 		intString = value[:pIndex] + value[pIndex+1:]
 		scale = len(value[pIndex+1:])
@@ -141,12 +143,12 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	dValue := new(big.Int)
 	_, ok := dValue.SetString(intString, 10)
 	if !ok {
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
 	// the value should always be positive, as we already extracted the sign
 	if dValue.Sign() == -1 {
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
 	// nolint: gosec
@@ -154,7 +156,6 @@ func parseBint(s string) (bool, bint, uint8, error) {
 }
 
 func parseBintFromU128(s string) (bool, bint, uint8, error) {
-	errInvalidFormat := fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
 	width := len(s)
 
 	var (
@@ -164,7 +165,7 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 
 	switch s[0] {
 	case '.':
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	case '-':
 		neg = true
 		pos++
@@ -176,12 +177,12 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 
 	// prevent "+" or "-"
 	if pos == width {
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
 	// prevent "-.123" or "+.123"
 	if s[pos] == '.' {
-		return false, bint{}, 0, errInvalidFormat
+		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
 	var (
@@ -193,7 +194,7 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 		if s[pos] == '.' {
 			// return err if we encounter the '.' more than once
 			if scale != 0 {
-				return false, bint{}, 0, errInvalidFormat
+				return false, bint{}, 0, errInvalidFormat(s)
 			}
 
 			// nolint: gosec
@@ -201,7 +202,7 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 
 			// prevent "123." or "-123."
 			if scale == 0 {
-				return false, bint{}, 0, errInvalidFormat
+				return false, bint{}, 0, errInvalidFormat(s)
 			}
 
 			if scale > defaultScale {
@@ -212,7 +213,7 @@ func parseBintFromU128(s string) (bool, bint, uint8, error) {
 		}
 
 		if s[pos] < '0' || s[pos] > '9' {
-			return false, bint{}, 0, errInvalidFormat
+			return false, bint{}, 0, errInvalidFormat(s)
 		}
 
 		coef, err = coef.Mul64(10)

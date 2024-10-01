@@ -3,20 +3,19 @@ package udecimal
 import (
 	"fmt"
 	"math/bits"
-	"strconv"
 )
 
-// U256 represents a 256-bits unsigned integer
-// U256 = carry * 2^128 + hi*2^64 + lo
+// u256 represents a 256-bits unsigned integer
+// u256 = carry * 2^128 + hi*2^64 + lo
 // carry = u*2^64 + v
-type U256 struct {
+type u256 struct {
 	hi, lo uint64
 
 	// store overflow
 	carry u128
 }
 
-func (u U256) bitLen() int {
+func (u u256) bitLen() int {
 	if u.carry.hi != 0 {
 		return 192 + bits.Len64(u.carry.hi)
 	}
@@ -33,35 +32,35 @@ func (u U256) bitLen() int {
 }
 
 // for debugging
-func (u U256) PrintBit() {
-	b1 := strconv.FormatUint(u.carry.hi, 2)
-	b2 := strconv.FormatUint(u.carry.lo, 2)
-	b3 := strconv.FormatUint(u.hi, 2)
-	b4 := strconv.FormatUint(u.lo, 2)
+// func (u u256) PrintBit() {
+// 	b1 := strconv.FormatUint(u.carry.hi, 2)
+// 	b2 := strconv.FormatUint(u.carry.lo, 2)
+// 	b3 := strconv.FormatUint(u.hi, 2)
+// 	b4 := strconv.FormatUint(u.lo, 2)
 
-	fmt.Printf("%s.%s.%s.%s\n", apz(b1), apz(b2), apz(b3), apz(b4))
-}
+// 	fmt.Printf("%s.%s.%s.%s\n", apz(b1), apz(b2), apz(b3), apz(b4))
+// }
 
-func apz(s string) string {
-	if len(s) == 64 {
-		return s
-	}
+// func apz(s string) string {
+// 	if len(s) == 64 {
+// 		return s
+// 	}
 
-	l := len(s)
+// 	l := len(s)
 
-	for range 64 - l {
-		s = "0" + s
-	}
+// 	for range 64 - l {
+// 		s = "0" + s
+// 	}
 
-	return s
-}
+// 	return s
+// }
 
-// Compare 2 U256, returns:
+// Compare 2 u256, returns:
 //
 //	+1 when u > v
 //	 0 when u = v
 //	-1 when u < v
-func (u U256) cmp(v U256) int {
+func (u u256) cmp(v u256) int {
 	if k := u.carry.Cmp(v.carry); k != 0 {
 		return k
 	}
@@ -69,12 +68,12 @@ func (u U256) cmp(v U256) int {
 	return u128FromHiLo(u.hi, u.lo).Cmp(u128FromHiLo(v.hi, v.lo))
 }
 
-// Compare U256 and U128, returns:
+// Compare u256 and U128, returns:
 //
 //	+1 when u > v
 //	 0 when u = v
 //	-1 when u < v
-func (u U256) cmp128(v u128) int {
+func (u u256) cmp128(v u128) int {
 	if !u.carry.IsZero() {
 		return 1
 	}
@@ -82,67 +81,76 @@ func (u U256) cmp128(v u128) int {
 	return u128FromHiLo(u.hi, u.lo).Cmp(v)
 }
 
-func (u U256) pow(e int) (U256, error) {
+func (u u256) pow(e int) (u256, error) {
 	if e <= 0 {
-		return U256{}, fmt.Errorf("invalid exponent %d. Must be greater than 0", e)
+		return u256{}, fmt.Errorf("invalid exponent %d. Must be greater than 0", e)
 	}
 
-	result := U256{lo: 1}
+	result := u256{lo: 1}
+	d256 := u
 	var err error
 
 	for ; e > 0; e >>= 1 {
 		if e&1 == 1 {
-			// if we encounter bit 1, then result *= (d256)^(2^i)
-			if (!result.carry.IsZero() && !u.carry.IsZero()) ||
-				(!result.carry.IsZero() && u.hi != 0) ||
-				(!u.carry.IsZero() && result.hi != 0) {
-				return U256{}, ErrOverflow
+			if !result.carry.IsZero() {
+				return u256{}, ErrOverflow
 			}
 
-			if result.carry.IsZero() {
-				result, err = u.Mul128(u128{lo: result.lo, hi: result.hi})
-			} else {
-				result, err = result.Mul128(u128{lo: u.lo, hi: u.hi})
-			}
-
+			// result = result * u (with u = (d256)^(2^i))
+			result, err = d256.mul128(u128{lo: result.lo, hi: result.hi})
 			if err != nil {
-				return U256{}, err
+				return u256{}, err
 			}
 		}
 
 		// d256 = (d256)^2 each time
-		u, err = u.Mul128(u128{lo: u.lo, hi: u.hi})
+		d256, err = d256.mul128(u128{lo: d256.lo, hi: d256.hi})
 		if err != nil {
-			return U256{}, err
+			return u256{}, err
 		}
 
 		// if there's a carry, next iteration will overflow
-		if !u.carry.IsZero() {
-			return U256{}, ErrOverflow
+		if !d256.carry.IsZero() && e > 1 {
+			return u256{}, ErrOverflow
 		}
 	}
 
 	return result, nil
 }
 
-func (u U256) sub(v U256) (U256, error) {
+func (u u256) mul128(v u128) (u256, error) {
+	a := u128FromHiLo(u.hi, u.lo).MulToU256(v)
+	b, err := u.carry.Mul(v)
+	if err != nil {
+		return u256{}, err
+	}
+
+	c, err := a.carry.Add(b)
+	if err != nil {
+		return u256{}, err
+	}
+
+	return u256{hi: a.hi, lo: a.lo, carry: c}, nil
+}
+
+func (u u256) sub(v u256) (u256, error) {
 	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
 	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
 
 	c, err := v.carry.Add64(borrow)
 	if err != nil {
-		return U256{}, err
+		return u256{}, err
 	}
 
 	c1, err := u.carry.Sub(c)
 	if err != nil {
-		return U256{}, err
+		return u256{}, err
 	}
 
-	return U256{lo: lo, hi: hi, carry: c1}, nil
+	return u256{lo: lo, hi: hi, carry: c1}, nil
 }
 
-func (u U256) rsh(n uint) (v U256) {
+func (u u256) rsh(n uint) (v u256) {
 	switch {
 	case n < 64:
 		v.carry = u.carry.Rsh(n)
@@ -157,29 +165,13 @@ func (u U256) rsh(n uint) (v U256) {
 
 	case n >= 128:
 		v.carry = u128{}
-		v.hi = u.carry.hi >> (n - 128)
-		v.lo = u.carry.hi<<(196-n) | u.carry.lo>>(n-128)
-
+		c := u128{hi: u.carry.hi, lo: u.carry.lo}.Rsh(n - 128)
+		v.hi, v.lo = c.hi, c.lo
 	default:
 		// n < 0, can't happen
 	}
 
 	return
-}
-
-func (u U256) Mul128(v u128) (U256, error) {
-	a := u128FromHiLo(u.hi, u.lo).MulToU256(v)
-	b, err := u.carry.mulRaw(v)
-	if err != nil {
-		return U256{}, err
-	}
-
-	c, err := a.carry.addRaw(b)
-	if err != nil {
-		return U256{}, err
-	}
-
-	return U256{hi: a.hi, lo: a.lo, carry: c}, nil
 }
 
 // Quo only returns quotient of u/v
@@ -189,7 +181,7 @@ func (u U256) Mul128(v u128) (U256, error) {
 //	max(coef) = 10^38-1
 //	max(scale) = 19
 //	max(u) = 2^192-1
-func (u U256) fastQuo(v u128) (u128, error) {
+func (u u256) fastQuo(v u128) (u128, error) {
 	// if u >= 2^192, the quotient might won't fit in 128-bits number (overflow).
 	if u.carry.hi != 0 {
 		return u128{}, ErrOverflow
@@ -256,7 +248,7 @@ func (u U256) fastQuo(v u128) (u128, error) {
 
 	var (
 		v1, tq u128
-		u1     U256
+		u1     u256
 		err    error
 	)
 
@@ -342,7 +334,7 @@ func (u U256) fastQuo(v u128) (u128, error) {
 //	q must be a u128
 //	u = q*v + r
 //	Return overflow if the result q doesn't fit in a u128
-func (u U256) quoRem64Tou128(v uint64) (u128, uint64, error) {
+func (u u256) quoRem64Tou128(v uint64) (u128, uint64, error) {
 	if u.carry.lo == 0 {
 		q, r := u128FromHiLo(u.hi, u.lo).QuoRem64(v)
 		return q, r, nil

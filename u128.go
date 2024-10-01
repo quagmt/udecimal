@@ -32,15 +32,6 @@ func (u u128) IsZero() bool {
 	return u == u128{}
 }
 
-// isOverflow returns true if coef is greater than or equal to 10^38
-// coef should be less than 10^38 to take advantage of 128-bits unsigned integer
-func (u u128) isOverflow() bool {
-	// scale = frac digits
-	// whole part has at most 19 digits
-	// consider it's overflow when total digits > scale + 19, which means coef >= 10^(scale+19)
-	return !u.LessThan(pow10[38])
-}
-
 // Cmp compares u, v and returns:
 //
 //	-1 if u < v
@@ -90,19 +81,6 @@ func (u u128) LessThan(v u128) bool {
 }
 
 func (u u128) Add(v u128) (u128, error) {
-	q, err := u.addRaw(v)
-	if err != nil {
-		return u128{}, err
-	}
-
-	if q.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return q, nil
-}
-
-func (u u128) addRaw(v u128) (u128, error) {
 	lo, carry := bits.Add64(u.lo, v.lo, 0)
 	hi, carry := bits.Add64(u.hi, v.hi, carry)
 	if carry != 0 {
@@ -112,44 +90,12 @@ func (u u128) addRaw(v u128) (u128, error) {
 	return u128{hi: hi, lo: lo}, nil
 }
 
-// Add64 returns u+v.
+// Add64 returns u+v where v is a 64-bits unsigned integer.
 func (u u128) Add64(v uint64) (u128, error) {
-	q, err := u.add64Raw(v)
-	if err != nil {
-		return u128{}, err
-	}
-
-	if q.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return q, nil
-}
-
-func (u u128) add64Raw(v uint64) (u128, error) {
-	lo, carry := bits.Add64(u.lo, v, 0)
-	hi, carry := bits.Add64(u.hi, 0, carry)
-	if carry != 0 {
-		return u128{}, ErrOverflow
-	}
-
-	return u128{hi: hi, lo: lo}, nil
+	return u.Add(u128{lo: v})
 }
 
 func (u u128) Sub(v u128) (u128, error) {
-	q, err := u.subRaw(v)
-	if err != nil {
-		return u128{}, err
-	}
-
-	if q.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return q, nil
-}
-
-func (u u128) subRaw(v u128) (u128, error) {
 	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
 	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
 	if borrow != 0 {
@@ -160,46 +106,8 @@ func (u u128) subRaw(v u128) (u128, error) {
 	return u128{hi: hi, lo: lo}, nil
 }
 
-// Sub64 returns u-v.
-func (u u128) Sub64(v uint64) (u128, error) {
-	q, err := u.sub64Raw(v)
-	if err != nil {
-		return u128{}, err
-	}
-
-	if q.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return q, nil
-}
-
-func (u u128) sub64Raw(v uint64) (u128, error) {
-	lo, borrow := bits.Sub64(u.lo, v, 0)
-	hi, borrow := bits.Sub64(u.hi, 0, borrow)
-	if borrow != 0 {
-		return u128{}, ErrOverflow
-	}
-
-	return u128{hi: hi, lo: lo}, nil
-}
-
-// Mul64 returns u*v.
-// Return overflow if the result is greater than 10^38-1
+// Mul64 returns u*v. If the result is greater than 2^128-1, Mul64 returns an overflow error.
 func (u u128) Mul64(v uint64) (u128, error) {
-	q, err := u.mul64Raw(v)
-	if err != nil {
-		return u128{}, err
-	}
-
-	if q.isOverflow() {
-		return u128{}, ErrOverflow
-	}
-
-	return q, nil
-}
-
-func (u u128) mul64Raw(v uint64) (u128, error) {
 	hi, lo := bits.Mul64(u.lo, v)
 	p0, p1 := bits.Mul64(u.hi, v)
 	hi, c0 := bits.Add64(hi, p1, 0)
@@ -223,21 +131,9 @@ func (u u128) Mul(v u128) (u128, error) {
 	return v.Mul64(u.lo)
 }
 
-// raw version of Mul, doesn't check custom overflow condition
-func (u u128) mulRaw(v u128) (u128, error) {
-	if u.hi != 0 && v.hi != 0 {
-		return u128{}, ErrOverflow
-	}
-
-	if v.hi == 0 {
-		return u.mul64Raw(v.lo)
-	}
-
-	// u.hi == 0
-	return v.mul64Raw(u.lo)
-}
-
-func (u u128) MulToU256(v u128) U256 {
+// MulToU256 returns u*v and carry.
+// The whole result will be stored in a 256-bits unsigned integer.
+func (u u128) MulToU256(v u128) u256 {
 	hi, lo := bits.Mul64(u.lo, v.lo)
 	p0, p1 := bits.Mul64(u.hi, v.lo)
 	p2, p3 := bits.Mul64(u.lo, v.hi)
@@ -248,7 +144,7 @@ func (u u128) MulToU256(v u128) U256 {
 	hi, c1 := bits.Add64(hi, p3, 0)
 	c1 += c0
 
-	// calculate upper part of U256
+	// calculate upper part of u256
 	e0, e1 := bits.Mul64(u.hi, v.hi)
 	d, d0 := bits.Add64(p0, p2, 0)
 	d, d1 := bits.Add64(d, c1, 0)
@@ -259,7 +155,7 @@ func (u u128) MulToU256(v u128) U256 {
 		lo: e2,
 	}
 
-	return U256{
+	return u256{
 		lo:    lo,
 		hi:    hi,
 		carry: carry,
@@ -295,23 +191,23 @@ func (u u128) QuoRem(v u128) (q, r u128, err error) {
 		}
 
 		q = u128FromU64(tq)
-		vq, err := v.mul64Raw(tq)
+		vq, err := v.Mul64(tq)
 		if err != nil {
 			return q, r, err
 		}
 
-		r, err = u.subRaw(vq)
+		r, err = u.Sub(vq)
 		if err != nil {
 			return q, r, err
 		}
 
 		if r.Cmp(v) >= 0 {
-			q, err = q.add64Raw(1)
+			q, err = q.Add64(1)
 			if err != nil {
 				return q, r, err
 			}
 
-			r, err = r.subRaw(v)
+			r, err = r.Sub(v)
 			if err != nil {
 				return q, r, err
 			}
@@ -343,25 +239,26 @@ func (u u128) Lsh(n uint) (s u128) {
 	return
 }
 
-func (u u128) String() string {
-	if u.IsZero() {
-		return "0"
-	}
+// for debugging
+// func (u u128) String() string {
+// 	if u.IsZero() {
+// 		return "0"
+// 	}
 
-	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
-	for i := len(buf); ; i -= 19 {
-		q, r := u.QuoRem64(1e19) // largest power of 10 that fits in a uint64
-		var n int
-		for ; r != 0; r /= 10 {
-			n++
-			buf[i-n] += byte(r % 10)
-		}
-		if q.IsZero() {
-			return string(buf[i-n:])
-		}
-		u = q
-	}
-}
+// 	buf := []byte("0000000000000000000000000000000000000000") // log10(2^128) < 40
+// 	for i := len(buf); ; i -= 19 {
+// 		q, r := u.QuoRem64(1e19) // largest power of 10 that fits in a uint64
+// 		var n int
+// 		for ; r != 0; r /= 10 {
+// 			n++
+// 			buf[i-n] += byte(r % 10)
+// 		}
+// 		if q.IsZero() {
+// 			return string(buf[i-n:])
+// 		}
+// 		u = q
+// 	}
+// }
 
 // Rsh returns u>>n.
 func (u u128) Rsh(n uint) (s u128) {

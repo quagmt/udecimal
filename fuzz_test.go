@@ -405,7 +405,7 @@ func FuzzDiv64(f *testing.F) {
 		// e.g. 0.099999999999999 -> 0.1
 		// so to check the result, we can check the difference
 		// between our result and shopspring/decimal result
-		// valid result should be less than or equal to 1e-19, which is our smallest unit
+		// valid result should have the difference less than or equal to 1e-19, which is our smallest unit
 		d := MustParse(cc.String())
 		e := c.Sub(d)
 		require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0)

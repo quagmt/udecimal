@@ -30,14 +30,118 @@ func TestU128Mul(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testcases {
-		t.Run(fmt.Sprintf("%s*%s", tc.u, tc.v), func(t *testing.T) {
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			got, err := tc.u.Mul(tc.v)
 			if tc.wantErr != nil {
 				require.Equal(t, tc.wantErr, err)
 				return
 			}
 
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestU128Cmp64(t *testing.T) {
+	testcases := []struct {
+		u    u128
+		v    uint64
+		want int
+	}{
+		{
+			u:    u128FromHiLo(0, 10),
+			v:    10,
+			want: 0,
+		},
+		{
+			u:    u128FromHiLo(0, 10),
+			v:    100,
+			want: -1,
+		},
+		{
+			u:    u128FromHiLo(10, 10),
+			v:    10,
+			want: 1,
+		},
+		{
+			u:    u128FromHiLo(10, 10),
+			v:    20,
+			want: 1,
+		},
+	}
+
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			got := tc.u.Cmp64(tc.v)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestSubOverflow(t *testing.T) {
+	testcases := []struct {
+		u, v u128
+	}{
+		{
+			u: u128FromHiLo(0, 10),
+			v: u128FromHiLo(1, 10),
+		},
+		{
+			u: u128FromHiLo(1, 10),
+			v: u128FromHiLo(2, 10),
+		},
+	}
+
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			_, err := tc.u.Sub(tc.v)
+			require.Equal(t, ErrOverflow, err)
+		})
+	}
+}
+
+func TestRightShift(t *testing.T) {
+	testcases := []struct {
+		u     u128
+		shift uint
+		want  u128
+	}{
+		{
+			u:     u128FromHiLo(0, 10),
+			shift: 1,
+			want:  u128FromHiLo(0, 5),
+		},
+		{
+			u:     u128FromHiLo(0, 10),
+			shift: 2,
+			want:  u128FromHiLo(0, 2),
+		},
+		{
+			u:     u128FromHiLo(0, 10),
+			shift: 3,
+			want:  u128FromHiLo(0, 1),
+		},
+		{
+			u:     u128FromHiLo(0, 10),
+			shift: 4,
+			want:  u128FromHiLo(0, 0),
+		},
+		{
+			u:     u128FromHiLo(10, 0),
+			shift: 65,
+			want:  u128FromHiLo(0, 5),
+		},
+		{
+			u:     u128FromHiLo(10, 0),
+			shift: 66,
+			want:  u128FromHiLo(0, 2),
+		},
+	}
+
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			got := tc.u.Rsh(tc.shift)
 			require.Equal(t, tc.want, got)
 		})
 	}

@@ -89,7 +89,7 @@ var pow10Big = [20]*big.Int{
 }
 
 var (
-	ErrOverflow        = fmt.Errorf("overflow. Number is out of range [-9_999_999_999_999_999_999.9_999_999_999_999_999_999, 9_999_999_999_999_999_999.9_999_999_999_999_999_999]")
+	ErrOverflow        = fmt.Errorf("overflow")
 	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
 	ErrEmptyString     = fmt.Errorf("parse empty string")
 	ErrMaxStrLen       = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
@@ -379,6 +379,7 @@ func (d Decimal) Sub64(e uint64) Decimal {
 		)
 
 		if d.coef.GT(ecoef) {
+			// dcoef > ecoef, subtract can't overflow
 			dcoef, _ = d.coef.Sub(ecoef)
 			neg = false
 		} else {
@@ -1170,7 +1171,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		powScale = int(defaultScale)
 	}
 
-	d256 := U256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
+	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
 	result, err := d256.pow(e)
 	if err != nil {
 		return Decimal{}, err
@@ -1224,7 +1225,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		powScale = int(defaultScale)
 	}
 
-	d256 := U256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
+	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
 	result, err := d256.pow(e)
 	if err != nil {
 		return Decimal{}, err
