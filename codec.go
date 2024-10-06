@@ -85,7 +85,7 @@ func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
 
 var (
 	// maxByteMap is a map of maximum byte needed to represent an u128 number, indexed by the number of bits.
-	maxByteMap = [128]byte{
+	maxByteMap = [129]byte{
 		1, 1, 1, 1, 2, 2, 2, 3, 3, 3, // 0-9 bits
 		4, 4, 4, 4, 5, 5, 5, 6, 6, 6, // 10-19 bits
 		7, 7, 7, 7, 8, 8, 8, 9, 9, 9, // 20-29 bits
@@ -98,7 +98,7 @@ var (
 		28, 28, 28, 28, 29, 29, 29, 30, 30, 30, // 90-99 bits
 		31, 31, 31, 32, 32, 32, 32, 33, 33, 33, // 100-109 bits
 		34, 34, 34, 35, 35, 35, 35, 36, 36, 36, // 110-119 bits
-		37, 37, 37, 38, 38, 38, 38, 39, // 120-127 bits
+		37, 37, 37, 38, 38, 38, 38, 39, 39, // 120-128 bits
 	}
 
 	digitBytes = [10]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}

@@ -137,16 +137,6 @@ func NewFromHiLo(neg bool, hi uint64, lo uint64, scale uint8) (Decimal, error) {
 
 // newDecimal return the decimal
 func newDecimal(neg bool, coef bint, scale uint8) Decimal {
-	// double check to make sure the whole part is not greater than 10^19
-	// if coef is not overflow, the decimal range is:
-	// [-9_999_999_999_999_999_999.9_999_999_999_999_999_999 <= d <= 9_999_999_999_999_999_999.9_999_999_999_999_999_999]
-	if !coef.overflow && !coef.u128.LessThan(pow10[38]) {
-		// if not, convert coef to big.Int
-		coef.overflow = true
-		coef.bigInt = coef.u128.ToBigInt()
-		coef.u128 = u128{}
-	}
-
 	return Decimal{neg: neg, coef: coef, scale: scale}
 }
 
