@@ -93,7 +93,7 @@ func (u u256) pow(e int) (u256, error) {
 	for ; e > 0; e >>= 1 {
 		if e&1 == 1 {
 			if !result.carry.IsZero() {
-				return u256{}, ErrOverflow
+				return u256{}, errOverflow
 			}
 
 			// result = result * u (with u = (d256)^(2^i))
@@ -111,7 +111,7 @@ func (u u256) pow(e int) (u256, error) {
 
 		// if there's a carry, next iteration will overflow
 		if !d256.carry.IsZero() && e > 1 {
-			return u256{}, ErrOverflow
+			return u256{}, errOverflow
 		}
 	}
 
@@ -178,13 +178,13 @@ func (u u256) rsh(n uint) (v u256) {
 // Fast divsion for U192 divided by U128 using Hacker's Delight multiword division algorithm
 // with some constraints regarding max coef and scale value, including:
 //
-//	max(coef) = 10^38-1
+//	max(coef) = 2^128-1
 //	max(scale) = 19
 //	max(u) = 2^192-1
 func (u u256) fastQuo(v u128) (u128, error) {
 	// if u >= 2^192, the quotient might won't fit in 128-bits number (overflow).
 	if u.carry.hi != 0 {
-		return u128{}, ErrOverflow
+		return u128{}, errOverflow
 	}
 
 	if u.carry.IsZero() {
@@ -230,15 +230,11 @@ func (u u256) fastQuo(v u128) (u128, error) {
 	// since there's no U192/U128 division algorithm currently available.
 	//
 	// What we do have are fast algorithms for U192/U64 or U128/U128 division.
-	// Therefore, we can only compute tq by adjusting u and v to fit either U128/U128 or U192/U64 divisions.
-	// This might not be optimal, but it's the best we can achieve for now.
+	// Therefore, we can only compute tq by adjusting u and v to fit either U128/U128 or U192/U64.
+	// This might not be the best optimization, but it's the best we can achieve for now.
 	// If we later find a fast U192/U128 division algorithm, we can improve this process.
 	//
-	// As previously mentioned, if after finding the minimum k, v * k still exceeds 2^128,
-	// we will fall back to big.Int division.
-	//
-	// Although this method is not optimal (at the moment), it's still 10 - 15x faster and guarantees zero allocations
-	// compared to big.Int division in most cases where numbers are not too big.
+	// As previously mentioned, if after finding the minimum k, v * k still exceeds 2^128, we will fall back to big.Int division.
 
 	// nolint: gosec
 	n := uint(bits.LeadingZeros64(v.hi))
@@ -286,7 +282,9 @@ func (u u256) fastQuo(v u128) (u128, error) {
 	}
 
 	if !vqu.carry.IsZero() {
-		return u128{}, ErrOverflow
+		// v * k > 2^128, we can't find k
+		// fall back to big.Int division
+		return u128{}, errOverflow
 	}
 
 	vqu128 := u128FromHiLo(vqu.hi, vqu.lo)
@@ -342,10 +340,12 @@ func (u u256) quoRem64Tou128(v uint64) (u128, uint64, error) {
 
 	quo, rem := u128FromHiLo(u.carry.lo, u.hi).QuoRem64(v)
 	if quo.hi != 0 {
-		return u128{}, 0, ErrOverflow
+		return u128{}, 0, errOverflow
 	}
 
 	hi := quo.lo
+
+	// can't panic because rem < v
 	lo, r := bits.Div64(rem, u.lo, v)
 
 	return u128FromHiLo(hi, lo), r, nil

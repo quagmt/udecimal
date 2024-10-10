@@ -11,10 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-var (
-	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
-)
-
 // String returns the string representation of the decimal.
 // Trailing zeros will be removed.
 func (d Decimal) String() string {
@@ -193,8 +189,11 @@ func unsafeBytesToString(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-// MarshalText implements encoding.TextMarshaler interface.
-func (d Decimal) MarshalText() ([]byte, error) {
+func unssafeStringToBytes(s string) []byte {
+	return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+func (d Decimal) MarshalJSON() ([]byte, error) {
 	if !d.coef.overflow {
 		return d.bytesU128(true), nil
 	}
@@ -202,28 +201,28 @@ func (d Decimal) MarshalText() ([]byte, error) {
 	return []byte(d.stringBigInt(true)), nil
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler interface.
-func (d *Decimal) UnmarshalText(text []byte) error {
+func (d *Decimal) UnmarshalJSON(data []byte) error {
 	var err error
-	*d, err = Parse(string(text))
+	*d, err = Parse(unsafeBytesToString(data))
 	return err
 }
 
-// MarshalBinary implements encoding.BinaryMarshaler interface.
-// Binary format: [overflow + neg] [scale] [total bytes] [coef]
+// MarshalBinary implements encoding.BinaryMarshaler interface with custom binary format.
 //
-// e.g. -1.2345
-// 1st byte: 0b0001_0000 (overflow = true, neg = false)
-// 2nd byte: 0b0000_0100 (scale = 4)
-// 3rd byte: 0b0000_1101 (total bytes = 11)
-// 4th-11th bytes: 0x0000_0000_0000_3039 (coef = 12345, only stores the lo part)
+//	Binary format: [overflow + neg] [scale] [total bytes] [coef]
 //
-// e.g. 1234567890123456789.1234567890123456789
-// 1st byte: 0b0000_0000 (overflow = false, neg = false)
-// 2nd byte: 0b0001_0011 (scale = 19)
-// 3rd byte: 0b0001_0011 (total bytes = 19)
-// 4th-11th bytes: 0x0949_b0f6_f002_3313 (coef.hi)
-// 12th-19th bytes: 0xd3b5_05f9_b5f1_8115 (coef.lo)
+//	 example 1: -1.2345
+//	 1st byte: 0b0001_0000 (overflow = true, neg = false)
+//	 2nd byte: 0b0000_0100 (scale = 4)
+//	 3rd byte: 0b0000_1101 (total bytes = 11)
+//	 4th-11th bytes: 0x0000_0000_0000_3039 (coef = 12345, only stores the coef.lo part)
+//
+//	 example 2: 1234567890123456789.1234567890123456789
+//	 1st byte: 0b0000_0000 (overflow = false, neg = false)
+//	 2nd byte: 0b0001_0011 (scale = 19)
+//	 3rd byte: 0b0001_0011 (total bytes = 19)
+//	 4th-11th bytes: 0x0949_b0f6_f002_3313 (coef.hi)
+//	 12th-19th bytes: 0xd3b5_05f9_b5f1_8115 (coef.lo)
 func (d Decimal) MarshalBinary() ([]byte, error) {
 	if !d.coef.overflow {
 		return d.marshalBinaryU128()
@@ -342,7 +341,7 @@ func (d *Decimal) Scan(src any) error {
 	var err error
 	switch v := src.(type) {
 	case []byte:
-		*d, err = Parse(string(v))
+		*d, err = Parse(unsafeBytesToString(v))
 	case string:
 		*d, err = Parse(v)
 	case uint64:

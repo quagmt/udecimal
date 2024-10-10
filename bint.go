@@ -3,6 +3,7 @@ package udecimal
 import (
 	"fmt"
 	"math/big"
+	"strings"
 )
 
 var (
@@ -61,11 +62,11 @@ func (u bint) Cmp(v bint) int {
 	return u.GetBig().Cmp(v.GetBig())
 }
 
-func errInvalidFormat(s string) error {
+func errInvalidFormat(s []byte) error {
 	return fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
 }
 
-func parseBint(s string) (bool, bint, uint8, error) {
+func parseBint(s []byte) (bool, bint, uint8, error) {
 	if len(s) > maxStrLen {
 		return false, bint{}, 0, ErrMaxStrLen
 	}
@@ -73,7 +74,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	// if s has less than 40 characters, it can fit into u128
 	if len(s) <= 40 {
 		neg, bint, scale, err := parseBintFromU128(s)
-		if err == nil || err != ErrOverflow {
+		if err == nil || err != errOverflow {
 			return neg, bint, scale, err
 		}
 
@@ -127,12 +128,24 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	switch {
 	case pIndex == -1:
 		// There is no decimal point, we can just parse the original string as an int
-		intString = value
+		intString = string(value)
 	case pIndex >= vLen-1:
 		// prevent "123." or "-123."
 		return false, bint{}, 0, errInvalidFormat(s)
 	default:
-		intString = value[:pIndex] + value[pIndex+1:]
+		b := strings.Builder{}
+		_, err := b.Write(value[:pIndex])
+		if err != nil {
+			return false, bint{}, 0, err
+		}
+
+		_, err = b.Write(value[pIndex+1:])
+		if err != nil {
+			return false, bint{}, 0, err
+		}
+
+		// intString = value[:pIndex] + value[pIndex+1:]
+		intString = b.String()
 		scale = len(value[pIndex+1:])
 	}
 
@@ -155,7 +168,7 @@ func parseBint(s string) (bool, bint, uint8, error) {
 	return neg, bintFromBigInt(dValue), uint8(scale), nil
 }
 
-func parseBintFromU128(s string) (bool, bint, uint8, error) {
+func parseBintFromU128(s []byte) (bool, bint, uint8, error) {
 	width := len(s)
 
 	var (
@@ -265,7 +278,7 @@ func (u bint) Sub(v bint) (bint, error) {
 
 	// make sure the result is always positive
 	if uBig.Cmp(vBig) < 0 {
-		return bint{}, ErrOverflow
+		return bint{}, errOverflow
 	}
 
 	return bintFromBigInt(new(big.Int).Sub(uBig, vBig)), nil

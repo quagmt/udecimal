@@ -84,7 +84,7 @@ func (u u128) Add(v u128) (u128, error) {
 	lo, carry := bits.Add64(u.lo, v.lo, 0)
 	hi, carry := bits.Add64(u.hi, v.hi, carry)
 	if carry != 0 {
-		return u128{}, ErrOverflow
+		return u128{}, errOverflow
 	}
 
 	return u128{hi: hi, lo: lo}, nil
@@ -100,7 +100,7 @@ func (u u128) Sub(v u128) (u128, error) {
 	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
 	if borrow != 0 {
 		// borrow != 0 means u < v and this must not happen
-		return u128{}, ErrOverflow
+		return u128{}, errOverflow
 	}
 
 	return u128{hi: hi, lo: lo}, nil
@@ -112,7 +112,7 @@ func (u u128) Mul64(v uint64) (u128, error) {
 	p0, p1 := bits.Mul64(u.hi, v)
 	hi, c0 := bits.Add64(hi, p1, 0)
 	if p0 != 0 || c0 != 0 {
-		return u128{}, ErrOverflow
+		return u128{}, errOverflow
 	}
 
 	return u128{hi: hi, lo: lo}, nil
@@ -120,7 +120,7 @@ func (u u128) Mul64(v uint64) (u128, error) {
 
 func (u u128) Mul(v u128) (u128, error) {
 	if u.hi != 0 && v.hi != 0 {
-		return u128{}, ErrOverflow
+		return u128{}, errOverflow
 	}
 
 	if v.hi == 0 {
@@ -281,7 +281,7 @@ func (u u128) ToBigInt() *big.Int {
 }
 
 // getTrailingZeros64 returns the number of trailing zeros in u
-// NOTE: this only works when maxScale is 19
+// NOTE: this only works when maxDefaultScale is 19
 func getTrailingZeros64(u uint64) uint8 {
 	var z uint8
 	if u%1e16 == 0 {

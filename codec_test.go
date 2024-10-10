@@ -5,10 +5,12 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestStringFixed(t *testing.T) {
@@ -74,6 +76,37 @@ func TestMarshalJSON(t *testing.T) {
 			require.NoError(t, json.Unmarshal(b, &c))
 
 			require.Equal(t, a, c)
+		})
+	}
+}
+
+type Test struct {
+	Test Decimal `json:"price"`
+}
+
+func TestUnmarshalNumber(t *testing.T) {
+	testcases := []struct {
+		in      string
+		wantErr error
+	}{
+		{"1234567890123.1234567890123", nil},
+		{"1234567890123.12345678901234567899", fmt.Errorf("scale out of range. Only support maximum 19 digits after the decimal point")},
+		{`"1234567890123.1234567890123"`, nil},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			s := fmt.Sprintf(`{"price":%s}`, tc.in)
+
+			var test Test
+			err := json.Unmarshal([]byte(s), &test)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, strings.Trim(tc.in, `"`), test.Test.String())
 		})
 	}
 }
@@ -299,6 +332,17 @@ func BenchmarkMarshalBinary(b *testing.B) {
 	}
 }
 
+func BenchmarkUnmarshalBinary(b *testing.B) {
+	b.StopTimer()
+	data, _ := MustParse("123456789.123456789").MarshalBinary()
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		var d Decimal
+		_ = d.UnmarshalBinary(data)
+	}
+}
+
 func BenchmarkMarshalBinaryBigInt(b *testing.B) {
 	b.StopTimer()
 	a := MustParse("12345678901234567890123456789.1234567890123456789")
@@ -306,5 +350,27 @@ func BenchmarkMarshalBinaryBigInt(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = a.MarshalBinary()
+	}
+}
+
+func BenchmarkUnmarshalBinaryBigInt(b *testing.B) {
+	b.StopTimer()
+	data, _ := MustParse("12345678901234567890123456789.1234567890123456789").MarshalBinary()
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		var d Decimal
+		_ = d.UnmarshalBinary(data)
+	}
+}
+
+func BenchmarkUnmarshalJSON(b *testing.B) {
+	b.StopTimer()
+	data := []byte("123456789.123456789")
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		var d Decimal
+		_ = d.UnmarshalJSON(data)
 	}
 }

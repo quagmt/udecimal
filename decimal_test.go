@@ -13,7 +13,7 @@ import (
 func TestSetDefaultScale(t *testing.T) {
 	// NOTE: must be careful with tests that change the default scale
 	// it can affect other tests, especially tests in different packages which can run in parallel
-	defer SetDefaultScale(maxScale)
+	defer SetDefaultScale(maxDefaultScale)
 
 	require.Equal(t, uint8(19), defaultScale)
 
@@ -25,9 +25,9 @@ func TestSetDefaultScale(t *testing.T) {
 		SetDefaultScale(0)
 	})
 
-	// expect panic if scale is > maxScale
-	require.PanicsWithValue(t, fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale), func() {
-		SetDefaultScale(maxScale + 1)
+	// expect panic if scale is > maxDefaultScale
+	require.PanicsWithValue(t, fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxDefaultScale), func() {
+		SetDefaultScale(maxDefaultScale + 1)
 	})
 }
 
@@ -1032,7 +1032,7 @@ func TestDivExact(t *testing.T) {
 
 func TestDivWithCustomScale(t *testing.T) {
 	SetDefaultScale(14)
-	defer SetDefaultScale(maxScale)
+	defer SetDefaultScale(maxDefaultScale)
 
 	testcases := []struct {
 		a, b     string
@@ -1239,6 +1239,40 @@ func TestCmp(t *testing.T) {
 
 			// compare with shopspring/decimal
 			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			cc := aa.Cmp(bb)
+			require.Equal(t, cc, c)
+		})
+	}
+}
+
+func TestCmpWithDifferentScale(t *testing.T) {
+	testcases := []struct {
+		a1, a2, b string
+		want      int
+	}{
+		{"123456.9999999", "0.0000001", "123457", 0},
+		{"12345.123456789", "0.000000001", "12345.12345679", 0},
+		{"12345.129999999999", "0.000000000001", "12345.13", 0},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("(%s+%s).Cmp(%s)", tc.a1, tc.a2, tc.b), func(t *testing.T) {
+			a1 := MustParse(tc.a1)
+			a2 := MustParse(tc.a2)
+
+			a := a1.Add(a2)
+			b := MustParse(tc.b)
+
+			c := a.Cmp(b)
+			require.Equal(t, tc.want, c)
+
+			// compare with shopspring/decimal
+			aa1 := decimal.RequireFromString(tc.a1)
+			aa2 := decimal.RequireFromString(tc.a2)
+
+			aa := aa1.Add(aa2)
 			bb := decimal.RequireFromString(tc.b)
 
 			cc := aa.Cmp(bb)

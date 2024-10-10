@@ -20,4 +20,4 @@ fuzz-all:
 	done \
 
 bench:
-	go test -bench=BenchmarkDivRound -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
+	go test -bench=BenchmarkUnmarshalText -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE

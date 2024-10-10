@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/quagmt/udecimal"
+
+	gv "github.com/govalues/decimal"
 	ss "github.com/shopspring/decimal"
 )
 
@@ -245,6 +247,7 @@ func BenchmarkDiv(b *testing.B) {
 	}{
 		{"1234567890123456789.1234567890123456879", "1111.1789"},
 		{"12345.1234567890123456879", "1111.1234567890123456789"},
+		{"1234567890123456789.1234567890123456879", "9876543210987654321.1234567890123456789"},
 		{"123.456", "0.123"},
 		{"3", "7"},
 		{"123456.123456", "999999"},
@@ -261,6 +264,24 @@ func BenchmarkDiv(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_ = a.Div(bb)
+			}
+		})
+
+		// govalues benchmark
+		b.Run(fmt.Sprintf("gv/%s.Div(%s)", tc.a, tc.b), func(b *testing.B) {
+			a, err := gv.Parse(tc.a)
+			if err != nil {
+				return
+			}
+
+			bb, err := gv.Parse(tc.b)
+			if err != nil {
+				return
+			}
+
+			b.ResetTimer()
+			for range b.N {
+				_, _ = a.Quo(bb)
 			}
 		})
 
@@ -341,6 +362,134 @@ func BenchmarkPow(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_ = a.PowInt(tc.b)
+			}
+		})
+	}
+}
+
+func BenchmarkMarshalJSON(b *testing.B) {
+	testcases := []string{
+		"1234567890123456789.1234567890123456879",
+		"123",
+		"123456.123456",
+		"1234567890",
+		"0.1234567890123456879",
+		"12345678901234567891234567890123456789.1234567890123456879",
+	}
+
+	for _, tc := range testcases {
+		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+			bb := ss.RequireFromString(tc)
+
+			b.ResetTimer()
+			for range b.N {
+				_, _ = bb.MarshalJSON()
+			}
+		})
+
+		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
+			bb := udecimal.MustParse(tc)
+
+			b.ResetTimer()
+			for range b.N {
+				_, _ = bb.MarshalJSON()
+			}
+		})
+	}
+}
+
+func BenchmarkUnmarshalJSON(b *testing.B) {
+	testcases := []string{
+		"1234567890123456789.1234567890123456879",
+		"123",
+		"123456.123456",
+		"1234567890",
+		"0.1234567890123456879",
+		"12345678901234567891234567890123456789.1234567890123456879",
+	}
+
+	for _, tc := range testcases {
+		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+			data, _ := ss.RequireFromString(tc).MarshalJSON()
+
+			b.ResetTimer()
+			for range b.N {
+				var d ss.Decimal
+				_ = d.UnmarshalJSON(data)
+			}
+		})
+
+		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
+			data, _ := udecimal.MustParse(tc).MarshalJSON()
+
+			b.ResetTimer()
+			for range b.N {
+				var d udecimal.Decimal
+				_ = d.UnmarshalJSON(data)
+			}
+		})
+	}
+}
+
+func BenchmarkMarshalBinary(b *testing.B) {
+	testcases := []string{
+		"1234567890123456789.1234567890123456879",
+		"123",
+		"123456.123456",
+		"1234567890",
+		"0.1234567890123456879",
+		"12345678901234567891234567890123456789.1234567890123456879",
+	}
+
+	for _, tc := range testcases {
+		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+			bb := ss.RequireFromString(tc)
+
+			b.ResetTimer()
+			for range b.N {
+				_, _ = bb.MarshalBinary()
+			}
+		})
+
+		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
+			bb := udecimal.MustParse(tc)
+
+			b.ResetTimer()
+			for range b.N {
+				_, _ = bb.MarshalBinary()
+			}
+		})
+	}
+}
+
+func BenchmarkUnmarshalBinary(b *testing.B) {
+	testcases := []string{
+		"1234567890123456789.1234567890123456879",
+		"123",
+		"123456.123456",
+		"1234567890",
+		"0.1234567890123456879",
+		"12345678901234567891234567890123456789.1234567890123456879",
+	}
+
+	for _, tc := range testcases {
+		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+			data, _ := ss.RequireFromString(tc).MarshalBinary()
+
+			b.ResetTimer()
+			for range b.N {
+				var d ss.Decimal
+				_ = d.UnmarshalBinary(data)
+			}
+		})
+
+		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
+			data, _ := udecimal.MustParse(tc).MarshalBinary()
+
+			b.ResetTimer()
+			for range b.N {
+				var d udecimal.Decimal
+				_ = d.UnmarshalBinary(data)
 			}
 		})
 	}

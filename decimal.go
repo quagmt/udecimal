@@ -12,8 +12,8 @@ var (
 	// if not specified
 	defaultScale uint8 = 19
 
-	// maxScale is the maximum number of digits after the decimal point
-	maxScale uint8 = 19
+	// maxDefaultScale is the maximum number of digits after the decimal point
+	maxDefaultScale uint8 = 19
 
 	// maxStrLen is the maximum length of string input when using Parse/MustParse
 	// set it to 200 so string length value can fit in 1 byte (for MarshalBinary).
@@ -89,13 +89,35 @@ var pow10Big = [20]*big.Int{
 }
 
 var (
-	ErrOverflow        = fmt.Errorf("overflow")
+	errOverflow = fmt.Errorf("overflow")
+)
+
+var (
+	// ErrScaleOutOfRange is returned when the scale is greater than the default scale
+	// default scale can be configured using SetDefaultScale, and its value is up to 19
 	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
-	ErrEmptyString     = fmt.Errorf("parse empty string")
-	ErrMaxStrLen       = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
-	ErrInvalidFormat   = fmt.Errorf("invalid format")
-	ErrDivideByZero    = fmt.Errorf("can't divide by zero")
-	ErrSqrtNegative    = fmt.Errorf("can't calculate square root of negative number")
+
+	// ErrEmptyString is returned when the input string is empty
+	ErrEmptyString = fmt.Errorf("parse empty string")
+
+	// ErrMaxStrLen is returned when the input string exceeds the maximum length
+	// This limitation is set to prevent large string input which can cause performance issue
+	// Maximum length is set to 200
+	ErrMaxStrLen = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
+
+	// ErrInvalidFormat is returned when the input string is not in the correct format
+	// It doesn't support scientific notation, such as 1e-2, 1.23e4, etc.
+	ErrInvalidFormat = fmt.Errorf("invalid format")
+
+	// ErrDivideByZero is returned when dividing by zero
+	ErrDivideByZero = fmt.Errorf("can't divide by zero")
+
+	// ErrSqrtNegative is returned when calculating square root of negative number
+	ErrSqrtNegative = fmt.Errorf("can't calculate square root of negative number")
+
+	// ErrInvalidBinaryData is returned when unmarshalling invalid binary data
+	// The binary data should follow the format as described in MarshalBinary
+	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
 )
 
 var (
@@ -114,9 +136,18 @@ type Decimal struct {
 	scale uint8
 }
 
+// SetDefaultScale changes the default scale for decimal numbers in the package.
+// The scale determines the number of digits after the decimal point.
+// Maximum default scale is 19
+//
+// This function is particularly useful when you want to have your precision of the deicmal smaller than 19
+// across the whole application.
+// NOTE: numbers have more precision than defaultScale is still truncated
+//
+// Panics if the new scale is greater than 19 (maxDefaultScale) or new scale is 0
 func SetDefaultScale(scale uint8) {
-	if scale > maxScale {
-		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale))
+	if scale > maxDefaultScale {
+		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxDefaultScale))
 	}
 
 	if scale == 0 {
@@ -160,7 +191,7 @@ func MustFromUint64(coef uint64, scale uint8) Decimal {
 	return d
 }
 
-// NewFromInt64 returns a decimal which equals to coef / 10^scale and coef is an int64
+// NewFromInt64 returns a decimal which equals to coef / 10^scale and coef is an int64.
 // Trailing zeros wll be removed and the scale will also be adjusted
 func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
 	var neg bool
@@ -187,7 +218,7 @@ func MustFromInt64(coef int64, scale uint8) Decimal {
 	return d
 }
 
-// NewFromFloat64 returns decimal from float64 f
+// NewFromFloat64 returns decimal from float64.
 // !!!NOTE: you'll expect to lose some precision for this method due to FormatFloat. See: https://stackoverflow.com/questions/21895756/why-are-floating-point-numbers-inaccurate
 // This method is suitable for small numbers with small precision. e.g. 1.0001, 0.0001, -123.456, -1000000.123456
 // If you don't want to lose any precision, use Parse with string input instead
@@ -221,30 +252,43 @@ func MustFromFloat64(f float64) Decimal {
 
 // InexactFloat64 returns the float64 representation of the decimal.
 // The result may not be 100% accurate due to the limitation of float64 (less decimal precision).
-// !Caution: this method will not return the exact number if the decimal is too large.
-// !e.g. 123456789012345678901234567890123456789.9999999999999999999 -> 123456789012345680000000000000000000000
+//
+// Caution: this method will not return the exact number if the decimal is too large.
+//
+//	e.g. 123456789012345678901234567890123456789.9999999999999999999 -> 123456789012345680000000000000000000000
 func (d Decimal) InexactFloat64() (float64, error) {
 	return strconv.ParseFloat(d.String(), 64)
 }
 
 // Parse parses a number in string to Decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
-// e.g. "123", "-123", "123.456", "-123.456", "+123.456", "0.123".
+//
+// Examples: "123", "-123", "123.456", "-123.456", "+123.456", "0.123".
 //
 // Returns error if:
 //  1. empty/invalid string
 //  2. the number has more than 19 digits after the decimal point
 func Parse(s string) (Decimal, error) {
-	if len(s) == 0 {
+	return parseBytes(unssafeStringToBytes(s))
+}
+
+func parseBytes(b []byte) (Decimal, error) {
+	if len(b) == 0 {
 		return Decimal{}, ErrEmptyString
 	}
 
-	neg, bint, scale, err := parseBint(s)
+	// unQuote if the string is quoted, usually when unmarshalling from JSON
+	if len(b) > 2 && b[0] == '"' && b[len(b)-1] == '"' {
+		b = b[1 : len(b)-1]
+	}
+
+	neg, bint, scale, err := parseBint(b)
 	if err != nil {
 		return Decimal{}, err
 	}
 
 	return newDecimal(neg, bint, scale), nil
+
 }
 
 // MustParse parses a number in string to Decimal.
@@ -402,7 +446,7 @@ func (d Decimal) Mul(e Decimal) Decimal {
 	dBig := d.coef.GetBig()
 	eBig := e.coef.GetBig()
 
-	dBig = dBig.Mul(dBig, eBig)
+	dBig.Mul(dBig, eBig)
 	if scale <= defaultScale {
 		return newDecimal(neg, bintFromBigInt(dBig), scale)
 	}
@@ -413,13 +457,13 @@ func (d Decimal) Mul(e Decimal) Decimal {
 
 func tryMulU128(d, e Decimal, neg bool, scale uint8) (Decimal, error) {
 	if d.coef.overflow || e.coef.overflow {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	rcoef := d.coef.u128.MulToU256(e.coef.u128)
 	if scale <= defaultScale {
 		if !rcoef.carry.IsZero() {
-			return Decimal{}, ErrOverflow
+			return Decimal{}, errOverflow
 		}
 
 		coef := u128{hi: rcoef.hi, lo: rcoef.lo}
@@ -455,7 +499,7 @@ func (d Decimal) Mul64(v uint64) Decimal {
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
-	dBig = dBig.Mul(dBig, new(big.Int).SetUint64(v))
+	dBig.Mul(dBig, new(big.Int).SetUint64(v))
 
 	return newDecimal(d.neg, bintFromBigInt(dBig), d.scale)
 }
@@ -483,8 +527,8 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 	dBig := d.coef.GetBig()
 	eBig := e.coef.GetBig()
 
-	dBig = dBig.Mul(dBig, pow10[factor].ToBigInt())
-	dBig = dBig.Div(dBig, eBig)
+	dBig.Mul(dBig, pow10[factor].ToBigInt())
+	dBig.Div(dBig, eBig)
 	return newDecimal(neg, bintFromBigInt(dBig), defaultScale), nil
 }
 
@@ -500,7 +544,7 @@ func (d Decimal) DivExact(e Decimal, scale uint8) (Decimal, error) {
 
 func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	if d.coef.overflow || e.coef.overflow {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	// Need to multiply divident with factor
@@ -587,9 +631,9 @@ func (d Decimal) cmpDecSameSign(e Decimal) int {
 	}
 
 	if d.scale < e.scale {
-		dBig = dBig.Mul(dBig, pow10[e.scale-d.scale].ToBigInt())
+		dBig.Mul(dBig, pow10[e.scale-d.scale].ToBigInt())
 	} else {
-		eBig = eBig.Mul(eBig, pow10[d.scale-e.scale].ToBigInt())
+		eBig.Mul(eBig, pow10[d.scale-e.scale].ToBigInt())
 	}
 
 	return dBig.Cmp(eBig)
@@ -597,7 +641,7 @@ func (d Decimal) cmpDecSameSign(e Decimal) int {
 
 func tryCmpU128(d, e Decimal) (int, error) {
 	if d.coef.overflow || e.coef.overflow {
-		return 0, ErrOverflow
+		return 0, errOverflow
 	}
 
 	if d.scale == e.scale {
@@ -628,8 +672,8 @@ func tryCmpU128(d, e Decimal) (int, error) {
 //	d := MustParse("123.456")
 //	d.Rescale(5) // 123.45600
 func (d Decimal) Rescale(scale uint8) Decimal {
-	if scale > maxScale {
-		scale = maxScale
+	if scale > maxDefaultScale {
+		scale = maxDefaultScale
 	}
 
 	if scale <= d.scale {
@@ -975,7 +1019,7 @@ func trailingZerosBigInt(n *big.Int) uint8 {
 	if m.Cmp(bigZero) == 0 {
 		zeros += 16
 
-		// shortcut because maxScale = 19
+		// shortcut because maxDefaultScale = 19
 		_, m = z.QuoRem(n, pow10Big[zeros+2], m)
 		if m.Cmp(bigZero) == 0 {
 			zeros += 2
@@ -1136,13 +1180,13 @@ func (d Decimal) powIntInverse(e int) Decimal {
 
 func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 	if d.coef.overflow {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	if d.coef.u128.hi != 0 && e >= 3 {
 		// e > 3 and u128.hi != 0 means the result will >= 2^192,
 		// which we can't use fast division. So we need to use big.Int instead
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	neg := d.neg
@@ -1152,7 +1196,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 
 	powScale := int(d.scale) * e
 	if powScale > int(defaultScale)+38 {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	factor := 0
@@ -1169,7 +1213,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 
 	if factor == 0 {
 		if !result.carry.IsZero() {
-			return Decimal{}, ErrOverflow
+			return Decimal{}, errOverflow
 		}
 
 		// nolint: gosec
@@ -1177,7 +1221,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 	}
 
 	if result.carry.hi != 0 {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	q, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
@@ -1190,13 +1234,13 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 
 func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	if d.coef.overflow {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	if d.coef.u128.hi != 0 && e >= 3 {
 		// e > 3 and u128.hi != 0 means the result will >= 2^192,
 		// which we can't use fast division. So we need to use big.Int instead
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	neg := d.neg
@@ -1206,7 +1250,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 
 	powScale := int(d.scale) * e
 	if powScale > int(defaultScale)+38 {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	factor := 0
@@ -1223,7 +1267,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 
 	if factor == 0 {
 		if !result.carry.IsZero() {
-			return Decimal{}, ErrOverflow
+			return Decimal{}, errOverflow
 		}
 
 		// nolint: gosec
@@ -1241,7 +1285,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	// in some cases, this adjustment creates a big difference in the final result
 	// so to be safe, use big.Int instead
 	if !result.carry.IsZero() {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	// a256 = 10^(powScale + factor + defaultScale)
@@ -1295,7 +1339,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 
 	coef := d.coef.u128.MulToU256(pow10[factor])
 	if coef.carry.hi != 0 {
-		return Decimal{}, ErrOverflow
+		return Decimal{}, errOverflow
 	}
 
 	// nolint: gosec

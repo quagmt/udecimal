@@ -16,7 +16,7 @@ func TestU128Mul(t *testing.T) {
 		{
 			u:       u128FromHiLo(10, 10),
 			v:       u128FromHiLo(5, 10),
-			wantErr: ErrOverflow,
+			wantErr: errOverflow,
 		},
 		{
 			u:    u128FromHiLo(0, 10),
@@ -96,7 +96,7 @@ func TestSubOverflow(t *testing.T) {
 	for i, tc := range testcases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			_, err := tc.u.Sub(tc.v)
-			require.Equal(t, ErrOverflow, err)
+			require.Equal(t, errOverflow, err)
 		})
 	}
 }
