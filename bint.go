@@ -12,14 +12,15 @@ var (
 	bigTen  = big.NewInt(10)
 )
 
-// bint stores the whole decimal number, without the decimal place
-// the value is always positive, even though fallback is big.Int
+// bint represents a whole decimal number without a decimal point.
+// The value is always positive and is stored in a 128-bit unsigned integer.
+// If the value exceeds the 128-bit limit, it falls back to using big.Int.
 type bint struct {
-	// flag to indicate if the value is overflow and stored in big.Int
+	// Indicates if the value has overflowed and is stored in big.Int.
 	overflow bool
 
-	// use for storing small number, with high performance and zero allocation
-	// Value range from -10^38 + 1 < u128 < 10^38 - 1
+	// Stores small numbers with high performance and zero allocation operations.
+	// The value range is 0 <= u128 <= 2^128 - 1
 	u128 u128
 
 	// fall back, in case the value is our of u128 range

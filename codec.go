@@ -29,7 +29,7 @@ func (d Decimal) String() string {
 // Trailing zeros will not be removed.
 // Special case: if the decimal is zero, it will return "0" regardless of the scale.
 func (d Decimal) StringFixed(scale uint8) string {
-	d1 := d.Rescale(scale)
+	d1 := d.rescale(scale)
 
 	if !d1.coef.overflow {
 		return d1.stringU128(false)

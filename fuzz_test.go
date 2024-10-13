@@ -360,7 +360,7 @@ func FuzzDivDec(f *testing.F) {
 		d := MustParse(cc.String())
 		e := c.Sub(d)
 
-		require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0, "a: %s, b: %s, expected %s, got %s", a, b, cc.String(), c.String())
+		require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "a: %s, b: %s, expected %s, got %s", a, b, cc.String(), c.String())
 	})
 }
 
@@ -408,7 +408,7 @@ func FuzzDiv64(f *testing.F) {
 		// valid result should have the difference less than or equal to 1e-19, which is our smallest unit
 		d := MustParse(cc.String())
 		e := c.Sub(d)
-		require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0)
+		require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0)
 	})
 }
 

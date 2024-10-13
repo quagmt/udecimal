@@ -12,8 +12,8 @@ var (
 	// if not specified
 	defaultScale uint8 = 19
 
-	// maxDefaultScale is the maximum number of digits after the decimal point
-	maxDefaultScale uint8 = 19
+	// maxScale is the maximum number of digits after the decimal point
+	maxScale uint8 = 19
 
 	// maxStrLen is the maximum length of string input when using Parse/MustParse
 	// set it to 200 so string length value can fit in 1 byte (for MarshalBinary).
@@ -90,9 +90,7 @@ var pow10Big = [20]*big.Int{
 
 var (
 	errOverflow = fmt.Errorf("overflow")
-)
 
-var (
 	// ErrScaleOutOfRange is returned when the scale is greater than the default scale
 	// default scale can be configured using SetDefaultScale, and its value is up to 19
 	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
@@ -123,7 +121,7 @@ var (
 var (
 	Zero    = Decimal{}
 	One     = MustFromInt64(1, 0)
-	OneUint = MustFromUint64(1, 19)
+	oneUnit = MustFromUint64(1, 19)
 )
 
 // Decimal represents a fixed-point decimal number.
@@ -136,25 +134,23 @@ type Decimal struct {
 	scale uint8
 }
 
-// SetDefaultScale changes the default scale for decimal numbers in the package.
-// The scale determines the number of digits after the decimal point.
-// Maximum default scale is 19
+// SetDefaultPrecision changes the default precision for decimal numbers in the package.
+// Max precision is 19 and is also default.
 //
 // This function is particularly useful when you want to have your precision of the deicmal smaller than 19
-// across the whole application.
-// NOTE: numbers have more precision than defaultScale is still truncated
+// across the whole application. It should be called only once at the beginning of your application
 //
-// Panics if the new scale is greater than 19 (maxDefaultScale) or new scale is 0
-func SetDefaultScale(scale uint8) {
-	if scale > maxDefaultScale {
-		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxDefaultScale))
+// Panics if the new scale is greater than 19 (maxScale) or new scale is 0
+func SetDefaultPrecision(prec uint8) {
+	if prec > maxScale {
+		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale))
 	}
 
-	if scale == 0 {
+	if prec == 0 {
 		panic("scale must be greater than 0")
 	}
 
-	defaultScale = scale
+	defaultScale = prec
 }
 
 func NewFromHiLo(neg bool, hi uint64, lo uint64, scale uint8) (Decimal, error) {
@@ -256,8 +252,9 @@ func MustFromFloat64(f float64) Decimal {
 // Caution: this method will not return the exact number if the decimal is too large.
 //
 //	e.g. 123456789012345678901234567890123456789.9999999999999999999 -> 123456789012345680000000000000000000000
-func (d Decimal) InexactFloat64() (float64, error) {
-	return strconv.ParseFloat(d.String(), 64)
+func (d Decimal) InexactFloat64() float64 {
+	f, _ := strconv.ParseFloat(d.String(), 64)
+	return f
 }
 
 // Parse parses a number in string to Decimal.
@@ -665,15 +662,15 @@ func tryCmpU128(d, e Decimal) (int, error) {
 }
 
 // Rescale returns the decimal with the new scale only if the new scale is greater than the current scale.
-// Useful when you want to increase the scale of the decimal.
+// Useful when you want to increase the scale of the decimal for display purposes.
 //
 // Example:
 //
-//	d := MustParse("123.456")
-//	d.Rescale(5) // 123.45600
-func (d Decimal) Rescale(scale uint8) Decimal {
-	if scale > maxDefaultScale {
-		scale = maxDefaultScale
+//	d := MustParse("123.456") // 123.456, scale = 3
+//	d.rescale(5) // 123.45600, scale = 5
+func (d Decimal) rescale(scale uint8) Decimal {
+	if scale > maxScale {
+		scale = maxScale
 	}
 
 	if scale <= d.scale {
@@ -1019,7 +1016,7 @@ func trailingZerosBigInt(n *big.Int) uint8 {
 	if m.Cmp(bigZero) == 0 {
 		zeros += 16
 
-		// shortcut because maxDefaultScale = 19
+		// shortcut because maxScale = 19
 		_, m = z.QuoRem(n, pow10Big[zeros+2], m)
 		if m.Cmp(bigZero) == 0 {
 			zeros += 2

@@ -13,21 +13,21 @@ import (
 func TestSetDefaultScale(t *testing.T) {
 	// NOTE: must be careful with tests that change the default scale
 	// it can affect other tests, especially tests in different packages which can run in parallel
-	defer SetDefaultScale(maxDefaultScale)
+	defer SetDefaultPrecision(maxScale)
 
 	require.Equal(t, uint8(19), defaultScale)
 
-	SetDefaultScale(10)
+	SetDefaultPrecision(10)
 	require.Equal(t, uint8(10), defaultScale)
 
 	// expect panic if scale is 0
 	require.PanicsWithValue(t, "scale must be greater than 0", func() {
-		SetDefaultScale(0)
+		SetDefaultPrecision(0)
 	})
 
-	// expect panic if scale is > maxDefaultScale
-	require.PanicsWithValue(t, fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxDefaultScale), func() {
-		SetDefaultScale(maxDefaultScale + 1)
+	// expect panic if scale is > maxScale
+	require.PanicsWithValue(t, fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale), func() {
+		SetDefaultPrecision(maxScale + 1)
 	})
 }
 
@@ -938,7 +938,7 @@ func TestDiv(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
@@ -1025,14 +1025,14 @@ func TestDivExact(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
 
 func TestDivWithCustomScale(t *testing.T) {
-	SetDefaultScale(14)
-	defer SetDefaultScale(maxDefaultScale)
+	SetDefaultPrecision(14)
+	defer SetDefaultPrecision(maxScale)
 
 	testcases := []struct {
 		a, b     string
@@ -1122,7 +1122,7 @@ func TestDivWithCustomScale(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
@@ -1189,7 +1189,7 @@ func TestDiv64(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(OneUint), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
@@ -2238,9 +2238,7 @@ func TestInexactFloat64(t *testing.T) {
 			a, err := Parse(tc.a)
 			require.NoError(t, err)
 
-			got, err := a.InexactFloat64()
-			require.NoError(t, err)
-
+			got := a.InexactFloat64()
 			require.Equal(t, tc.want, got)
 
 			// cross check with shopspring/decimal
