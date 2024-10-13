@@ -41,7 +41,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
-        run: go test -tags='!fuzz' -v -race -failfast -coverpkg=./... -coverprofile="coverage.txt" -covermode=atomic ./...
+        run: go test -tags='!fuzz' -race -failfast -coverpkg=./... -coverprofile="coverage.txt" -covermode=atomic ./...
 
       - name: Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == 'stable'
