@@ -5,7 +5,7 @@ lint:
 
 test:
 	# run all unit-tests, ignore fuzz tests
-	@go test -tags='!fuzz' -v -race -failfast -coverprofile=coverage.out -covermode=atomic ./...
+	@go test -tags='!fuzz' -v -race -failfast -coverprofile=coverage.txt -covermode=atomic ./...
 	@go tool cover -html=coverage.out
 
 fuzz:
@@ -13,11 +13,12 @@ fuzz:
 	@go test -tags='fuzz' -v -run=Fuzz -fuzz=$(fuzzName) -fuzztime=30s -timeout=10m
 
 fuzz-all:
-	echo "Run all fuzz tests"
-	for fuzz_test in $(shell go test -list "^Fuzz" $$fuzz_pkg | grep "^Fuzz"); do \
-		echo "Fuzzing $$fuzz_test in $$fuzz_pkg ..."; \
-		go test -tags='fuzz' -run=Fuzz -fuzz=$$fuzz_test -fuzztime=120s $$fuzz_pkg -timeout=10m || exit 1; \
-	done \
+	$(eval fuzzTime := $(filter-out $@,$(MAKECMDGOALS)))
+	@sh scripts/fuzz-all.sh $(fuzzTime)
 
 bench:
-	go test -bench=BenchmarkUnmarshalText -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
+	@go test -bench=BenchmarkUnmarshalText -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
+
+# https://stackoverflow.com/questions/6273608/how-to-pass-argument-to-makefile-from-command-line
+%:
+	@

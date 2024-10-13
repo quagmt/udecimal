@@ -8,12 +8,12 @@ import (
 )
 
 var (
-	// defaultScale is the default number of digits after the decimal point
+	// defaultPrec is the default number of digits after the decimal point
 	// if not specified
-	defaultScale uint8 = 19
+	defaultPrec uint8 = 19
 
-	// maxScale is the maximum number of digits after the decimal point
-	maxScale uint8 = 19
+	// maxPrec is the maximum number of digits after the decimal point
+	maxPrec uint8 = 19
 
 	// maxStrLen is the maximum length of string input when using Parse/MustParse
 	// set it to 200 so string length value can fit in 1 byte (for MarshalBinary).
@@ -91,9 +91,9 @@ var pow10Big = [20]*big.Int{
 var (
 	errOverflow = fmt.Errorf("overflow")
 
-	// ErrScaleOutOfRange is returned when the scale is greater than the default scale
-	// default scale can be configured using SetDefaultScale, and its value is up to 19
-	ErrScaleOutOfRange = fmt.Errorf("scale out of range. Only support maximum %d digits after the decimal point", defaultScale)
+	// ErrPrecOutOfRange is returned when the decimal precision is greater than the default precision
+	// default precision can be configured using SetDefaultPrecision, and its value is up to 19
+	ErrPrecOutOfRange = fmt.Errorf("precision out of range. Only support maximum %d digits after the decimal point", defaultPrec)
 
 	// ErrEmptyString is returned when the input string is empty
 	ErrEmptyString = fmt.Errorf("parse empty string")
@@ -125,13 +125,17 @@ var (
 )
 
 // Decimal represents a fixed-point decimal number.
-// The number is represented as a coefficient and a scale.
+// The number is represented as a struct with three fields: coef, neg, and prec.
 //
-// Number = coef / 10^(scale)
+//   - coef: the coefficient of the decimal number
+//   - neg: true if the number is negative
+//   - prec: the number of digits after the decimal point (0 to 19)
+//
+// Decimal numbers are immutable and can be used in arithmetic operations such as addition, subtraction, multiplication, and division.
 type Decimal struct {
-	coef  bint
-	neg   bool // true if number is negative
-	scale uint8
+	coef bint
+	neg  bool // true if number is negative
+	prec uint8
 }
 
 // SetDefaultPrecision changes the default precision for decimal numbers in the package.
@@ -140,46 +144,47 @@ type Decimal struct {
 // This function is particularly useful when you want to have your precision of the deicmal smaller than 19
 // across the whole application. It should be called only once at the beginning of your application
 //
-// Panics if the new scale is greater than 19 (maxScale) or new scale is 0
+// Panics if the new precision is greater than 19 (maxPrec) or new precision is 0
 func SetDefaultPrecision(prec uint8) {
-	if prec > maxScale {
-		panic(fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale))
+	if prec > maxPrec {
+		panic(fmt.Sprintf("precision out of range. Only allow maximum %d digits after the decimal points", maxPrec))
 	}
 
 	if prec == 0 {
-		panic("scale must be greater than 0")
+		panic("prec must be greater than 0")
 	}
 
-	defaultScale = prec
+	defaultPrec = prec
 }
 
-func NewFromHiLo(neg bool, hi uint64, lo uint64, scale uint8) (Decimal, error) {
-	if scale > defaultScale {
-		return Decimal{}, ErrScaleOutOfRange
+// NewFromHiLo returns Decimal from 128-bit unsigned integer (hi,lo)
+func NewFromHiLo(neg bool, hi uint64, lo uint64, prec uint8) (Decimal, error) {
+	if prec > defaultPrec {
+		return Decimal{}, ErrPrecOutOfRange
 	}
 
 	coef := u128{hi: hi, lo: lo}
-	return newDecimal(neg, bintFromU128(coef), scale), nil
+	return newDecimal(neg, bintFromU128(coef), prec), nil
 }
 
 // newDecimal return the decimal
-func newDecimal(neg bool, coef bint, scale uint8) Decimal {
-	return Decimal{neg: neg, coef: coef, scale: scale}
+func newDecimal(neg bool, coef bint, prec uint8) Decimal {
+	return Decimal{neg: neg, coef: coef, prec: prec}
 }
 
-// NewFromUint64 returns a decimal which equals to coef / 10^scale and coef is an uint64
-// Trailing zeros wll be removed and the scale will also be adjusted
-func NewFromUint64(coef uint64, scale uint8) (Decimal, error) {
-	if scale > defaultScale {
-		return Decimal{}, ErrScaleOutOfRange
+// NewFromUint64 returns a decimal which equals to coef / 10^prec and coef is an uint64
+// Trailing zeros wll be removed and the prec will also be adjusted
+func NewFromUint64(coef uint64, prec uint8) (Decimal, error) {
+	if prec > defaultPrec {
+		return Decimal{}, ErrPrecOutOfRange
 	}
 
-	return newDecimal(false, bintFromU64(coef), scale), nil
+	return newDecimal(false, bintFromU64(coef), prec), nil
 }
 
 // MustFromUint64 similars to NewFromUint64, but panics instead of returning error
-func MustFromUint64(coef uint64, scale uint8) Decimal {
-	d, err := NewFromUint64(coef, scale)
+func MustFromUint64(coef uint64, prec uint8) Decimal {
+	d, err := NewFromUint64(coef, prec)
 	if err != nil {
 		panic(err)
 	}
@@ -187,26 +192,26 @@ func MustFromUint64(coef uint64, scale uint8) Decimal {
 	return d
 }
 
-// NewFromInt64 returns a decimal which equals to coef / 10^scale and coef is an int64.
-// Trailing zeros wll be removed and the scale will also be adjusted
-func NewFromInt64(coef int64, scale uint8) (Decimal, error) {
+// NewFromInt64 returns a decimal which equals to coef / 10^prec and coef is an int64.
+// Trailing zeros wll be removed and the prec will also be adjusted
+func NewFromInt64(coef int64, prec uint8) (Decimal, error) {
 	var neg bool
 	if coef < 0 {
 		neg = true
 		coef = -coef
 	}
 
-	if scale > defaultScale {
-		return Decimal{}, ErrScaleOutOfRange
+	if prec > defaultPrec {
+		return Decimal{}, ErrPrecOutOfRange
 	}
 
 	// nolint: gosec
-	return newDecimal(neg, bintFromU64(uint64(coef)), scale), nil
+	return newDecimal(neg, bintFromU64(uint64(coef)), prec), nil
 }
 
 // MustFromInt64 similars to NewFromInt64, but panics instead of returning error
-func MustFromInt64(coef int64, scale uint8) Decimal {
-	d, err := NewFromInt64(coef, scale)
+func MustFromInt64(coef int64, prec uint8) Decimal {
+	d, err := NewFromInt64(coef, prec)
 	if err != nil {
 		panic(err)
 	}
@@ -215,11 +220,13 @@ func MustFromInt64(coef int64, scale uint8) Decimal {
 }
 
 // NewFromFloat64 returns decimal from float64.
-// !!!NOTE: you'll expect to lose some precision for this method due to FormatFloat. See: https://stackoverflow.com/questions/21895756/why-are-floating-point-numbers-inaccurate
-// This method is suitable for small numbers with small precision. e.g. 1.0001, 0.0001, -123.456, -1000000.123456
-// If you don't want to lose any precision, use Parse with string input instead
 //
-// Returns error if:
+// **NOTE**: you'll expect to lose some precision for this method due to FormatFloat. See: https://github.com/golang/go/issues/29491
+//
+// This method is only suitable for small numbers with low precision. e.g. 1.0001, 0.0001, -123.456, -1000000.123456.
+// You should avoid using this method if your input number has high precision.
+//
+// Returns error when:
 //  1. f is NaN or Inf
 //  2. error when parsing float to string and then to decimal
 func NewFromFloat64(f float64) (Decimal, error) {
@@ -260,8 +267,6 @@ func (d Decimal) InexactFloat64() float64 {
 // Parse parses a number in string to Decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
 //
-// Examples: "123", "-123", "123.456", "-123.456", "+123.456", "0.123".
-//
 // Returns error if:
 //  1. empty/invalid string
 //  2. the number has more than 19 digits after the decimal point
@@ -279,17 +284,16 @@ func parseBytes(b []byte) (Decimal, error) {
 		b = b[1 : len(b)-1]
 	}
 
-	neg, bint, scale, err := parseBint(b)
+	neg, bint, prec, err := parseBint(b)
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bint, scale), nil
+	return newDecimal(neg, bint, prec), nil
 
 }
 
-// MustParse parses a number in string to Decimal.
-// Panic on error
+// MustParse similars to Parse, but pacnis instead of returning error.
 func MustParse(s string) Decimal {
 	d, err := Parse(s)
 	if err != nil {
@@ -304,22 +308,22 @@ func (d Decimal) Add(e Decimal) Decimal {
 	dcoef, ecoef := d.coef, e.coef
 
 	var (
-		scale uint8
+		prec uint8
 	)
 
 	switch {
-	case d.scale == e.scale:
-		scale = d.scale
-	case d.scale > e.scale:
-		scale = d.scale
-		ecoef = ecoef.Mul(bintFromU128(pow10[d.scale-e.scale]))
-	case d.scale < e.scale:
-		scale = e.scale
-		dcoef = dcoef.Mul(bintFromU128(pow10[e.scale-d.scale]))
+	case d.prec == e.prec:
+		prec = d.prec
+	case d.prec > e.prec:
+		prec = d.prec
+		ecoef = ecoef.Mul(bintFromU128(pow10[d.prec-e.prec]))
+	case d.prec < e.prec:
+		prec = e.prec
+		dcoef = dcoef.Mul(bintFromU128(pow10[e.prec-d.prec]))
 	}
 
 	if d.neg == e.neg {
-		return newDecimal(d.neg, dcoef.Add(ecoef), scale)
+		return newDecimal(d.neg, dcoef.Add(ecoef), prec)
 	}
 
 	// different sign
@@ -327,17 +331,17 @@ func (d Decimal) Add(e Decimal) Decimal {
 	case 1:
 		// dcoef > ecoef, subtract can't overflow
 		coef, _ := dcoef.Sub(ecoef)
-		return newDecimal(d.neg, coef, scale)
+		return newDecimal(d.neg, coef, prec)
 	default:
 		// dcoef <= ecoef
 		coef, _ := ecoef.Sub(dcoef)
-		return newDecimal(e.neg, coef, scale)
+		return newDecimal(e.neg, coef, prec)
 	}
 }
 
 // Add64 returns d + e where e is a uint64
 func (d Decimal) Add64(e uint64) Decimal {
-	ecoef := bintFromU64(e).Mul(bintFromU128(pow10[d.scale]))
+	ecoef := bintFromU64(e).Mul(bintFromU128(pow10[d.prec]))
 
 	if d.neg {
 		var (
@@ -354,11 +358,11 @@ func (d Decimal) Add64(e uint64) Decimal {
 			neg = false
 		}
 
-		return newDecimal(neg, dcoef, d.scale)
+		return newDecimal(neg, dcoef, d.prec)
 	}
 
 	dcoef := d.coef.Add(ecoef)
-	return newDecimal(false, dcoef, d.scale)
+	return newDecimal(false, dcoef, d.prec)
 }
 
 // Sub returns d - e
@@ -366,24 +370,24 @@ func (d Decimal) Sub(e Decimal) Decimal {
 	dcoef, ecoef := d.coef, e.coef
 
 	var (
-		scale uint8
+		prec uint8
 	)
 
 	switch {
-	case d.scale == e.scale:
-		scale = d.scale
-	case d.scale > e.scale:
-		scale = d.scale
-		ecoef = ecoef.Mul(bintFromU128(pow10[d.scale-e.scale]))
-	case d.scale < e.scale:
-		scale = e.scale
-		dcoef = dcoef.Mul(bintFromU128(pow10[e.scale-d.scale]))
+	case d.prec == e.prec:
+		prec = d.prec
+	case d.prec > e.prec:
+		prec = d.prec
+		ecoef = ecoef.Mul(bintFromU128(pow10[d.prec-e.prec]))
+	case d.prec < e.prec:
+		prec = e.prec
+		dcoef = dcoef.Mul(bintFromU128(pow10[e.prec-d.prec]))
 	}
 
 	if d.neg != e.neg {
 		// different sign
 		coef := dcoef.Add(ecoef)
-		return newDecimal(d.neg, coef, scale)
+		return newDecimal(d.neg, coef, prec)
 	}
 
 	// same sign
@@ -391,17 +395,17 @@ func (d Decimal) Sub(e Decimal) Decimal {
 	case 1:
 		// dcoef > ecoef, subtract can't overflow
 		coef, _ := dcoef.Sub(ecoef)
-		return newDecimal(d.neg, coef, scale)
+		return newDecimal(d.neg, coef, prec)
 	default:
 		// dcoef <= ecoef
 		coef, _ := ecoef.Sub(dcoef)
-		return newDecimal(!d.neg, coef, scale)
+		return newDecimal(!d.neg, coef, prec)
 	}
 }
 
 // Sub64 returns d - e where e is a uint64
 func (d Decimal) Sub64(e uint64) Decimal {
-	ecoef := bintFromU64(e).Mul(bintFromU128(pow10[d.scale]))
+	ecoef := bintFromU64(e).Mul(bintFromU128(pow10[d.prec]))
 
 	if !d.neg {
 		var (
@@ -418,23 +422,23 @@ func (d Decimal) Sub64(e uint64) Decimal {
 			neg = true
 		}
 
-		return newDecimal(neg, dcoef, d.scale)
+		return newDecimal(neg, dcoef, d.prec)
 	}
 
-	return newDecimal(true, d.coef.Add(ecoef), d.scale)
+	return newDecimal(true, d.coef.Add(ecoef), d.prec)
 }
 
 // Mul returns d * e.
-// The result will have at most defaultScale digits after the decimal point.
+// The result will have at most defaultPrec digits after the decimal point.
 func (d Decimal) Mul(e Decimal) Decimal {
 	if e.coef.IsZero() {
 		return Decimal{}
 	}
 
-	scale := d.scale + e.scale
+	prec := d.prec + e.prec
 	neg := d.neg != e.neg
 
-	v, err := tryMulU128(d, e, neg, scale)
+	v, err := tryMulU128(d, e, neg, prec)
 	if err == nil {
 		return v
 	}
@@ -444,40 +448,40 @@ func (d Decimal) Mul(e Decimal) Decimal {
 	eBig := e.coef.GetBig()
 
 	dBig.Mul(dBig, eBig)
-	if scale <= defaultScale {
-		return newDecimal(neg, bintFromBigInt(dBig), scale)
+	if prec <= defaultPrec {
+		return newDecimal(neg, bintFromBigInt(dBig), prec)
 	}
 
-	q, _ := new(big.Int).QuoRem(dBig, pow10[scale-defaultScale].ToBigInt(), new(big.Int))
-	return newDecimal(neg, bintFromBigInt(q), defaultScale)
+	q, _ := new(big.Int).QuoRem(dBig, pow10[prec-defaultPrec].ToBigInt(), new(big.Int))
+	return newDecimal(neg, bintFromBigInt(q), defaultPrec)
 }
 
-func tryMulU128(d, e Decimal, neg bool, scale uint8) (Decimal, error) {
+func tryMulU128(d, e Decimal, neg bool, prec uint8) (Decimal, error) {
 	if d.coef.overflow || e.coef.overflow {
 		return Decimal{}, errOverflow
 	}
 
 	rcoef := d.coef.u128.MulToU256(e.coef.u128)
-	if scale <= defaultScale {
+	if prec <= defaultPrec {
 		if !rcoef.carry.IsZero() {
 			return Decimal{}, errOverflow
 		}
 
 		coef := u128{hi: rcoef.hi, lo: rcoef.lo}
 
-		return newDecimal(neg, bintFromU128(coef), scale), nil
+		return newDecimal(neg, bintFromU128(coef), prec), nil
 	}
 
-	q, err := rcoef.fastQuo(pow10[scale-defaultScale])
+	q, err := rcoef.fastQuo(pow10[prec-defaultPrec])
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bintFromU128(q), defaultScale), nil
+	return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 }
 
 // Mul64 returns d * e where e is a uint64.
-// The result will have at most defaultScale digits after the decimal point.
+// The result will have at most defaultPrec digits after the decimal point.
 func (d Decimal) Mul64(v uint64) Decimal {
 	if v == 0 {
 		return Decimal{}
@@ -490,7 +494,7 @@ func (d Decimal) Mul64(v uint64) Decimal {
 	if !d.coef.overflow {
 		coef, err := d.coef.u128.Mul64(v)
 		if err == nil {
-			return newDecimal(d.neg, bintFromU128(coef), d.scale)
+			return newDecimal(d.neg, bintFromU128(coef), d.prec)
 		}
 	}
 
@@ -498,11 +502,12 @@ func (d Decimal) Mul64(v uint64) Decimal {
 	dBig := d.coef.GetBig()
 	dBig.Mul(dBig, new(big.Int).SetUint64(v))
 
-	return newDecimal(d.neg, bintFromBigInt(dBig), d.scale)
+	return newDecimal(d.neg, bintFromBigInt(dBig), d.prec)
 }
 
-// Div returns d / e
+// Div returns d / e.
 // If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+//
 // Returns divide by zero error when e is zero
 func (d Decimal) Div(e Decimal) (Decimal, error) {
 	if e.coef.IsZero() {
@@ -517,8 +522,8 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 	}
 
 	// Need to multiply divident with factor
-	// to make sure the total decimal number after the decimal point is defaultScale
-	factor := defaultScale - (d.scale - e.scale)
+	// to make sure the total decimal number after the decimal point is defaultPrec
+	factor := defaultPrec - (d.prec - e.prec)
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
@@ -526,17 +531,7 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 
 	dBig.Mul(dBig, pow10[factor].ToBigInt())
 	dBig.Div(dBig, eBig)
-	return newDecimal(neg, bintFromBigInt(dBig), defaultScale), nil
-}
-
-// DivExact returns d / e with exact scale. The result will be truncated to the specified scale. No rounding is performed.
-func (d Decimal) DivExact(e Decimal, scale uint8) (Decimal, error) {
-	q, err := d.Div(e)
-	if err != nil {
-		return Decimal{}, err
-	}
-
-	return q.Trunc(scale), nil
+	return newDecimal(neg, bintFromBigInt(dBig), defaultPrec), nil
 }
 
 func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
@@ -545,8 +540,8 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	}
 
 	// Need to multiply divident with factor
-	// to make sure the total decimal number after the decimal point is defaultScale
-	factor := defaultScale - (d.scale - e.scale)
+	// to make sure the total decimal number after the decimal point is defaultPrec
+	factor := defaultPrec - (d.prec - e.prec)
 
 	d256 := d.coef.u128.MulToU256(pow10[factor])
 	quo, err := d256.fastQuo(e.coef.u128)
@@ -554,11 +549,12 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bintFromU128(quo), defaultScale), nil
+	return newDecimal(neg, bintFromU128(quo), defaultPrec), nil
 }
 
-// Div64 returns d / e where e is a uint64
+// Div64 returns d / e where e is a uint64.
 // If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+//
 // Returns divide by zero error when e is zero
 func (d Decimal) Div64(v uint64) (Decimal, error) {
 	if v == 0 {
@@ -570,27 +566,27 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 	}
 
 	if !d.coef.overflow {
-		d256 := d.coef.u128.MulToU256(pow10[defaultScale-d.scale])
+		d256 := d.coef.u128.MulToU256(pow10[defaultPrec-d.prec])
 		quo, _, err := d256.quoRem64Tou128(v)
 		if err == nil {
-			return newDecimal(d.neg, bintFromU128(quo), defaultScale), nil
+			return newDecimal(d.neg, bintFromU128(quo), defaultPrec), nil
 		}
 	}
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
-	dBig.Mul(dBig, pow10[defaultScale-d.scale].ToBigInt())
+	dBig.Mul(dBig, pow10[defaultPrec-d.prec].ToBigInt())
 	dBig.Div(dBig, new(big.Int).SetUint64(v))
 
-	return newDecimal(d.neg, bintFromBigInt(dBig), defaultScale), nil
+	return newDecimal(d.neg, bintFromBigInt(dBig), defaultPrec), nil
 }
 
-// Scale returns decimal scale
-func (d Decimal) Scale() int {
-	return int(d.scale)
+// Prec returns decimal precision
+func (d Decimal) Prec() int {
+	return int(d.prec)
 }
 
-// cmp compares two decimals d,e and returns:
+// Cmp compares two decimals d,e and returns:
 //
 //	-1 if d < e
 //	 0 if d == e
@@ -623,14 +619,14 @@ func (d Decimal) cmpDecSameSign(e Decimal) int {
 	dBig := d.coef.GetBig()
 	eBig := e.coef.GetBig()
 
-	if d.scale == e.scale {
+	if d.prec == e.prec {
 		return dBig.Cmp(eBig)
 	}
 
-	if d.scale < e.scale {
-		dBig.Mul(dBig, pow10[e.scale-d.scale].ToBigInt())
+	if d.prec < e.prec {
+		dBig.Mul(dBig, pow10[e.prec-d.prec].ToBigInt())
 	} else {
-		eBig.Mul(eBig, pow10[d.scale-e.scale].ToBigInt())
+		eBig.Mul(eBig, pow10[d.prec-e.prec].ToBigInt())
 	}
 
 	return dBig.Cmp(eBig)
@@ -641,56 +637,58 @@ func tryCmpU128(d, e Decimal) (int, error) {
 		return 0, errOverflow
 	}
 
-	if d.scale == e.scale {
+	if d.prec == e.prec {
 		return d.coef.u128.Cmp(e.coef.u128), nil
 	}
 
-	// scale is different
+	// prec is different
 	// e has more fraction digits
-	if d.scale < e.scale {
+	if d.prec < e.prec {
 		// d has more fraction digits
-		d256 := d.coef.u128.MulToU256(pow10[e.scale-d.scale])
+		d256 := d.coef.u128.MulToU256(pow10[e.prec-d.prec])
 		return d256.cmp128(e.coef.u128), nil
 	}
 
 	// d has more fraction digits
-	// we need to compare d with e * 10^(d.scale - e.scale)
-	e256 := e.coef.u128.MulToU256(pow10[d.scale-e.scale])
+	// we need to compare d with e * 10^(d.prec - e.prec)
+	e256 := e.coef.u128.MulToU256(pow10[d.prec-e.prec])
 
 	// remember to reverse the result because e256.cmp128(d.coef) returns the opposite
 	return -e256.cmp128(d.coef.u128), nil
 }
 
-// Rescale returns the decimal with the new scale only if the new scale is greater than the current scale.
-// Useful when you want to increase the scale of the decimal for display purposes.
+// Rescale returns the decimal with the new prec only if the new prec is greater than the current prec.
+// Useful when you want to increase the prec of the decimal for display purposes.
 //
 // Example:
 //
-//	d := MustParse("123.456") // 123.456, scale = 3
-//	d.rescale(5) // 123.45600, scale = 5
-func (d Decimal) rescale(scale uint8) Decimal {
-	if scale > maxScale {
-		scale = maxScale
+//	d := MustParse("123.456") // 123.456, prec = 3
+//	d.rescale(5) // 123.45600, prec = 5
+func (d Decimal) rescale(prec uint8) Decimal {
+	dTrim := d.trimTrailingZeros()
+
+	if prec > maxPrec {
+		prec = maxPrec
 	}
 
-	if scale <= d.scale {
-		return d
+	if prec <= dTrim.prec {
+		return dTrim
 	}
 
-	diff := scale - d.scale
-	coef := d.coef.Mul(bintFromU128(pow10[diff]))
+	diff := prec - dTrim.prec
+	coef := dTrim.coef.Mul(bintFromU128(pow10[diff]))
 
-	return newDecimal(d.neg, coef, scale)
+	return newDecimal(dTrim.neg, coef, prec)
 }
 
 // Neg returns -d
 func (d Decimal) Neg() Decimal {
-	return Decimal{neg: !d.neg, coef: d.coef, scale: d.scale}
+	return Decimal{neg: !d.neg, coef: d.coef, prec: d.prec}
 }
 
 // Abs returns |d|
 func (d Decimal) Abs() Decimal {
-	return Decimal{neg: false, coef: d.coef, scale: d.scale}
+	return Decimal{neg: false, coef: d.coef, prec: d.prec}
 }
 
 // Sign returns:
@@ -736,20 +734,20 @@ func (d Decimal) IsPos() bool {
 	return !d.neg && !d.coef.IsZero()
 }
 
-// RoundBank uses half up to even (banker's rounding) to round the decimal to the specified scale.
+// RoundBank uses half up to even (banker's rounding) to round the decimal to the specified prec.
 //
 // Examples:
 //
-//	Round(1.12345, 4) = 1.1234
-//	Round(1.12335, 4) = 1.1234
-//	Round(1.5, 0) = 2
-//	Roung(-1.5, 0) = -2
-func (d Decimal) RoundBank(scale uint8) Decimal {
-	if scale >= d.scale {
+//	RoundBank(1.12345, 4) = 1.1234
+//	RoundBank(1.12335, 4) = 1.1234
+//	RoundBank(1.5, 0) = 2
+//	RoundBank(-1.5, 0) = -2
+func (d Decimal) RoundBank(prec uint8) Decimal {
+	if prec >= d.prec {
 		return d
 	}
 
-	factor := pow10[d.scale-scale]
+	factor := pow10[d.prec-prec]
 	lo := factor.lo / 2
 
 	if !d.coef.overflow {
@@ -761,7 +759,7 @@ func (d Decimal) RoundBank(scale uint8) Decimal {
 
 		// no overflow, return the result
 		if err == nil {
-			return newDecimal(d.neg, bintFromU128(q), scale)
+			return newDecimal(d.neg, bintFromU128(q), prec)
 		}
 	}
 
@@ -774,10 +772,10 @@ func (d Decimal) RoundBank(scale uint8) Decimal {
 		q.Add(q, bigOne)
 	}
 
-	return newDecimal(d.neg, bintFromBigInt(q), scale)
+	return newDecimal(d.neg, bintFromBigInt(q), prec)
 }
 
-// RoundHAZ rounds the decimal to the specified scale using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
+// RoundHAZ rounds the decimal to the specified prec using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
 //
 // Examples:
 //
@@ -785,12 +783,12 @@ func (d Decimal) RoundBank(scale uint8) Decimal {
 //	Round(1.12335, 4) = 1.1234
 //	Round(1.5, 0) = 2
 //	Round(-1.5, 0) = -2
-func (d Decimal) RoundHAZ(scale uint8) Decimal {
-	if scale >= d.scale {
+func (d Decimal) RoundHAZ(prec uint8) Decimal {
+	if prec >= d.prec {
 		return d
 	}
 
-	factor := pow10[d.scale-scale]
+	factor := pow10[d.prec-prec]
 	lo, _ := factor.QuoRem64(2)
 
 	if !d.coef.overflow {
@@ -801,7 +799,7 @@ func (d Decimal) RoundHAZ(scale uint8) Decimal {
 		}
 
 		if err == nil {
-			return newDecimal(d.neg, bintFromU128(q), scale)
+			return newDecimal(d.neg, bintFromU128(q), prec)
 		}
 	}
 
@@ -814,10 +812,10 @@ func (d Decimal) RoundHAZ(scale uint8) Decimal {
 		q.Add(q, bigOne)
 	}
 
-	return newDecimal(d.neg, bintFromBigInt(q), scale)
+	return newDecimal(d.neg, bintFromBigInt(q), prec)
 }
 
-// RoundHTZ rounds the decimal to the specified scale using HALF TOWARD ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero).
+// RoundHTZ rounds the decimal to the specified prec using HALF TOWARD ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero).
 //
 // Examples:
 //
@@ -825,12 +823,12 @@ func (d Decimal) RoundHAZ(scale uint8) Decimal {
 //	Round(1.12335, 4) = 1.1233
 //	Round(1.5, 0) = 1
 //	Round(-1.5, 0) = -1
-func (d Decimal) RoundHTZ(scale uint8) Decimal {
-	if scale >= d.scale {
+func (d Decimal) RoundHTZ(prec uint8) Decimal {
+	if prec >= d.prec {
 		return d
 	}
 
-	factor := pow10[d.scale-scale]
+	factor := pow10[d.prec-prec]
 	lo, _ := factor.QuoRem64(2)
 
 	if !d.coef.overflow {
@@ -841,7 +839,7 @@ func (d Decimal) RoundHTZ(scale uint8) Decimal {
 		}
 
 		if err == nil {
-			return newDecimal(d.neg, bintFromU128(q), scale)
+			return newDecimal(d.neg, bintFromU128(q), prec)
 		}
 	}
 
@@ -854,25 +852,18 @@ func (d Decimal) RoundHTZ(scale uint8) Decimal {
 		q.Add(q, bigOne)
 	}
 
-	return newDecimal(d.neg, bintFromBigInt(q), scale)
+	return newDecimal(d.neg, bintFromBigInt(q), prec)
 }
 
 // Floor returns the largest integer value less than or equal to d.
-//
-// Examples:
-//
-//	Floor(1.12345) = 1
-//	Floor(1.12335) = 1
-//	Floor(1.5, 0) = 1
-//	Floor(-1.5, 0) = -2
 func (d Decimal) Floor() Decimal {
-	if d.scale == 0 {
+	if d.prec == 0 {
 		return d
 	}
 
 	if !d.coef.overflow {
 		var err error
-		q, r := d.coef.u128.QuoRem64(pow10[d.scale].lo)
+		q, r := d.coef.u128.QuoRem64(pow10[d.prec].lo)
 
 		// add 1 if it's negative and there's a remainder, e.g. -1.5 -> -2
 		if d.neg && r != 0 {
@@ -886,7 +877,7 @@ func (d Decimal) Floor() Decimal {
 
 	// overflow, fallback to big.Int
 	dBig := d.coef.GetBig()
-	q, r := new(big.Int).QuoRem(dBig, pow10[d.scale].ToBigInt(), new(big.Int))
+	q, r := new(big.Int).QuoRem(dBig, pow10[d.prec].ToBigInt(), new(big.Int))
 
 	// add 1 if it's negative and there's a remainder, e.g. -1.5 -> -2
 	if d.neg && r.Cmp(bigZero) != 0 {
@@ -897,21 +888,14 @@ func (d Decimal) Floor() Decimal {
 }
 
 // Ceil returns the smallest integer value greater than or equal to d.
-//
-// Examples:
-//
-//	Ceil(1.12345, 4) = 1.1235
-//	Ceil(1.12335, 4) = 1.1234
-//	Ceil(1.5, 0) = 2
-//	Ceil(-1.5, 0) = -1
 func (d Decimal) Ceil() Decimal {
-	if d.scale == 0 {
+	if d.prec == 0 {
 		return d
 	}
 
 	if !d.coef.overflow {
 		var err error
-		q, r := d.coef.u128.QuoRem64(pow10[d.scale].lo)
+		q, r := d.coef.u128.QuoRem64(pow10[d.prec].lo)
 
 		// add 1 if it's positive and there's a remainder, e.g. 1.5 -> 2
 		if !d.neg && r != 0 {
@@ -925,7 +909,7 @@ func (d Decimal) Ceil() Decimal {
 
 	// overflow, fallback to big.Int
 	dBig := d.coef.GetBig()
-	q, r := new(big.Int).QuoRem(dBig, pow10[d.scale].ToBigInt(), new(big.Int))
+	q, r := new(big.Int).QuoRem(dBig, pow10[d.prec].ToBigInt(), new(big.Int))
 
 	// add 1 if it's positive and there's a remainder, e.g. 1.5 -> 2
 	if !d.neg && r.Cmp(bigZero) != 0 {
@@ -935,28 +919,28 @@ func (d Decimal) Ceil() Decimal {
 	return newDecimal(d.neg, bintFromBigInt(q), 0)
 }
 
-// Trunc returns d after truncating the decimal to the specified scale.
+// Trunc returns d after truncating the decimal to the specified prec.
 //
 // Examples:
 //
 //	Trunc(1.12345, 4) = 1.1234
 //	Trunc(1.12335, 4) = 1.1233
-func (d Decimal) Trunc(scale uint8) Decimal {
-	if scale >= d.scale {
+func (d Decimal) Trunc(prec uint8) Decimal {
+	if prec >= d.prec {
 		return d
 	}
 
-	factor := pow10[d.scale-scale]
+	factor := pow10[d.prec-prec]
 
 	if !d.coef.overflow {
 		q, _ := d.coef.u128.QuoRem64(factor.lo)
-		return newDecimal(d.neg, bintFromU128(q), scale)
+		return newDecimal(d.neg, bintFromU128(q), prec)
 	}
 
 	// overflow, fallback to big.Int
 	dBig := d.coef.GetBig()
 	q := new(big.Int).Quo(dBig, factor.ToBigInt())
-	return newDecimal(d.neg, bintFromBigInt(q), scale)
+	return newDecimal(d.neg, bintFromBigInt(q), prec)
 }
 
 func (d Decimal) trimTrailingZeros() Decimal {
@@ -964,45 +948,45 @@ func (d Decimal) trimTrailingZeros() Decimal {
 		zeros := trailingZerosBigInt(d.coef.bigInt)
 
 		var (
-			dBig  = d.coef.GetBig()
-			scale uint8
+			dBig = d.coef.GetBig()
+			prec uint8
 		)
 
 		if zeros == 0 {
-			return newDecimal(d.neg, bintFromBigInt(dBig), d.scale)
+			return newDecimal(d.neg, bintFromBigInt(dBig), d.prec)
 		}
 
-		if zeros >= d.scale {
-			dBig.Div(dBig, pow10[d.scale].ToBigInt())
-			scale = 0
+		if zeros >= d.prec {
+			dBig.Div(dBig, pow10[d.prec].ToBigInt())
+			prec = 0
 		} else {
-			scale = d.scale - uint8(zeros)
+			prec = d.prec - uint8(zeros)
 			dBig.Div(dBig, pow10[zeros].ToBigInt())
 		}
 
-		return newDecimal(d.neg, bintFromBigInt(dBig), scale)
+		return newDecimal(d.neg, bintFromBigInt(dBig), prec)
 	}
 
 	zeros := trailingZerosU128(d.coef.u128)
 	if zeros == 0 {
-		return newDecimal(d.neg, bintFromU128(d.coef.u128), d.scale)
+		return newDecimal(d.neg, bintFromU128(d.coef.u128), d.prec)
 	}
 
 	var (
-		coef  u128
-		scale uint8
+		coef u128
+		prec uint8
 	)
 
-	if zeros >= d.scale {
-		coef, _, _ = d.coef.u128.QuoRem(pow10[d.scale])
-		scale = 0
+	if zeros >= d.prec {
+		coef, _, _ = d.coef.u128.QuoRem(pow10[d.prec])
+		prec = 0
 	} else {
-		scale = d.scale - zeros
+		prec = d.prec - zeros
 		coef, _, _ = d.coef.u128.QuoRem(pow10[zeros])
 	}
 
 	d.coef = bintFromU128(coef)
-	d.scale = scale
+	d.prec = prec
 	return d
 }
 
@@ -1016,7 +1000,7 @@ func trailingZerosBigInt(n *big.Int) uint8 {
 	if m.Cmp(bigZero) == 0 {
 		zeros += 16
 
-		// shortcut because maxScale = 19
+		// shortcut because maxPrec = 19
 		_, m = z.QuoRem(n, pow10Big[zeros+2], m)
 		if m.Cmp(bigZero) == 0 {
 			zeros += 2
@@ -1132,10 +1116,10 @@ func (d Decimal) PowInt(e int) Decimal {
 	// overflow, fallback to big.Int
 	dBig := dTrim.coef.GetBig()
 	factor := 0
-	powScale := int(dTrim.scale) * e
-	if powScale >= int(defaultScale) {
-		factor = powScale - int(defaultScale)
-		powScale = int(defaultScale)
+	powPrecision := int(dTrim.prec) * e
+	if powPrecision >= int(defaultPrec) {
+		factor = powPrecision - int(defaultPrec)
+		powPrecision = int(defaultPrec)
 	}
 
 	m := new(big.Int).Exp(bigTen, big.NewInt(int64(factor)), nil)
@@ -1148,7 +1132,7 @@ func (d Decimal) PowInt(e int) Decimal {
 	}
 
 	// nolint: gosec
-	return newDecimal(neg, bintFromBigInt(qBig), uint8(powScale))
+	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision))
 }
 
 // powIntInverse returns d^(-e), with e > 0
@@ -1160,10 +1144,10 @@ func (d Decimal) powIntInverse(e int) Decimal {
 
 	// overflow, fallback to big.Int
 	dBig := d.coef.GetBig()
-	powScale := int(d.scale) * e
+	powPrecision := int(d.prec) * e
 
-	// d^(-e) = 10^(defaultScale + e) / d^e (with defaultScale digits after the decimal point)
-	m := new(big.Int).Exp(bigTen, big.NewInt(int64(powScale+int(defaultScale))), nil)
+	// d^(-e) = 10^(defaultPrec + e) / d^e (with defaultPrec digits after the decimal point)
+	m := new(big.Int).Exp(bigTen, big.NewInt(int64(powPrecision+int(defaultPrec))), nil)
 	dBig = new(big.Int).Exp(dBig, big.NewInt(int64(e)), nil)
 	qBig := dBig.Quo(m, dBig)
 
@@ -1172,7 +1156,7 @@ func (d Decimal) powIntInverse(e int) Decimal {
 		neg = false
 	}
 
-	return newDecimal(neg, bintFromBigInt(qBig), defaultScale)
+	return newDecimal(neg, bintFromBigInt(qBig), defaultPrec)
 }
 
 func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
@@ -1191,15 +1175,15 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		neg = false
 	}
 
-	powScale := int(d.scale) * e
-	if powScale > int(defaultScale)+38 {
+	powPrecision := int(d.prec) * e
+	if powPrecision > int(defaultPrec)+38 {
 		return Decimal{}, errOverflow
 	}
 
 	factor := 0
-	if powScale > int(defaultScale) {
-		factor = powScale - int(defaultScale)
-		powScale = int(defaultScale)
+	if powPrecision > int(defaultPrec) {
+		factor = powPrecision - int(defaultPrec)
+		powPrecision = int(defaultPrec)
 	}
 
 	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
@@ -1214,7 +1198,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		}
 
 		// nolint: gosec
-		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powScale)), nil
+		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powPrecision)), nil
 	}
 
 	if result.carry.hi != 0 {
@@ -1226,7 +1210,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bintFromU128(q), defaultScale), nil
+	return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 }
 
 func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
@@ -1245,15 +1229,15 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		neg = false
 	}
 
-	powScale := int(d.scale) * e
-	if powScale > int(defaultScale)+38 {
+	powPrecision := int(d.prec) * e
+	if powPrecision > int(defaultPrec)+38 {
 		return Decimal{}, errOverflow
 	}
 
 	factor := 0
-	if powScale > int(defaultScale) {
-		factor = powScale - int(defaultScale)
-		powScale = int(defaultScale)
+	if powPrecision > int(defaultPrec) {
+		factor = powPrecision - int(defaultPrec)
+		powPrecision = int(defaultPrec)
 	}
 
 	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
@@ -1268,14 +1252,14 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		}
 
 		// nolint: gosec
-		a256 := one128.MulToU256(pow10[defaultScale+uint8(powScale)])
+		a256 := one128.MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 
 		q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 		if err != nil {
 			return Decimal{}, err
 		}
 
-		return newDecimal(neg, bintFromU128(q), defaultScale), nil
+		return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 	}
 
 	// if result is not u128, one solution is adjusting it to u128 by dividing it with 10^factor
@@ -1285,19 +1269,19 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	// a256 = 10^(powScale + factor + defaultScale)
+	// a256 = 10^(powPrecision + factor + defaultPrec)
 	// nolint: gosec
-	a256 := pow10[factor].MulToU256(pow10[defaultScale+uint8(powScale)])
+	a256 := pow10[factor].MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 	q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
 		return Decimal{}, err
 	}
 
-	return newDecimal(neg, bintFromU128(q), defaultScale), nil
+	return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 }
 
 // Sqrt returns the square root of d using Newton-Raphson method.
-// The result will have at most defaultScale digits after the decimal point.
+// The result will have at most defaultPrec digits after the decimal point.
 // Returns error if d < 0
 //
 // Examples:
@@ -1326,13 +1310,13 @@ func (d Decimal) Sqrt() (Decimal, error) {
 
 	// overflow, fallback to big.Int
 	dBig := d.coef.GetBig()
-	factor := 2*defaultScale - d.scale
+	factor := 2*defaultPrec - d.prec
 	coef := dBig.Mul(dBig, pow10[factor].ToBigInt())
-	return newDecimal(false, bintFromBigInt(coef.Sqrt(coef)), defaultScale), nil
+	return newDecimal(false, bintFromBigInt(coef.Sqrt(coef)), defaultPrec), nil
 }
 
 func (d Decimal) sqrtU128() (Decimal, error) {
-	factor := 2*defaultScale - d.scale
+	factor := 2*defaultPrec - d.prec
 
 	coef := d.coef.u128.MulToU256(pow10[factor])
 	if coef.carry.hi != 0 {
@@ -1366,5 +1350,5 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 		x = x1
 	}
 
-	return newDecimal(false, bintFromU128(x), defaultScale), nil
+	return newDecimal(false, bintFromU128(x), defaultPrec), nil
 }

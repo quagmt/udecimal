@@ -1,7 +1,9 @@
 # udecimal
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/quagmt/udecimal)](https://pkg.go.dev/github.com/quagmt/udecimal)
+[![build](https://github.com/quagmt/udecimal/actions/workflows/ci.yaml/badge.svg)](https://github.com/quagmt/udecimal/actions/workflows/ci.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/quagmt/udecimal)](https://goreportcard.com/report/github.com/quagmt/udecimal)
+[![codecov](https://codecov.io/gh/quagmt/udecimal/graph/badge.svg?token=662ET843EZ)](https://codecov.io/gh/quagmt/udecimal)
+[![GoDoc](https://pkg.go.dev/badge/github.com/quagmt/udecimal)](https://pkg.go.dev/github.com/quagmt/udecimal)
 
 High performance, high precision fixed-point decimal number for financial applications.
 
@@ -14,8 +16,9 @@ go get github.com/quagmt/udecimal
 ## Features
 
 - **High Precision**: Supports up to 19 decimal places with no precision loss during arithmetic operations.
-- **Optimized for Speed**: Designed for high performance with zero memory allocation in most cases (see [benchmarks](#benchmarks) and [How it works](#how-it-works)).
+- **Optimized for Speed**: Designed for high performance with zero memory allocation in most cases (see [Benchmarks](benchmarks/BENCHMARKS.md) and [How it works](#how-it-works)).
 - **Panic-Free**: All errors are returned as values, ensuring no unexpected panics.
+- **Immutable**: All arithmetic operations return a new `Decimal` value, preserving the original value and safe for concurrent use.
 - **Versatile Rounding Methods**: Includes HALF AWAY FROM ZERO, HALF TOWARD ZERO, and Banker's rounding.
   <br/>
 
@@ -23,7 +26,7 @@ go get github.com/quagmt/udecimal
 
 ## Documentation
 
-- Checkout [documentation](#docs) and [FAQ](FAQ.md) for more information.
+- Checkout [documentation](#docs) for more information.
 
 ## Usage
 
@@ -70,9 +73,9 @@ func main() {
 
 ## Rounding Methods
 
-Rounding can be challenging and often confusing, as there are [numerous ways](https://www.mathsisfun.com/numbers/rounding-methods.html) to round a number. Each method has specific use cases, and developers frequently make mistakes or incorrect assumptions about rounding. For instance, round(1.5) might result in either 1 or 2, depending on the chosen rounding method.
+Rounding numbers can often be challenging and confusing due to the [variety of methods](https://www.mathsisfun.com/numbers/rounding-methods.html) available. Each method serves specific purposes, and it's common for developers to make mistakes or incorrect assumptions about how rounding should be performed. For example, the result of `round(1.45)` could be either 1.4 or 1.5, depending on the rounding method used.
 
-This issue is particularly critical in financial applications, where even minor rounding mistakes can be accumulated and result in significant financial losses. To prevent such mistakes, this library avoids implicit rounding and requires developers to explicitly invoke the rounding method. The supported rounding methods are:
+This issue is particularly critical in financial applications, where even minor rounding errors can accumulate and lead to significant financial losses. To mitigate such errors, this library intentionally avoids implicit rounding. If the result of an operation exceeds the maximum precision specified by developers beforehand, **extra digits are truncated**. Developers need to explicitly choose the rounding method they want to use. The supported rounding methods are:
 
 - [Banker's rounding](https://en.wikipedia.org/wiki/Rounding#Rounding_half_to_even) or round half to even
 - [Half away from zero](https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero) (HAZ)
@@ -104,22 +107,22 @@ func main() {
 
 As mentioned above, this library is not always memory allocation free. To understand why, let's take a look at how the `Decimal` type is implemented.
 
-The `Decimal` type represents a fixed-point decimal number. It consists of three components: sign, coefficient, and scale. The number is represented as:
+The `Decimal` type represents a fixed-point decimal number. It consists of three components: sign, coefficient, and prec. The number is represented as:
 
 ```go
-// decimal value = (neg == true ? -1 : 1) * coef * 10^(-scale)
+// decimal value = (neg == true ? -1 : 1) * coef * 10^(-prec)
 type Decimal struct {
 	neg bool
 	coef bint
-	scale uint8 // 0 <= scale <= 19
+	prec uint8 // 0 <= prec <= 19
 }
 
 // Example:
 // 123.456 = 123456 * 10^-3
-// -> neg = false, coef = 123456, scale = 3
+// -> neg = false, coef = 123456, prec = 3
 
 // -123.456 = -123456 / 10^-3
-// -> neg = true, coef = 123456, scale = 3
+// -> neg = true, coef = 123456, prec = 3
 ```
 
 <br/>

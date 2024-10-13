@@ -176,10 +176,10 @@ func (u u256) rsh(n uint) (v u256) {
 
 // Quo only returns quotient of u/v
 // Fast divsion for U192 divided by U128 using Hacker's Delight multiword division algorithm
-// with some constraints regarding max coef and scale value, including:
+// with some constraints regarding max coef and prec value, including:
 //
 //	max(coef) = 2^128-1
-//	max(scale) = 19
+//	max(prec) = 19
 //	max(u) = 2^192-1
 func (u u256) fastQuo(v u128) (u128, error) {
 	// if u >= 2^192, the quotient might won't fit in 128-bits number (overflow).

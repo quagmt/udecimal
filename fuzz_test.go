@@ -14,10 +14,10 @@ import (
 )
 
 var corpus = []struct {
-	neg   bool
-	hi    uint64
-	lo    uint64
-	scale uint8
+	neg  bool
+	hi   uint64
+	lo   uint64
+	prec uint8
 }{
 	{false, 0, 0, 0},
 	{false, 1, 0, 0},
@@ -39,7 +39,7 @@ var corpus = []struct {
 	{true, math.MaxUint64, math.MaxUint64, 10},
 }
 
-func ssDecimal(neg bool, hi, lo uint64, scale uint8) ss.Decimal {
+func ssDecimal(neg bool, hi, lo uint64, prec uint8) ss.Decimal {
 	bytes := make([]byte, 16)
 	binary.BigEndian.PutUint64(bytes, hi)
 	binary.BigEndian.PutUint64(bytes[8:], lo)
@@ -50,27 +50,27 @@ func ssDecimal(neg bool, hi, lo uint64, scale uint8) ss.Decimal {
 		bint = bint.Neg(bint)
 	}
 
-	d := ss.NewFromBigInt(bint, -int32(scale))
+	d := ss.NewFromBigInt(bint, -int32(prec))
 	return d
 }
 
 func FuzzParse(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -94,20 +94,20 @@ func FuzzParse(f *testing.F) {
 func FuzzAddDec(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -122,8 +122,8 @@ func FuzzAddDec(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
-		bb := ssDecimal(bneg, bhi, blo, bscale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec)
 		cc := aa.Add(bb)
 
 		require.Equal(t, cc.String(), c.String(), "add %s %s", a, b)
@@ -133,13 +133,13 @@ func FuzzAddDec(f *testing.F) {
 func FuzzAdd64(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.lo)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.lo)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, blo uint64) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -154,7 +154,7 @@ func FuzzAdd64(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
 		bb := ssDecimal(false, 0, blo, 0)
 		cc := aa.Add(bb)
 
@@ -165,20 +165,20 @@ func FuzzAdd64(f *testing.F) {
 func FuzzSubDec(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -193,8 +193,8 @@ func FuzzSubDec(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
-		bb := ssDecimal(bneg, bhi, blo, bscale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec)
 		cc := aa.Sub(bb)
 
 		require.Equal(t, cc.String(), c.String(), "sub %s %s", a, b)
@@ -204,13 +204,13 @@ func FuzzSubDec(f *testing.F) {
 func FuzzSub64(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.lo)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.lo)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, blo uint64) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -225,7 +225,7 @@ func FuzzSub64(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
 		bb := ssDecimal(false, 0, blo, 0)
 		cc := aa.Sub(bb)
 
@@ -236,20 +236,20 @@ func FuzzSub64(f *testing.F) {
 func FuzzMulDec(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -264,10 +264,10 @@ func FuzzMulDec(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
-		bb := ssDecimal(bneg, bhi, blo, bscale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec)
 
-		prec := int32(c.Scale())
+		prec := int32(c.Prec())
 		cc := aa.Mul(bb).Truncate(prec)
 
 		require.Equal(t, cc.String(), c.String(), "mul %s %s", a, b)
@@ -277,13 +277,13 @@ func FuzzMulDec(f *testing.F) {
 func FuzzMul64(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.lo)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.lo)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, blo uint64) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -298,10 +298,10 @@ func FuzzMul64(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
 		bb := ssDecimal(false, 0, blo, 0)
 
-		prec := int32(c.Scale())
+		prec := int32(c.Prec())
 		cc := aa.Mul(bb).Truncate(prec)
 
 		require.Equal(t, cc.String(), c.String(), "mul64 %s %d", a, blo)
@@ -311,20 +311,20 @@ func FuzzMul64(f *testing.F) {
 func FuzzDivDec(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -346,10 +346,10 @@ func FuzzDivDec(f *testing.F) {
 		require.NoError(t, err)
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
-		bb := ssDecimal(bneg, bhi, blo, bscale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec)
 
-		prec := int32(c.Scale())
+		prec := int32(c.Prec())
 		cc := aa.DivRound(bb, 28).Truncate(prec)
 
 		// sometimes shopspring/decimal does rounding differently
@@ -367,13 +367,13 @@ func FuzzDivDec(f *testing.F) {
 func FuzzDiv64(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.lo)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.lo)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, blo uint64) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -395,10 +395,10 @@ func FuzzDiv64(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
 		bb := ssDecimal(false, 0, blo, 0)
 
-		prec := int32(c.Scale())
+		prec := int32(c.Prec())
 		cc := aa.DivRound(bb, 24).Truncate(prec)
 
 		// sometimes shopspring/decimal does rounding differently
@@ -415,21 +415,21 @@ func FuzzDiv64(f *testing.F) {
 func FuzzRoundBank(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			roundScale := uint8(rand.N(20))
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale, roundScale)
+			roundPrecision := uint8(rand.N(20))
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec, roundPrecision)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8, roundScale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -445,34 +445,34 @@ func FuzzRoundBank(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundScale)
+		u8Round := uint8(roundPrecision)
 		cround := c.RoundBank(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundScale)
+		i32Round := int32(roundPrecision)
 		cc := ss.RequireFromString(cstr).RoundBank(i32Round)
 
-		require.Equal(t, cc.String(), cround.String(), "round %s %d", c, roundScale)
+		require.Equal(t, cc.String(), cround.String(), "round %s %d", c, roundPrecision)
 	})
 }
 
 func FuzzFloor(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -500,20 +500,20 @@ func FuzzFloor(f *testing.F) {
 func FuzzCeil(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale)
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -541,21 +541,21 @@ func FuzzCeil(f *testing.F) {
 func FuzzTrunc(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
-			roundScale := uint8(rand.N(20))
-			f.Add(c.neg, c.hi, c.lo, c.scale, d.neg, d.hi, d.lo, d.scale, roundScale)
+			roundPrecision := uint8(rand.N(20))
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec, roundPrecision)
 		}
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, bneg bool, bhi uint64, blo uint64, bscale uint8, roundScale uint8) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
 		}
 
-		b, err := NewFromHiLo(bneg, bhi, blo, bscale)
-		if err == ErrScaleOutOfRange {
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -571,25 +571,25 @@ func FuzzTrunc(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundScale)
+		u8Round := uint8(roundPrecision)
 		cround := c.Trunc(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundScale)
+		i32Round := int32(roundPrecision)
 		cc := ss.RequireFromString(cstr).Truncate(i32Round)
 
-		require.Equal(t, cc.String(), cround.String(), "trunc %s %d", c, roundScale)
+		require.Equal(t, cc.String(), cround.String(), "trunc %s %d", c, roundPrecision)
 	})
 }
 
 func FuzzPowInt(f *testing.F) {
 	for _, c := range corpus {
-		f.Add(c.neg, c.hi, c.lo, c.scale, rand.Int())
+		f.Add(c.neg, c.hi, c.lo, c.prec, rand.Int())
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, pow int) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, pow int) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -607,9 +607,9 @@ func FuzzPowInt(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
 
-		prec := int32(c.Scale())
+		prec := int32(c.Prec())
 		aa = aa.Pow(ss.NewFromInt(int64(p))).Truncate(prec)
 
 		require.Equal(t, aa.String(), c.String(), "powInt %s %d", a, p)
@@ -618,12 +618,12 @@ func FuzzPowInt(f *testing.F) {
 
 func FuzzPowNegative(f *testing.F) {
 	for _, c := range corpus {
-		f.Add(c.neg, c.hi, c.lo, c.scale, rand.Int64())
+		f.Add(c.neg, c.hi, c.lo, c.prec, rand.Int64())
 	}
 
-	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, ascale uint8, pow int64) {
-		a, err := NewFromHiLo(aneg, ahi, alo, ascale)
-		if err == ErrScaleOutOfRange {
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, pow int64) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
 			t.Skip()
 		} else {
 			require.NoError(t, err)
@@ -646,13 +646,13 @@ func FuzzPowNegative(f *testing.F) {
 		}
 
 		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, ascale)
+		aa := ssDecimal(aneg, ahi, alo, aprec)
 
 		ssPow := ss.NewFromInt(p)
-		aa, err = aa.PowWithPrecision(ssPow, int32(c.scale)+8)
+		aa, err = aa.PowWithPrecision(ssPow, int32(c.prec)+8)
 		require.NoError(t, err)
 
-		prec := int32(c.Scale())
+		prec := int32(c.Prec())
 		aa = aa.Truncate(prec)
 
 		require.Equal(t, aa.String(), c.String(), "powIntNegative %s %d, %s", a, p, ssPow)

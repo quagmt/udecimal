@@ -25,11 +25,12 @@ func (d Decimal) String() string {
 	return d.stringBigInt(true)
 }
 
-// StringFixed returns the string representation of the decimal with fixed scale.
+// StringFixed returns the string representation of the decimal with fixed prec.
 // Trailing zeros will not be removed.
-// Special case: if the decimal is zero, it will return "0" regardless of the scale.
-func (d Decimal) StringFixed(scale uint8) string {
-	d1 := d.rescale(scale)
+//
+// Special case: if the decimal is zero, it will return "0" regardless of the prec.
+func (d Decimal) StringFixed(prec uint8) string {
+	d1 := d.rescale(prec)
 
 	if !d1.coef.overflow {
 		return d1.stringU128(false)
@@ -40,7 +41,7 @@ func (d Decimal) StringFixed(scale uint8) string {
 
 func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
 	str := d.coef.bigInt.String()
-	dExpInt := int(d.scale)
+	dExpInt := int(d.prec)
 	if dExpInt > len(str) {
 		// pad with zeros
 		l := len(str)
@@ -109,10 +110,10 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 	byteLen := maxByteMap[d.coef.u128.bitLen()]
 	var buf []byte
 	if trimTrailingZeros {
-		// if d.scale > byteLen, that means we need to allocate upto d.scale to cover all the zeros of the fraction part
-		// e.g. 0.00000123, scale = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
-		if byteLen <= d.scale {
-			byteLen = d.scale + 1 // 1 for zero in the whole part
+		// if d.prec > byteLen, that means we need to allocate upto d.prec to cover all the zeros of the fraction part
+		// e.g. 0.00000123, prec = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
+		if byteLen <= d.prec {
+			byteLen = d.prec + 1 // 1 for zero in the whole part
 		}
 
 		buf = make([]byte, byteLen+2) // 1 sign + 1 dot
@@ -122,18 +123,18 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 		buf = []byte("0000000000000000000000000000000000000000")
 	}
 
-	quo, rem := d.coef.u128.QuoRem64(pow10[d.scale].lo) // max scale is 19, so we can safely use QuoRem64
+	quo, rem := d.coef.u128.QuoRem64(pow10[d.prec].lo) // max prec is 19, so we can safely use QuoRem64
 	l := len(buf)
 	n := 0
-	scale := d.scale
+	prec := d.prec
 
 	if rem != 0 {
 		if trimTrailingZeros {
 			// remove trailing zeros, e.g. 1.2300 -> 1.23
-			// both scale and rem will be adjusted
+			// both prec and rem will be adjusted
 			zeros := getTrailingZeros64(rem)
 			rem /= pow10[zeros].lo
-			scale -= zeros
+			prec -= zeros
 		}
 
 		for ; rem != 0; rem /= 10 {
@@ -142,12 +143,12 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 		}
 
 		// fill remaining zeros
-		for i := n + 1; i <= int(scale); i++ {
+		for i := n + 1; i <= int(prec); i++ {
 			buf[l-i] = '0'
 		}
 
-		buf[l-1-int(scale)] = '.'
-		n = int(scale + 1)
+		buf[l-1-int(prec)] = '.'
+		n = int(prec + 1)
 	}
 
 	if quo.IsZero() {
@@ -209,17 +210,17 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 
 // MarshalBinary implements encoding.BinaryMarshaler interface with custom binary format.
 //
-//	Binary format: [overflow + neg] [scale] [total bytes] [coef]
+//	Binary format: [overflow + neg] [prec] [total bytes] [coef]
 //
 //	 example 1: -1.2345
 //	 1st byte: 0b0001_0000 (overflow = true, neg = false)
-//	 2nd byte: 0b0000_0100 (scale = 4)
+//	 2nd byte: 0b0000_0100 (prec = 4)
 //	 3rd byte: 0b0000_1101 (total bytes = 11)
 //	 4th-11th bytes: 0x0000_0000_0000_3039 (coef = 12345, only stores the coef.lo part)
 //
 //	 example 2: 1234567890123456789.1234567890123456789
 //	 1st byte: 0b0000_0000 (overflow = false, neg = false)
-//	 2nd byte: 0b0001_0011 (scale = 19)
+//	 2nd byte: 0b0001_0011 (prec = 19)
 //	 3rd byte: 0b0001_0011 (total bytes = 19)
 //	 4th-11th bytes: 0x0949_b0f6_f002_3313 (coef.hi)
 //	 12th-19th bytes: 0xd3b5_05f9_b5f1_8115 (coef.lo)
@@ -247,7 +248,7 @@ func (d Decimal) marshalBinaryU128() ([]byte, error) {
 
 	// overflow + neg with overflow = false (always 0)
 	buf[0] = byte(neg)
-	buf[1] = byte(d.scale)
+	buf[1] = byte(d.prec)
 	buf[2] = byte(totalBytes)
 
 	if coef.hi != 0 {
@@ -276,7 +277,7 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 
 func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	d.neg = data[0]&1 == 1
-	d.scale = data[1]
+	d.prec = data[1]
 	d.coef.overflow = false
 
 	totalBytes := data[2]
@@ -314,7 +315,7 @@ func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
 
 	// overflow + neg with overflow = true (always 1)
 	buf[0] = byte(1<<4 | neg)
-	buf[1] = byte(d.scale)
+	buf[1] = byte(d.prec)
 	buf[2] = byte(totalBytes)
 	d.coef.bigInt.FillBytes(buf[3:])
 
@@ -324,7 +325,7 @@ func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
 func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 	d.neg = data[0]&1 == 1
 	d.coef.overflow = true
-	d.scale = data[1]
+	d.prec = data[1]
 
 	totalBytes := data[2]
 
@@ -374,7 +375,9 @@ type NullDecimal struct {
 	Valid   bool
 }
 
-// Scan implements sql.Scanner interface.
+// Scan implements [sql.Scanner] interface.
+//
+// [sql.Scanner]: https://pkg.go.dev/database/sql#Scanner
 func (d *NullDecimal) Scan(src any) error {
 	if src == nil {
 		d.Decimal, d.Valid = Decimal{}, false
@@ -405,7 +408,9 @@ func (d *NullDecimal) Scan(src any) error {
 	return err
 }
 
-// Value implements driver.Valuer interface.
+// Value implements the [driver.Valuer] interface.
+//
+// [driver.Valuer]: https://pkg.go.dev/database/sql/driver#Valuer
 func (d NullDecimal) Value() (driver.Value, error) {
 	if !d.Valid {
 		return nil, nil

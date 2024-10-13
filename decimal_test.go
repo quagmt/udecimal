@@ -10,24 +10,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSetDefaultScale(t *testing.T) {
-	// NOTE: must be careful with tests that change the default scale
+func TestSetDefaultPrecision(t *testing.T) {
+	// NOTE: must be careful with tests that change the default prec
 	// it can affect other tests, especially tests in different packages which can run in parallel
-	defer SetDefaultPrecision(maxScale)
+	defer SetDefaultPrecision(maxPrec)
 
-	require.Equal(t, uint8(19), defaultScale)
+	require.Equal(t, uint8(19), defaultPrec)
 
 	SetDefaultPrecision(10)
-	require.Equal(t, uint8(10), defaultScale)
+	require.Equal(t, uint8(10), defaultPrec)
 
-	// expect panic if scale is 0
-	require.PanicsWithValue(t, "scale must be greater than 0", func() {
+	// expect panic if prec is 0
+	require.PanicsWithValue(t, "prec must be greater than 0", func() {
 		SetDefaultPrecision(0)
 	})
 
-	// expect panic if scale is > maxScale
-	require.PanicsWithValue(t, fmt.Sprintf("scale out of range. Only allow maximum %d digits after the decimal points", maxScale), func() {
-		SetDefaultPrecision(maxScale + 1)
+	// expect panic if prec is > maxPrec
+	require.PanicsWithValue(t, fmt.Sprintf("precision out of range. Only allow maximum %d digits after the decimal points", maxPrec), func() {
+		SetDefaultPrecision(maxPrec + 1)
 	})
 }
 
@@ -35,7 +35,7 @@ func TestNewFromHiLo(t *testing.T) {
 	testcases := []struct {
 		neg     bool
 		hi, lo  uint64
-		scale   uint8
+		prec    uint8
 		want    string
 		wantErr error
 	}{
@@ -51,12 +51,12 @@ func TestNewFromHiLo(t *testing.T) {
 		{false, 1234567890123456789, 1234567890123456789, 10, "2277375791072698140349073869.1264577813", nil},
 		{false, math.MaxUint64, math.MaxUint64, 19, "34028236692093846346.3374607431768211455", nil},
 		{true, 1234567890123456789, 1234567890123456789, 0, "-22773757910726981403490738691264577813", nil},
-		{false, math.MaxUint64, math.MaxUint64, 20, "", ErrScaleOutOfRange},
+		{false, math.MaxUint64, math.MaxUint64, 20, "", ErrPrecOutOfRange},
 	}
 
 	for _, tc := range testcases {
 		t.Run(fmt.Sprintf("%d %d", tc.hi, tc.lo), func(t *testing.T) {
-			d, err := NewFromHiLo(tc.neg, tc.hi, tc.lo, tc.scale)
+			d, err := NewFromHiLo(tc.neg, tc.hi, tc.lo, tc.prec)
 			if tc.wantErr != nil {
 				require.Equal(t, tc.wantErr, err)
 				return
@@ -122,8 +122,8 @@ func TestParse(t *testing.T) {
 		{"-.1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '-.1234567890123456789012345678901234567890123456' to Decimal", ErrInvalidFormat)},
 		{"1.12345678901234567890123.45678901234567890123456", "", fmt.Errorf("%w: can't parse '1.12345678901234567890123.45678901234567890123456' to Decimal", ErrInvalidFormat)},
 		{"340282366920938463463374607431768211459.123+--", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.123+--' to Decimal", ErrInvalidFormat)},
-		{"1.234567890123456789012348901", "", ErrScaleOutOfRange},
-		{"1.123456789012345678912345678901234567890123456", "", ErrScaleOutOfRange},
+		{"1.234567890123456789012348901", "", ErrPrecOutOfRange},
+		{"1.123456789012345678912345678901234567890123456", "", ErrPrecOutOfRange},
 		{"", "", ErrEmptyString},
 		{".", "", fmt.Errorf("%w: can't parse '.' to Decimal", ErrInvalidFormat)},
 		{"123.", "", fmt.Errorf("%w: can't parse '123.' to Decimal", ErrInvalidFormat)},
@@ -186,7 +186,7 @@ func TestMustParse(t *testing.T) {
 		{"12345678901234567890.123456789", nil},
 		{"1234567890123456789123456789012345678901", nil},
 		{"340282366920938463463374607431768211459", nil},
-		{"1.234567890123456789012348901", ErrScaleOutOfRange},
+		{"1.234567890123456789012348901", ErrPrecOutOfRange},
 		{"", ErrEmptyString},
 		{".", fmt.Errorf("%w: can't parse '.' to Decimal", ErrInvalidFormat)},
 		{"123.", fmt.Errorf("%w: can't parse '123.' to Decimal", ErrInvalidFormat)},
@@ -225,7 +225,7 @@ func TestMustParse(t *testing.T) {
 func TestNewFromInt64(t *testing.T) {
 	testcases := []struct {
 		input   int64
-		scale   uint8 // scale of decimal
+		prec    uint8 // prec of decimal
 		s       string
 		wantErr error
 	}{
@@ -236,8 +236,8 @@ func TestNewFromInt64(t *testing.T) {
 		{10000, 4, "1", nil},
 		{10000, 5, "0.1", nil},
 		{123456000, 6, "123.456", nil},
-		{0, 20, "0", ErrScaleOutOfRange},
-		{0, 41, "0", ErrScaleOutOfRange},
+		{0, 20, "0", ErrPrecOutOfRange},
+		{0, 41, "0", ErrPrecOutOfRange},
 		{1, 0, "1", nil},
 		{-1, 0, "-1", nil},
 		{1, 5, "0.00001", nil},
@@ -252,7 +252,7 @@ func TestNewFromInt64(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(strconv.FormatInt(tc.input, 10), func(t *testing.T) {
-			d, err := NewFromInt64(tc.input, tc.scale)
+			d, err := NewFromInt64(tc.input, tc.prec)
 			if tc.wantErr != nil {
 				require.Equal(t, tc.wantErr, err)
 				return
@@ -267,7 +267,7 @@ func TestNewFromInt64(t *testing.T) {
 func TestMustFromInt64(t *testing.T) {
 	testcases := []struct {
 		input   int64
-		scale   uint8 // scale of decimal
+		prec    uint8 // prec of decimal
 		s       string
 		wantErr error
 	}{
@@ -278,8 +278,8 @@ func TestMustFromInt64(t *testing.T) {
 		{10000, 4, "1", nil},
 		{10000, 5, "0.1", nil},
 		{123456000, 6, "123.456", nil},
-		{0, 20, "0", ErrScaleOutOfRange},
-		{0, 41, "0", ErrScaleOutOfRange},
+		{0, 20, "0", ErrPrecOutOfRange},
+		{0, 41, "0", ErrPrecOutOfRange},
 		{1, 0, "1", nil},
 		{-1, 0, "-1", nil},
 		{1, 5, "0.00001", nil},
@@ -296,12 +296,12 @@ func TestMustFromInt64(t *testing.T) {
 		t.Run(strconv.FormatInt(tc.input, 10), func(t *testing.T) {
 			if tc.wantErr != nil {
 				require.PanicsWithError(t, tc.wantErr.Error(), func() {
-					_ = MustFromInt64(tc.input, tc.scale)
+					_ = MustFromInt64(tc.input, tc.prec)
 				})
 				return
 			}
 
-			d := MustFromInt64(tc.input, tc.scale)
+			d := MustFromInt64(tc.input, tc.prec)
 			require.Equal(t, tc.s, d.String())
 		})
 	}
@@ -310,7 +310,7 @@ func TestMustFromInt64(t *testing.T) {
 func TestNewFromUint64(t *testing.T) {
 	testcases := []struct {
 		input   uint64
-		scale   uint8 // scale of decimal
+		prec    uint8 // prec of decimal
 		s       string
 		wantErr error
 	}{
@@ -321,8 +321,8 @@ func TestNewFromUint64(t *testing.T) {
 		{10000, 4, "1", nil},
 		{10000, 5, "0.1", nil},
 		{123456000, 6, "123.456", nil},
-		{0, 20, "0", ErrScaleOutOfRange},
-		{0, 41, "0", ErrScaleOutOfRange},
+		{0, 20, "0", ErrPrecOutOfRange},
+		{0, 41, "0", ErrPrecOutOfRange},
 		{1, 0, "1", nil},
 		{1, 5, "0.00001", nil},
 		{1, 19, "0.0000000000000000001", nil},
@@ -332,7 +332,7 @@ func TestNewFromUint64(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(strconv.FormatUint(tc.input, 10), func(t *testing.T) {
-			d, err := NewFromUint64(tc.input, tc.scale)
+			d, err := NewFromUint64(tc.input, tc.prec)
 			if tc.wantErr != nil {
 				require.Equal(t, tc.wantErr, err)
 				return
@@ -347,7 +347,7 @@ func TestNewFromUint64(t *testing.T) {
 func TestMustFromUint64(t *testing.T) {
 	testcases := []struct {
 		input   uint64
-		scale   uint8 // scale of decimal
+		prec    uint8 // prec of decimal
 		s       string
 		wantErr error
 	}{
@@ -358,8 +358,8 @@ func TestMustFromUint64(t *testing.T) {
 		{10000, 4, "1", nil},
 		{10000, 5, "0.1", nil},
 		{123456000, 6, "123.456", nil},
-		{0, 20, "0", ErrScaleOutOfRange},
-		{0, 41, "0", ErrScaleOutOfRange},
+		{0, 20, "0", ErrPrecOutOfRange},
+		{0, 41, "0", ErrPrecOutOfRange},
 		{1, 0, "1", nil},
 		{1, 5, "0.00001", nil},
 		{1, 19, "0.0000000000000000001", nil},
@@ -371,12 +371,12 @@ func TestMustFromUint64(t *testing.T) {
 		t.Run(strconv.FormatUint(tc.input, 10), func(t *testing.T) {
 			if tc.wantErr != nil {
 				require.PanicsWithError(t, tc.wantErr.Error(), func() {
-					_ = MustFromUint64(tc.input, tc.scale)
+					_ = MustFromUint64(tc.input, tc.prec)
 				})
 				return
 			}
 
-			d := MustFromUint64(tc.input, tc.scale)
+			d := MustFromUint64(tc.input, tc.prec)
 			require.Equal(t, tc.s, d.String())
 		})
 	}
@@ -549,7 +549,7 @@ func TestAdd(t *testing.T) {
 			bb := decimal.RequireFromString(tc.b)
 
 			// nolint: gosec
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.Add(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -596,7 +596,7 @@ func TestAdd64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.Add(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -672,7 +672,7 @@ func TestSub(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.Sub(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -720,7 +720,7 @@ func TestSub64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.Sub(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -794,7 +794,7 @@ func TestMul(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.Mul(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -845,7 +845,7 @@ func TestMul64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.Mul(bb).Truncate(prec)
 
 			require.Equal(t, cc.String(), c.String())
@@ -927,7 +927,7 @@ func TestDiv(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.DivRound(bb, 28).Truncate(prec)
 
 			// sometimes shopspring/decimal does rounding differently
@@ -943,96 +943,9 @@ func TestDiv(t *testing.T) {
 	}
 }
 
-func TestDivExact(t *testing.T) {
-	testcases := []struct {
-		a, b     string
-		scale    uint8
-		overflow bool
-		wantErr  error
-	}{
-		{"123456.1234567890123456789", "234567.1234567890123456789", 3, false, nil},
-		{"123456.1234567890123456789", "1", 2, false, nil},
-		{"-123456.1234567890123456789", "234567.1234567890123456789", 8, false, nil},
-		{"123456.1234567890123456789", "-234567.1234567890123456789", 9, false, nil},
-		{"-123456.1234567890123456789", "-234567.1234567890123456789", 1, false, nil},
-		{"9999999999999999999", "1.0001", 12, false, nil},
-		{"-9999999999999999999.9999999999999999999", "9999999999999999999", 16, false, nil},
-		{"1234567890123456789", "1", 17, false, nil},
-		{"1234567890123456789", "2", 9, false, nil},
-		{"123456789012345678.9", "0.1", 8, false, nil},
-		{"1111111111111", "1111.123456789123456789", 7, false, nil},
-		{"123456789", "1.1234567890123456789", 10, false, nil},
-		{"2345678901234567899", "1234567890123456789.1234567890123456789", 4, false, nil},
-		{"0.1234567890123456789", "0.04586201546101", 5, false, nil},
-		{"1", "1111.123456789123456789", 6, false, nil},
-		{"1", "1.123456789123456789", 6, false, nil},
-		{"1", "2", 6, false, nil},
-		{"1", "3", 6, false, nil},
-		{"1", "4", 6, false, nil},
-		{"1", "5", 6, false, nil},
-		{"1234567890123456789.1234567890123456879", "1111.1789", 11, false, nil},
-		{"123456789123456789.123456789", "3.123456789", 11, false, nil},
-		{"123456789123456789.123456789", "3", 11, false, nil},
-		{"9999999999999999999", "1234567890123456789.1234567890123456879", 11, false, nil},
-		{"9999999999999999999.999999999999999999", "1000000000000000000.1234567890123456789", 11, false, nil},
-		{"999999999999999999", "0.100000000000001", 11, false, nil},
-		{"123456789123456789.123456789", "0", 11, false, ErrDivideByZero},
-		{"1000000000000", "0.0000001", 11, false, nil},
-		{"1234567890123456789.1234567890123456789", "0.0000000000000000002", 12, true, nil},
-		{"1234567890123456789.1234567890123456789", "0.000000001", 12, true, nil},
-		{"1000000000000000000000000.1234567890123456789", "-100000000000000000000", 12, true, nil},
-		{"1234567890123456789012345678901234567890.1234567890123456789", "1234567890123456789012345678901234567890.1234567890123456789", 12, true, nil},
-		{"1234567890123456789012345678901234567890.1234567890123456789", "-1234567890123456789012345678901234567890.1234567890123456789", 12, true, nil},
-		{"-1234567890123456789012345678901234567890.1234567890123456789", "1234567890123456789012345678901234567890.1234567890123456789", 12, true, nil},
-		{"-1234567890123456789012345678901234567890.1234567890123456789", "-1234567890123456789012345678901234567890.1234567890123456789", 12, true, nil},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.a+"/"+tc.b, func(t *testing.T) {
-			a, err := Parse(tc.a)
-			require.NoError(t, err)
-
-			b, err := Parse(tc.b)
-			require.NoError(t, err)
-
-			aStr := a.String()
-			bStr := b.String()
-
-			c, err := a.DivExact(b, tc.scale)
-			if tc.wantErr != nil {
-				require.Equal(t, tc.wantErr, err)
-				return
-			}
-
-			require.NoError(t, err)
-
-			assertOverflow(t, c, tc.overflow)
-
-			// make sure a and b are immutable
-			require.Equal(t, aStr, a.String())
-			require.Equal(t, bStr, b.String())
-
-			// compare with shopspring/decimal
-			aa := decimal.RequireFromString(tc.a)
-			bb := decimal.RequireFromString(tc.b)
-
-			cc := aa.DivRound(bb, 28).Truncate(int32(tc.scale))
-			// sometimes shopspring/decimal does rounding differently
-			// e.g. 0.099999999999999 -> 0.1
-			// so to check the result, we can check the difference
-			// between our result and shopspring/decimal result
-			// valid result should be less than or equal to 1e-19, which is our smallest unit
-			d := MustParse(cc.String())
-			e := c.Sub(d)
-
-			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
-		})
-	}
-}
-
-func TestDivWithCustomScale(t *testing.T) {
+func TestDivWithCustomPrecision(t *testing.T) {
 	SetDefaultPrecision(14)
-	defer SetDefaultPrecision(maxScale)
+	defer SetDefaultPrecision(maxPrec)
 
 	testcases := []struct {
 		a, b     string
@@ -1040,11 +953,11 @@ func TestDivWithCustomScale(t *testing.T) {
 		wantErr  error
 		parseErr error
 	}{
-		{"123456.1234567890123456789", "1", false, nil, ErrScaleOutOfRange},
-		{"123456.1234567890123456789", "234567.1234567890123456789", false, nil, ErrScaleOutOfRange},
-		{"-123456.1234567890123456789", "234567.1234567890123456789", false, nil, ErrScaleOutOfRange},
-		{"123456.1234567890123456789", "-234567.1234567890123456789", false, nil, ErrScaleOutOfRange},
-		{"-123456.1234567890123456789", "-234567.1234567890123456789", false, nil, ErrScaleOutOfRange},
+		{"123456.1234567890123456789", "1", false, nil, ErrPrecOutOfRange},
+		{"123456.1234567890123456789", "234567.1234567890123456789", false, nil, ErrPrecOutOfRange},
+		{"-123456.1234567890123456789", "234567.1234567890123456789", false, nil, ErrPrecOutOfRange},
+		{"123456.1234567890123456789", "-234567.1234567890123456789", false, nil, ErrPrecOutOfRange},
+		{"-123456.1234567890123456789", "-234567.1234567890123456789", false, nil, ErrPrecOutOfRange},
 		{"9999999999999999999", "1.0001", false, nil, nil},
 		{"-9999999999999999999.99999999999999", "9999999999999999999", false, nil, nil},
 		{"1234567890123456789", "1", false, nil, nil},
@@ -1111,7 +1024,7 @@ func TestDivWithCustomScale(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.DivRound(bb, 28).Truncate(prec)
 
 			// sometimes shopspring/decimal does rounding differently
@@ -1178,7 +1091,7 @@ func TestDiv64(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.NewFromUint64(tc.b)
 
-			prec := int32(c.Scale())
+			prec := int32(c.Prec())
 			cc := aa.DivRound(bb, 24).Truncate(prec)
 
 			// sometimes shopspring/decimal does rounding differently
@@ -1247,7 +1160,7 @@ func TestCmp(t *testing.T) {
 	}
 }
 
-func TestCmpWithDifferentScale(t *testing.T) {
+func TestCmpWithDifferentPrecision(t *testing.T) {
 	testcases := []struct {
 		a1, a2, b string
 		want      int
@@ -1338,7 +1251,7 @@ func TestSign(t *testing.T) {
 func TestRoundBank(t *testing.T) {
 	testcases := []struct {
 		a        string
-		scale    uint8
+		prec     uint8
 		want     string
 		overflow bool
 	}{
@@ -1423,13 +1336,13 @@ func TestRoundBank(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(fmt.Sprintf("%s.round(%d)", tc.a, tc.scale), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s.round(%d)", tc.a, tc.prec), func(t *testing.T) {
 			a, err := Parse(tc.a)
 			require.NoError(t, err)
 
 			aStr := a.String()
 
-			b := a.RoundBank(tc.scale)
+			b := a.RoundBank(tc.prec)
 			assertOverflow(t, b, tc.overflow)
 
 			// make sure a is immutable
@@ -1439,7 +1352,7 @@ func TestRoundBank(t *testing.T) {
 
 			// cross check with shopspring/decimal
 			aa := decimal.RequireFromString(tc.a)
-			aa = aa.RoundBank(int32(tc.scale))
+			aa = aa.RoundBank(int32(tc.prec))
 
 			require.Equal(t, aa.String(), b.String())
 		})
@@ -1449,7 +1362,7 @@ func TestRoundBank(t *testing.T) {
 func TestRoundHalfAwayFromZero(t *testing.T) {
 	testcases := []struct {
 		a        string
-		scale    uint8
+		prec     uint8
 		want     string
 		overflow bool
 	}{
@@ -1534,13 +1447,13 @@ func TestRoundHalfAwayFromZero(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(fmt.Sprintf("%s.roundHAZ(%d)", tc.a, tc.scale), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s.roundHAZ(%d)", tc.a, tc.prec), func(t *testing.T) {
 			a, err := Parse(tc.a)
 			require.NoError(t, err)
 
 			aStr := a.String()
 
-			b := a.RoundHAZ(tc.scale)
+			b := a.RoundHAZ(tc.prec)
 			assertOverflow(t, a, tc.overflow)
 			require.Equal(t, tc.want, b.String())
 
@@ -1551,7 +1464,7 @@ func TestRoundHalfAwayFromZero(t *testing.T) {
 			// NOTE: shopspring/decimal roundup somehow similars to ceil, not round half up away from zero
 			// Waiting this one to be merged: https://github.com/shopspring/decimal/pull/378
 			// aa := decimal.RequireFromString(tc.a)
-			// aa = aa.RoundUp(int32(tc.scale))
+			// aa = aa.RoundUp(int32(tc.prec))
 
 			// require.Equal(t, aa.String(), a.String())
 		})
@@ -1561,7 +1474,7 @@ func TestRoundHalfAwayFromZero(t *testing.T) {
 func TestRoundHalfTowardZero(t *testing.T) {
 	testcases := []struct {
 		a        string
-		scale    uint8
+		prec     uint8
 		want     string
 		overflow bool
 	}{
@@ -1648,13 +1561,13 @@ func TestRoundHalfTowardZero(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(fmt.Sprintf("%s.round(%d)", tc.a, tc.scale), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s.round(%d)", tc.a, tc.prec), func(t *testing.T) {
 			a, err := Parse(tc.a)
 			require.NoError(t, err)
 
 			aStr := a.String()
 
-			b := a.RoundHTZ(tc.scale)
+			b := a.RoundHTZ(tc.prec)
 			assertOverflow(t, a, tc.overflow)
 
 			require.Equal(t, tc.want, b.String())
@@ -1666,7 +1579,7 @@ func TestRoundHalfTowardZero(t *testing.T) {
 			// NOTE: shopspring/decimal roundup somehow similars to ceil, not round half up away from zero
 			// Waiting this one to be merged: https://github.com/shopspring/decimal/pull/378
 			// aa := decimal.RequireFromString(tc.a)
-			// aa = aa.RoundUp(int32(tc.scale))
+			// aa = aa.RoundUp(int32(tc.prec))
 
 			// require.Equal(t, aa.String(), a.String())
 		})
@@ -1819,9 +1732,9 @@ func TestCeil(t *testing.T) {
 
 func TestTrunc(t *testing.T) {
 	testcases := []struct {
-		a     string
-		scale uint8
-		want  string
+		a    string
+		prec uint8
+		want string
 	}{
 		{"123456789012345678901234567890123456789.9999999999999999999", 0, "123456789012345678901234567890123456789"},
 		{"-123456789012345678901234567890123456789.9999999999999999999", 0, "-123456789012345678901234567890123456789"},
@@ -1911,13 +1824,13 @@ func TestTrunc(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(fmt.Sprintf("%s.trunc(%d)", tc.a, tc.scale), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s.trunc(%d)", tc.a, tc.prec), func(t *testing.T) {
 			a, err := Parse(tc.a)
 			require.NoError(t, err)
 
 			aStr := a.String()
 
-			b := a.Trunc(tc.scale)
+			b := a.Trunc(tc.prec)
 			require.Equal(t, tc.want, b.String())
 
 			// make sure a is immutable
@@ -1925,7 +1838,7 @@ func TestTrunc(t *testing.T) {
 
 			// cross check with shopspring/decimal
 			aa := decimal.RequireFromString(tc.a)
-			aa = aa.Truncate(int32(tc.scale))
+			aa = aa.Truncate(int32(tc.prec))
 
 			require.Equal(t, aa.String(), b.String())
 		})
@@ -1934,11 +1847,11 @@ func TestTrunc(t *testing.T) {
 
 func TestTrimTrailingZeros(t *testing.T) {
 	testcases := []struct {
-		neg       bool
-		coef      bint
-		scale     uint8
-		want      string
-		wantScale uint8
+		neg           bool
+		coef          bint
+		prec          uint8
+		want          string
+		wantPrecision uint8
 	}{
 		{false, bintFromU128(pow10[25]), 19, "1000000", 0},
 		{false, bintFromU128(pow10[24]), 19, "100000", 0},
@@ -2026,18 +1939,18 @@ func TestTrimTrailingZeros(t *testing.T) {
 
 	for i, tc := range testcases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			// d := newDecimal{neg: tc.neg, coef: tc.coef, scale: tc.scale}
-			d := newDecimal(tc.neg, tc.coef, tc.scale)
-			d1 := newDecimal(tc.neg, tc.coef, tc.scale)
+			// d := newDecimal{neg: tc.neg, coef: tc.coef, prec: tc.prec}
+			d := newDecimal(tc.neg, tc.coef, tc.prec)
+			d1 := newDecimal(tc.neg, tc.coef, tc.prec)
 
 			dTrim := d.trimTrailingZeros()
 
 			require.Equal(t, tc.want, dTrim.String())
-			require.Equal(t, tc.wantScale, dTrim.scale)
+			require.Equal(t, tc.wantPrecision, dTrim.prec)
 
 			// d and d1 should be the same
 			require.Equal(t, d1.String(), d.String())
-			require.Equal(t, d1.scale, d.scale)
+			require.Equal(t, d1.prec, d.prec)
 		})
 	}
 }
@@ -2085,10 +1998,10 @@ func TestPowInt(t *testing.T) {
 
 			// cross check with shopspring/decimal
 			aa := decimal.RequireFromString(tc.a)
-			aa, err = aa.PowWithPrecision(decimal.New(int64(tc.b), 0), int32(b.scale)+4)
+			aa, err = aa.PowWithPrecision(decimal.New(int64(tc.b), 0), int32(b.prec)+4)
 			require.NoError(t, err)
 
-			aa = aa.Truncate(int32(b.scale))
+			aa = aa.Truncate(int32(b.prec))
 
 			require.Equal(t, aa.String(), b.String())
 		})
@@ -2120,10 +2033,10 @@ func TestRandomPow(t *testing.T) {
 				b := a.PowInt(i)
 
 				aa := decimal.RequireFromString(input)
-				aa, err := aa.PowWithPrecision(decimal.New(int64(i), 0), int32(b.scale)+4)
+				aa, err := aa.PowWithPrecision(decimal.New(int64(i), 0), int32(b.prec)+4)
 				require.NoError(t, err)
 
-				aa = aa.Truncate(int32(b.scale))
+				aa = aa.Truncate(int32(b.prec))
 
 				require.Equal(t, aa.String(), b.String(), "%s.pow(%d)", input, i)
 			}
@@ -2138,10 +2051,10 @@ func TestRandomPow(t *testing.T) {
 				b := a.PowInt(i)
 
 				aa := decimal.RequireFromString(input)
-				aa, err := aa.PowWithPrecision(decimal.New(int64(i), 0), int32(b.scale)+4)
+				aa, err := aa.PowWithPrecision(decimal.New(int64(i), 0), int32(b.prec)+4)
 				require.NoError(t, err)
 
-				aa = aa.Truncate(int32(b.scale))
+				aa = aa.Truncate(int32(b.prec))
 
 				require.Equal(t, aa.String(), b.String(), "%s.pow(%d)", input, i)
 			}
@@ -2189,10 +2102,10 @@ func TestSqrt(t *testing.T) {
 
 			// cross check with shopspring/decimal
 			aa := decimal.RequireFromString(tc.a)
-			aa, err = aa.PowWithPrecision(decimal.RequireFromString("0.5"), int32(b.scale)+4)
+			aa, err = aa.PowWithPrecision(decimal.RequireFromString("0.5"), int32(b.prec)+4)
 			require.NoError(t, err)
 
-			a1 := decimal.RequireFromString(b.String()).Sub(aa).Truncate(int32(b.scale))
+			a1 := decimal.RequireFromString(b.String()).Sub(aa).Truncate(int32(b.prec))
 			require.True(t, a1.IsZero())
 		})
 	}
@@ -2211,10 +2124,10 @@ func TestRandomSqrt(t *testing.T) {
 
 		// cross check with shopspring/decimal
 		aa := decimal.RequireFromString(input)
-		aa, err = aa.PowWithPrecision(decimal.RequireFromString("0.5"), int32(a.scale)+4)
+		aa, err = aa.PowWithPrecision(decimal.RequireFromString("0.5"), int32(a.prec)+4)
 		require.NoError(t, err)
 
-		a1 := decimal.RequireFromString(a.String()).Sub(aa).Truncate(int32(a.scale))
+		a1 := decimal.RequireFromString(a.String()).Sub(aa).Truncate(int32(a.prec))
 		require.True(t, a1.IsZero())
 	}
 }

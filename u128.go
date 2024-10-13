@@ -281,7 +281,7 @@ func (u u128) ToBigInt() *big.Int {
 }
 
 // getTrailingZeros64 returns the number of trailing zeros in u
-// NOTE: this only works when maxScale is 19
+// NOTE: this only works when maxPrec is 19
 func getTrailingZeros64(u uint64) uint8 {
 	var z uint8
 	if u%1e16 == 0 {

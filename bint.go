@@ -74,9 +74,9 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 
 	// if s has less than 40 characters, it can fit into u128
 	if len(s) <= 40 {
-		neg, bint, scale, err := parseBintFromU128(s)
+		neg, bint, prec, err := parseBintFromU128(s)
 		if err == nil || err != errOverflow {
-			return neg, bint, scale, err
+			return neg, bint, prec, err
 		}
 
 		// overflow, try to parse into big.Int
@@ -84,11 +84,11 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 
 	// parse into big.Int
 	var (
-		width      = len(s)
-		intString  string
-		scale, pos int
-		neg        bool
-		value      = s
+		width     = len(s)
+		intString string
+		prec, pos int
+		neg       bool
+		value     = s
 	)
 
 	switch s[0] {
@@ -147,11 +147,11 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 
 		// intString = value[:pIndex] + value[pIndex+1:]
 		intString = b.String()
-		scale = len(value[pIndex+1:])
+		prec = len(value[pIndex+1:])
 	}
 
-	if scale > int(defaultScale) {
-		return false, bint{}, 0, ErrScaleOutOfRange
+	if prec > int(defaultPrec) {
+		return false, bint{}, 0, ErrPrecOutOfRange
 	}
 
 	dValue := new(big.Int)
@@ -166,7 +166,7 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 	}
 
 	// nolint: gosec
-	return neg, bintFromBigInt(dValue), uint8(scale), nil
+	return neg, bintFromBigInt(dValue), uint8(prec), nil
 }
 
 func parseBintFromU128(s []byte) (bool, bint, uint8, error) {
@@ -200,27 +200,27 @@ func parseBintFromU128(s []byte) (bool, bint, uint8, error) {
 	}
 
 	var (
-		err   error
-		coef  u128
-		scale uint8
+		err  error
+		coef u128
+		prec uint8
 	)
 	for ; pos < width; pos++ {
 		if s[pos] == '.' {
 			// return err if we encounter the '.' more than once
-			if scale != 0 {
+			if prec != 0 {
 				return false, bint{}, 0, errInvalidFormat(s)
 			}
 
 			// nolint: gosec
-			scale = uint8(width - pos - 1)
+			prec = uint8(width - pos - 1)
 
 			// prevent "123." or "-123."
-			if scale == 0 {
+			if prec == 0 {
 				return false, bint{}, 0, errInvalidFormat(s)
 			}
 
-			if scale > defaultScale {
-				return false, bint{}, 0, ErrScaleOutOfRange
+			if prec > defaultPrec {
+				return false, bint{}, 0, ErrPrecOutOfRange
 			}
 
 			continue
@@ -245,7 +245,7 @@ func parseBintFromU128(s []byte) (bool, bint, uint8, error) {
 		return false, bint{}, 0, nil
 	}
 
-	return neg, bint{u128: coef}, scale, nil
+	return neg, bint{u128: coef}, prec, nil
 }
 
 // GT returns true if u > v
