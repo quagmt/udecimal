@@ -1,0 +1,9 @@
+go test fuzz v1
+bool(false)
+uint64(18446744073709551546)
+uint64(18446744073709551555)
+byte('\x13')
+bool(false)
+uint64(1)
+uint64(0)
+byte('\x00')
