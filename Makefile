@@ -10,7 +10,7 @@ test:
 
 fuzz:
 	$(eval fuzzName := $(filter-out $@,$(MAKECMDGOALS)))
-	@go test -tags='fuzz' -v -run=Fuzz -fuzz=$(fuzzName) -fuzztime=30s -timeout=10m
+	@go test -tags='fuzz' -run=Fuzz -fuzz=$(fuzzName) -fuzztime=30s -timeout=10m
 
 fuzz-all:
 	$(eval fuzzTime := $(filter-out $@,$(MAKECMDGOALS)))

@@ -45,6 +45,7 @@ func TestStringFixed(t *testing.T) {
 		{"123456789012345678901234567890123.123456789", 15, "123456789012345678901234567890123.123456789000000"},
 		{"-123456789012345678901234567890123.123456789", 15, "-123456789012345678901234567890123.123456789000000"},
 		{"-123456789012345678901234567890123.123456789", 20, "-123456789012345678901234567890123.1234567890000000000"},
+		{"-34028236692093846346.3374607431768211455", 19, "-34028236692093846346.3374607431768211455"},
 	}
 
 	for _, tc := range testcases {
@@ -157,6 +158,27 @@ func TestMarshalBinary(t *testing.T) {
 			require.NoError(t, decoder.Decode(&c))
 
 			require.Equal(t, a, c)
+		})
+	}
+}
+
+func TestInvalidUnmarshalBinary(t *testing.T) {
+	testcases := []struct {
+		name    string
+		data    []byte
+		wantErr error
+	}{
+		{"empty", []byte{}, fmt.Errorf("invalid binary data")},
+		{"invalid", []byte{0x01, 0x02, 0x03}, fmt.Errorf("invalid binary data")},
+		{"len is less than 3", []byte{0x01, 0x02}, fmt.Errorf("invalid binary data")},
+		{"len is less than 3, bigInt", []byte{0x11, 0x02, 0x01}, fmt.Errorf("invalid binary data")},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var d Decimal
+			err := d.UnmarshalBinary(tc.data)
+			require.Equal(t, tc.wantErr, err)
 		})
 	}
 }

@@ -118,9 +118,9 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 
 		buf = make([]byte, byteLen+2) // 1 sign + 1 dot
 	} else {
-		// if not trimming trailing zeros, we can safely allocate 40 bytes
-		// 1 sign + 1 dot + len(u128) (which is max to 38 bytes)
-		buf = []byte("0000000000000000000000000000000000000000")
+		// if not trimming trailing zeros, we can safely allocate 41 bytes
+		// 1 sign + 1 dot + len(u128) (which is max to 39 bytes)
+		buf = []byte("00000000000000000000000000000000000000000")
 	}
 
 	quo, rem := d.coef.u128.QuoRem64(pow10[d.prec].lo) // max prec is 19, so we can safely use QuoRem64
@@ -267,6 +267,10 @@ func copyUint64ToBytes(b []byte, n uint64) {
 }
 
 func (d *Decimal) UnmarshalBinary(data []byte) error {
+	if len(data) < 3 {
+		return ErrInvalidBinaryData
+	}
+
 	overflow := data[0] >> 4 & 1
 	if overflow == 0 {
 		return d.unmarshalBinaryU128(data)
@@ -299,6 +303,21 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	return nil
 }
 
+func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
+	d.neg = data[0]&1 == 1
+	d.coef.overflow = true
+	d.prec = data[1]
+
+	totalBytes := data[2]
+
+	if totalBytes < 3 {
+		return ErrInvalidBinaryData
+	}
+
+	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
+	return nil
+}
+
 func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
 	var neg int
 	if d.neg {
@@ -320,21 +339,6 @@ func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
 	d.coef.bigInt.FillBytes(buf[3:])
 
 	return buf, nil
-}
-
-func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
-	d.neg = data[0]&1 == 1
-	d.coef.overflow = true
-	d.prec = data[1]
-
-	totalBytes := data[2]
-
-	if totalBytes < 3 {
-		return ErrInvalidBinaryData
-	}
-
-	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
-	return nil
 }
 
 // Scan implements sql.Scanner interface.

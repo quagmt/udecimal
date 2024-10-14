@@ -73,6 +73,7 @@ func TestParse(t *testing.T) {
 		input, want string
 		wantErr     error
 	}{
+		{"", "", ErrEmptyString},
 		{"1234567890123456789.1234567890123456789", "1234567890123456789.1234567890123456789", nil},
 		{"0.0000123456", "0.0000123456", nil},
 		{"-0.0000123456", "-0.0000123456", nil},
@@ -124,7 +125,6 @@ func TestParse(t *testing.T) {
 		{"340282366920938463463374607431768211459.123+--", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.123+--' to Decimal", ErrInvalidFormat)},
 		{"1.234567890123456789012348901", "", ErrPrecOutOfRange},
 		{"1.123456789012345678912345678901234567890123456", "", ErrPrecOutOfRange},
-		{"", "", ErrEmptyString},
 		{".", "", fmt.Errorf("%w: can't parse '.' to Decimal", ErrInvalidFormat)},
 		{"123.", "", fmt.Errorf("%w: can't parse '123.' to Decimal", ErrInvalidFormat)},
 		{"-123.", "", fmt.Errorf("%w: can't parse '-123.' to Decimal", ErrInvalidFormat)},

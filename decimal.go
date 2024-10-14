@@ -275,14 +275,6 @@ func Parse(s string) (Decimal, error) {
 }
 
 func parseBytes(b []byte) (Decimal, error) {
-	if len(b) == 0 {
-		return Decimal{}, ErrEmptyString
-	}
-
-	// unQuote if the string is quoted, usually when unmarshalling from JSON
-	if len(b) > 2 && b[0] == '"' && b[len(b)-1] == '"' {
-		b = b[1 : len(b)-1]
-	}
 
 	neg, bint, prec, err := parseBint(b)
 	if err != nil {
