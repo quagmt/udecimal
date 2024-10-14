@@ -16,7 +16,7 @@ go get github.com/quagmt/udecimal
 ## Features
 
 - **High Precision**: Supports up to 19 decimal places with no precision loss during arithmetic operations.
-- **Optimized for Speed**: Designed for high performance with zero memory allocation in most cases (see [Benchmarks](benchmarks/BENCHMARKS.md) and [How it works](#how-it-works)).
+- **Optimized for Speed**: Designed for high performance with zero memory allocation in most cases (see [Benchmarks](benchmarks/README.md) and [How it works](#how-it-works)).
 - **Panic-Free**: All errors are returned as values, ensuring no unexpected panics.
 - **Immutable**: All arithmetic operations return a new `Decimal` value, preserving the original value and safe for concurrent use.
 - **Versatile Rounding Methods**: Includes HALF AWAY FROM ZERO, HALF TOWARD ZERO, and Banker's rounding.
@@ -53,9 +53,6 @@ func main() {
 	fmt.Println(a.Div(b)) // 123.456 / -12.3456 = -10
 	fmt.Println(a.Div(d)) // 123.456 / 4123547.1234567890123456789 = 0.0000299392722585176
 
-	// Divide with precision, extra digits are truncated
-	fmt.Println(a.DivExact(c, 10)) // 123.456 / 1.2345 = 100.0048602673
-
 	// Rounding
 	fmt.Println(c.RoundBank(3)) // banker's rounding: 1.2345 -> 1.234
 	fmt.Println(c.RoundHAZ(3))  // half away from zero: 1.2345 -> 1.235
@@ -70,6 +67,16 @@ func main() {
 	fmt.Println(a.InexactFloat64()) // 123.456
 }
 ```
+
+## Why another decimal library?
+
+There are already a couple of decimal libraries available in Go, such as [shopspring/decimal](https://github.com/shopspring/decimal), [cockroachdb/apd](https://github.com/cockroachdb/apd), [govalues/decimal](https://github.com/govalues/decimal), etc. However, each of these libraries has its own limitations, for example:
+
+- [shopspring/decimal](https://github.com/shopspring/decimal) is great for general-purpose decimal arithmetic because of arbitrary precision. However, it's slow and requires memory allocation for every arithmetic operation. Also in financial applications, arbitrary precision is not always necessary.
+- [cockroachdb/apd](https://github.com/cockroachdb/apd) is faster but still requires memory allocation. Also the API is not very intuitive.
+- [govalues/decimal](https://github.com/govalues/decimal) is fast, no memory allocation, easy to use but the data range is only limited to 19 digits (include both the integer and fractional parts). Some operations (especially Quo/QuoRem) usually overflow and fallback to use big.Int API, which hurts the performance. Another limitation is that it starts losing precision when the total number of digits exceeds 19.
+
+This library is designed to address these limitations, providing both high performance and zero allocation while maintaining an acceptable range of precision, which is suitable for most financial applications.
 
 ## Rounding Methods
 
@@ -94,12 +101,12 @@ import (
 
 func main() {
 	// Create a new decimal number
-	a, _ := udecimal.NewFromFloat64(1.5) // a = 1.5
+	a, _ := udecimal.NewFromFloat64(1.45) // a = 1.45
 
 	// Rounding
-	fmt.Println(a.RoundBank(0)) // banker's rounding: 1.5 -> 2
-	fmt.Println(a.RoundHAZ(0))  // half away from zero: 1.5 -> 2
-	fmt.Println(a.RoundHTZ(0))  // half towards zero: 1.5 -> 1
+	fmt.Println(a.RoundBank(1)) // banker's rounding: 1.45 -> 1.4
+	fmt.Println(a.RoundHAZ(1))  // half away from zero: 1.5 -> 1.5
+	fmt.Println(a.RoundHTZ(1))  // half towards zero: 1.5 -> 1.4
 }
 ```
 
@@ -125,8 +132,6 @@ type Decimal struct {
 // -> neg = true, coef = 123456, prec = 3
 ```
 
-<br/>
-
 You can notice that `coef` data type is `bint`, which is a custom data type:
 
 ```go
@@ -134,10 +139,10 @@ type bint struct {
 	// Indicates if the coefficient exceeds 128-bit limit
 	overflow bool
 
-	// Indicates if the coefficient exceeds 128-bit limit
+	// For coefficients less than 2^128-1
 	u128 u128
 
-	// For coefficients exceeding 128-bit
+	// For coefficients exceeding u128
 	bigInt *big.Int
 }
 ```
@@ -145,7 +150,7 @@ type bint struct {
 The `bint` type can store coefficients up to `2^128 - 1` using `u128`. Arithmetic operations with `u128` are fast and require no memory allocation. If result of an arithmetic operation exceeds u128 capacity, the whole operation will be performed using `big.Int` API. Such operations are slower and do involve memory allocation. However, those cases are rare in financial applications due to the extensive range provided by a 128-bit unsigned integer, for example:
 
 - If precision is 0, the decimal range it can store is:
-  `[-340282366920938463463374607431768211455, 340282366920938463463374607431768211456]`(approximately -340 to 340 undecillion)
+  `[-340282366920938463463374607431768211455, 340282366920938463463374607431768211455]`(approximately -340 to 340 undecillion)
 
 - If precision is 19, the decimal range becomes:
   `[-34028236692093846346.3374607431768211455, 34028236692093846346.3374607431768211455]` (approximately -34 to 34 quintillion)

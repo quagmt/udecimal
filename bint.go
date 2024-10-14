@@ -68,12 +68,22 @@ func errInvalidFormat(s []byte) error {
 }
 
 func parseBint(s []byte) (bool, bint, uint8, error) {
+	if len(s) == 0 {
+		return false, bint{}, 0, ErrEmptyString
+	}
+
 	if len(s) > maxStrLen {
 		return false, bint{}, 0, ErrMaxStrLen
 	}
 
-	// if s has less than 40 characters, it can fit into u128
-	if len(s) <= 40 {
+	// unQuote if the string is quoted, usually when unmarshalling from JSON
+	if len(s) > 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	}
+
+	// if s has less than 41 characters, it can fit into u128
+	// 41 chars = maxLen(u128) + dot + sign = 39 + 1 + 1
+	if len(s) <= 41 {
 		neg, bint, prec, err := parseBintFromU128(s)
 		if err == nil || err != errOverflow {
 			return neg, bint, prec, err

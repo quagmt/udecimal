@@ -62,19 +62,14 @@ func FuzzParse(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Mul(b)
 		if c.coef.overflow {
@@ -99,19 +94,14 @@ func FuzzAddDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Add(b)
 		if c.coef.overflow {
@@ -138,12 +128,10 @@ func FuzzAdd64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		aprec = aprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Add64(blo)
 		if c.coef.overflow {
@@ -170,19 +158,14 @@ func FuzzSubDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Sub(b)
 		if c.coef.overflow {
@@ -209,12 +192,10 @@ func FuzzSub64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		aprec = aprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Sub64(blo)
 		if c.coef.overflow {
@@ -241,12 +222,11 @@ func FuzzMulDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
 		if err == ErrPrecOutOfRange {
@@ -282,12 +262,9 @@ func FuzzMul64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		aprec = aprec % maxPrec
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Mul64(blo)
 		if c.coef.overflow {
@@ -316,19 +293,14 @@ func FuzzDivDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c, err := a.Div(b)
 		if b.IsZero() {
@@ -372,12 +344,10 @@ func FuzzDiv64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
+		aprec = aprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c, err := a.Div64(blo)
 		if blo == 0 {
@@ -421,19 +391,14 @@ func FuzzRoundBank(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Mul(b)
 		if c.coef.overflow {
@@ -445,11 +410,11 @@ func FuzzRoundBank(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundPrecision)
+		u8Round := uint8(roundPrecision % maxPrec)
 		cround := c.RoundBank(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundPrecision)
+		i32Round := int32(roundPrecision % maxPrec)
 		cc := ss.RequireFromString(cstr).RoundBank(i32Round)
 
 		require.Equal(t, cc.String(), cround.String(), "round %s %d", c, roundPrecision)
@@ -464,19 +429,14 @@ func FuzzFloor(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Mul(b)
 		if c.coef.overflow {
@@ -505,19 +465,14 @@ func FuzzCeil(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Mul(b)
 		if c.coef.overflow {
@@ -547,19 +502,14 @@ func FuzzTrunc(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		require.NoError(t, err)
 
 		c := a.Mul(b)
 		if c.coef.overflow {
@@ -571,11 +521,11 @@ func FuzzTrunc(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundPrecision)
+		u8Round := uint8(roundPrecision) % maxPrec
 		cround := c.Trunc(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundPrecision)
+		i32Round := int32(roundPrecision % maxPrec)
 		cc := ss.RequireFromString(cstr).Truncate(i32Round)
 
 		require.Equal(t, cc.String(), cround.String(), "trunc %s %d", c, roundPrecision)
@@ -622,15 +572,12 @@ func FuzzPowNegative(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, pow int64) {
-		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
-		if err == ErrPrecOutOfRange {
-			t.Skip()
-		} else {
-			require.NoError(t, err)
-		}
+		aprec = aprec % maxPrec
 
-		// use pow less than 10000
-		p := -(pow % 19)
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		p := -(pow % int64(maxPrec))
 
 		c := a.PowInt(int(p))
 		if c.coef.overflow {
@@ -656,5 +603,75 @@ func FuzzPowNegative(f *testing.F) {
 		aa = aa.Truncate(prec)
 
 		require.Equal(t, aa.String(), c.String(), "powIntNegative %s %d, %s", a, p, ssPow)
+	})
+}
+
+func FuzzMarshalJSON(f *testing.F) {
+	for _, c := range corpus {
+		for _, d := range corpus {
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		require.NoError(t, err)
+
+		c := a.Mul(b)
+		if c.coef.overflow {
+			require.NotNil(t, c.coef.bigInt)
+			require.Equal(t, u128{}, c.coef.u128)
+		} else {
+			require.Nil(t, c.coef.bigInt)
+		}
+
+		data, err := c.MarshalJSON()
+		require.NoError(t, err)
+
+		var e Decimal
+		require.NoError(t, e.UnmarshalJSON(data))
+
+		require.Equal(t, c.String(), e.String())
+	})
+}
+
+func FuzzMarshalBinary(f *testing.F) {
+	for _, c := range corpus {
+		for _, d := range corpus {
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		require.NoError(t, err)
+
+		c := a.Mul(b)
+		if c.coef.overflow {
+			require.NotNil(t, c.coef.bigInt)
+			require.Equal(t, u128{}, c.coef.u128)
+		} else {
+			require.Nil(t, c.coef.bigInt)
+		}
+
+		data, err := c.MarshalBinary()
+		require.NoError(t, err)
+
+		var e Decimal
+		require.NoError(t, e.UnmarshalBinary(data))
+
+		require.Equal(t, c.String(), e.String())
 	})
 }
