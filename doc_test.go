@@ -2,8 +2,6 @@ package udecimal
 
 import (
 	"fmt"
-
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func ExampleSetDefaultPrecision() {
@@ -252,16 +250,6 @@ func ExampleDecimal_MarshalBinary() {
 	// [0 19 19 9 73 176 246 240 2 51 19 211 181 5 249 181 241 129 21] <nil>
 }
 
-func ExampleDecimal_MarshalDynamoDBAttributeValue() {
-	fmt.Println(MustParse("1.23").MarshalDynamoDBAttributeValue())
-	fmt.Println(MustParse("-1.2345").MarshalDynamoDBAttributeValue())
-	fmt.Println(MustParse("1234567890123456789.1234567890123456789").MarshalDynamoDBAttributeValue())
-	// Output:
-	// &{1.23 {}} <nil>
-	// &{-1.2345 {}} <nil>
-	// &{1234567890123456789.1234567890123456789 {}} <nil>
-}
-
 func ExampleDecimal_MarshalJSON() {
 	a, _ := MustParse("1.23").MarshalJSON()
 	b, _ := MustParse("-1.2345").MarshalJSON()
@@ -390,14 +378,6 @@ func ExampleDecimal_Trunc() {
 func ExampleDecimal_UnmarshalBinary() {
 	var a Decimal
 	_ = a.UnmarshalBinary([]byte{0, 2, 11, 0, 0, 0, 0, 0, 0, 0, 123})
-	fmt.Println(a)
-	// Output:
-	// 1.23
-}
-
-func ExampleDecimal_UnmarshalDynamoDBAttributeValue() {
-	var a Decimal
-	_ = a.UnmarshalDynamoDBAttributeValue(&types.AttributeValueMemberN{Value: "1.23"})
 	fmt.Println(a)
 	// Output:
 	// 1.23

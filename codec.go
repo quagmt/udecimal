@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"math/bits"
 	"unsafe"
-
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 // String returns the string representation of the decimal.
@@ -441,35 +439,4 @@ func (d NullDecimal) Value() (driver.Value, error) {
 	}
 
 	return d.Decimal.String(), nil
-}
-
-// MarshalDynamoDBAttributeValue implements the Marshaler interface
-// It supports marshalling udec.UDecimal to dynamoDB number (N)
-func (d Decimal) MarshalDynamoDBAttributeValue() (types.AttributeValue, error) {
-	return &types.AttributeValueMemberN{Value: d.String()}, nil
-}
-
-// UnmarshalDynamoDBAttributeValue implements the Unmarshaler interface
-// It supports unmarshalling from both N and S types to udec.UDecimal
-func (d *Decimal) UnmarshalDynamoDBAttributeValue(av types.AttributeValue) error {
-	switch av := av.(type) {
-	case *types.AttributeValueMemberN:
-		dec, err := Parse(av.Value)
-		if err != nil {
-			return err
-		}
-
-		*d = dec
-	case *types.AttributeValueMemberS:
-		dec, err := Parse(av.Value)
-		if err != nil {
-			return err
-		}
-
-		*d = dec
-	default:
-		return fmt.Errorf("can't unmarshal %T to Decimal: %T is not supported", av, av)
-	}
-
-	return nil
 }

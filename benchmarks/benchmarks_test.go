@@ -8,7 +8,6 @@ import (
 
 	"github.com/quagmt/udecimal"
 
-	gv "github.com/govalues/decimal"
 	ss "github.com/shopspring/decimal"
 )
 
@@ -264,24 +263,6 @@ func BenchmarkDiv(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_ = a.Div(bb)
-			}
-		})
-
-		// govalues benchmark
-		b.Run(fmt.Sprintf("gv/%s.Div(%s)", tc.a, tc.b), func(b *testing.B) {
-			a, err := gv.Parse(tc.a)
-			if err != nil {
-				return
-			}
-
-			bb, err := gv.Parse(tc.b)
-			if err != nil {
-				return
-			}
-
-			b.ResetTimer()
-			for range b.N {
-				_, _ = a.Quo(bb)
 			}
 		})
 
