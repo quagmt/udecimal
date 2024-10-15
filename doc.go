@@ -15,10 +15,9 @@
 // The udecimal package supports various encoding and decoding mechanisms to facilitate easy integration with
 // different data storage and transmission systems.
 //
-//   - Marshal/UnmarshalText: json, string
+//   - Marshal/UnmarshalJSON
 //   - Marshal/UnmarshalBinary: gob, protobuf
 //   - SQL: The Decimal type implements the sql.Scanner interface, enabling seamless integration with SQL databases.
-//   - DynamoDB: The package supports parsing DynamoDB number (regarless number or string) to Decimal and marshal Decimal back to DynamoDB number.
 //
 // For more details, see the documentation for each method.
 package udecimal
