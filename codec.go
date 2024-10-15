@@ -19,7 +19,7 @@ func (d Decimal) String() string {
 	}
 
 	if !d.coef.overflow() {
-		return d.stringU128(true)
+		return d.stringU128(true, false)
 	}
 
 	return d.stringBigInt(true)
@@ -33,7 +33,7 @@ func (d Decimal) StringFixed(prec uint8) string {
 	d1 := d.rescale(prec)
 
 	if !d1.coef.overflow() {
-		return d1.stringU128(false)
+		return d1.stringU128(false, false)
 	}
 
 	return d1.stringBigInt(false)
@@ -101,14 +101,15 @@ var (
 	digitBytes = [10]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}
 )
 
-func (d Decimal) stringU128(trimTrailingZeros bool) string {
-	return unsafeBytesToString(d.bytesU128(trimTrailingZeros))
+func (d Decimal) stringU128(trimTrailingZeros bool, withQuote bool) string {
+	return unsafeBytesToString(d.bytesU128(trimTrailingZeros, withQuote))
 }
 
 // bytesU128 returns the byte representation of the decimal if the coefficient is u128.
-func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
+func (d Decimal) bytesU128(trimTrailingZeros bool, withQuote bool) []byte {
+	var totalLen uint8
 	byteLen := maxByteMap[d.coef.u128.bitLen()]
-	var buf []byte
+
 	if trimTrailingZeros {
 		// if d.prec > byteLen, that means we need to allocate upto d.prec to cover all the zeros of the fraction part
 		// e.g. 0.00000123, prec = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
@@ -116,17 +117,38 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 			byteLen = d.prec + 1 // 1 for zero in the whole part
 		}
 
-		buf = make([]byte, byteLen+2) // 1 sign + 1 dot
+		totalLen = byteLen + 2
 	} else {
 		// if not trimming trailing zeros, we can safely allocate 41 bytes
 		// 1 sign + 1 dot + len(u128) (which is max to 39 bytes)
-		buf = []byte("00000000000000000000000000000000000000000")
+		// buf = []byte("00000000000000000000000000000000000000000")
+		totalLen = 41
 	}
 
+	if withQuote {
+		// if withQuote is true, we need to add quotes at the beginning and the end
+		totalLen += 2
+		buf := make([]byte, totalLen)
+		n := d.fillBuffer(buf[1:len(buf)-1], trimTrailingZeros)
+
+		n += 2 // 1 for quote offset at buf[l-1], 1 for moving the index to next position
+		l := len(buf)
+		buf[l-1], buf[l-n] = '"', '"'
+		return buf[l-n:]
+	}
+
+	buf := make([]byte, totalLen)
+	n := d.fillBuffer(buf, trimTrailingZeros)
+
+	return buf[len(buf)-n:]
+}
+
+func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 	quo, rem := d.coef.u128.QuoRem64(pow10[d.prec].lo) // max prec is 19, so we can safely use QuoRem64
+
+	prec := d.prec
 	l := len(buf)
 	n := 0
-	prec := d.prec
 
 	if rem != 0 {
 		if trimTrailingZeros {
@@ -175,7 +197,7 @@ func (d Decimal) bytesU128(trimTrailingZeros bool) []byte {
 		buf[l-n] = '-'
 	}
 
-	return buf[l-n:]
+	return n
 }
 
 func quoRem64(u u128, v uint64) (q u128, r uint64) {
@@ -196,15 +218,15 @@ func unssafeStringToBytes(s string) []byte {
 
 func (d Decimal) MarshalJSON() ([]byte, error) {
 	if !d.coef.overflow() {
-		return d.bytesU128(true), nil
+		return d.bytesU128(true, true), nil
 	}
 
-	return []byte(d.stringBigInt(true)), nil
+	return []byte(`"` + d.stringBigInt(true) + `"`), nil
 }
 
 func (d *Decimal) UnmarshalJSON(data []byte) error {
 	var err error
-	*d, err = Parse(unsafeBytesToString(data))
+	*d, err = parseBytes(data)
 	return err
 }
 
