@@ -460,10 +460,10 @@ func TestMustFromFloat64(t *testing.T) {
 
 func assertOverflow(t *testing.T, d Decimal, isOverflow bool) {
 	if isOverflow {
-		require.True(t, d.coef.overflow)
+		require.True(t, d.coef.overflow())
 		require.NotNil(t, d.coef.bigInt)
 	} else {
-		require.False(t, d.coef.overflow)
+		require.False(t, d.coef.overflow())
 		require.Nil(t, d.coef.bigInt)
 	}
 }

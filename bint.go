@@ -16,19 +16,20 @@ var (
 // The value is always positive and is stored in a 128-bit unsigned integer.
 // If the value exceeds the 128-bit limit, it falls back to using big.Int.
 type bint struct {
-	// Indicates if the value has overflowed and is stored in big.Int.
-	overflow bool
+	// fall back, in case the value is our of u128 range
+	bigInt *big.Int
 
 	// Stores small numbers with high performance and zero allocation operations.
 	// The value range is 0 <= u128 <= 2^128 - 1
 	u128 u128
+}
 
-	// fall back, in case the value is our of u128 range
-	bigInt *big.Int
+func (u *bint) overflow() bool {
+	return u.bigInt != nil
 }
 
 func bintFromBigInt(b *big.Int) bint {
-	return bint{overflow: true, bigInt: b}
+	return bint{bigInt: b}
 }
 
 func bintFromU128(u u128) bint {
@@ -40,7 +41,7 @@ func bintFromU64(u uint64) bint {
 }
 
 func (u bint) GetBig() *big.Int {
-	if u.overflow {
+	if u.overflow() {
 		return new(big.Int).Set(u.bigInt)
 	}
 
@@ -48,7 +49,7 @@ func (u bint) GetBig() *big.Int {
 }
 
 func (u bint) IsZero() bool {
-	if !u.overflow {
+	if !u.overflow() {
 		return u.u128.IsZero()
 	}
 
@@ -56,7 +57,7 @@ func (u bint) IsZero() bool {
 }
 
 func (u bint) Cmp(v bint) int {
-	if !u.overflow && !v.overflow {
+	if !u.overflow() && !v.overflow() {
 		return u.u128.Cmp(v.u128)
 	}
 
@@ -264,7 +265,7 @@ func (u bint) GT(v bint) bool {
 }
 
 func (u bint) Add(v bint) bint {
-	if !u.overflow && !v.overflow {
+	if !u.overflow() && !v.overflow() {
 		c, err := u.u128.Add(v.u128)
 		if err == nil {
 			return bint{u128: c}
@@ -277,7 +278,7 @@ func (u bint) Add(v bint) bint {
 }
 
 func (u bint) Sub(v bint) (bint, error) {
-	if !u.overflow && !v.overflow {
+	if !u.overflow() && !v.overflow() {
 		c, err := u.u128.Sub(v.u128)
 		if err == nil {
 			return bint{u128: c}, nil
@@ -296,7 +297,7 @@ func (u bint) Sub(v bint) (bint, error) {
 }
 
 func (u bint) Mul(v bint) bint {
-	if !u.overflow && !v.overflow {
+	if !u.overflow() && !v.overflow() {
 		c, err := u.u128.Mul(v.u128)
 		if err == nil {
 			return bint{u128: c}

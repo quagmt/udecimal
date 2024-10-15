@@ -72,7 +72,7 @@ func FuzzParse(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -104,7 +104,7 @@ func FuzzAddDec(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Add(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -134,7 +134,7 @@ func FuzzAdd64(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Add64(blo)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -168,7 +168,7 @@ func FuzzSubDec(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Sub(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -198,7 +198,7 @@ func FuzzSub64(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Sub64(blo)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -236,7 +236,7 @@ func FuzzMulDec(f *testing.F) {
 		}
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -267,7 +267,7 @@ func FuzzMul64(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul64(blo)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -308,7 +308,7 @@ func FuzzDivDec(f *testing.F) {
 			return
 		}
 
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -357,7 +357,7 @@ func FuzzDiv64(f *testing.F) {
 
 		require.NoError(t, err)
 
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -401,7 +401,7 @@ func FuzzRoundBank(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -439,7 +439,7 @@ func FuzzFloor(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -475,7 +475,7 @@ func FuzzCeil(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -512,7 +512,7 @@ func FuzzTrunc(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -549,7 +549,7 @@ func FuzzPowInt(f *testing.F) {
 		p := pow % 10000
 
 		c := a.PowInt(p)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -580,7 +580,7 @@ func FuzzPowNegative(f *testing.F) {
 		p := -(pow % int64(maxPrec))
 
 		c := a.PowInt(int(p))
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -624,7 +624,7 @@ func FuzzMarshalJSON(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {
@@ -659,7 +659,7 @@ func FuzzMarshalBinary(f *testing.F) {
 		require.NoError(t, err)
 
 		c := a.Mul(b)
-		if c.coef.overflow {
+		if c.coef.overflow() {
 			require.NotNil(t, c.coef.bigInt)
 			require.Equal(t, u128{}, c.coef.u128)
 		} else {

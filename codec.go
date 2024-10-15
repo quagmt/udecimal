@@ -18,7 +18,7 @@ func (d Decimal) String() string {
 		return "0"
 	}
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		return d.stringU128(true)
 	}
 
@@ -32,7 +32,7 @@ func (d Decimal) String() string {
 func (d Decimal) StringFixed(prec uint8) string {
 	d1 := d.rescale(prec)
 
-	if !d1.coef.overflow {
+	if !d1.coef.overflow() {
 		return d1.stringU128(false)
 	}
 
@@ -195,7 +195,7 @@ func unssafeStringToBytes(s string) []byte {
 }
 
 func (d Decimal) MarshalJSON() ([]byte, error) {
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		return d.bytesU128(true), nil
 	}
 
@@ -225,7 +225,7 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 //	 4th-11th bytes: 0x0949_b0f6_f002_3313 (coef.hi)
 //	 12th-19th bytes: 0xd3b5_05f9_b5f1_8115 (coef.lo)
 func (d Decimal) MarshalBinary() ([]byte, error) {
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		return d.marshalBinaryU128()
 	}
 
@@ -282,7 +282,6 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	d.neg = data[0]&1 == 1
 	d.prec = data[1]
-	d.coef.overflow = false
 
 	totalBytes := data[2]
 
@@ -305,7 +304,6 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 
 func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 	d.neg = data[0]&1 == 1
-	d.coef.overflow = true
 	d.prec = data[1]
 
 	totalBytes := data[2]

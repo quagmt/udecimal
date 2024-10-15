@@ -449,7 +449,7 @@ func (d Decimal) Mul(e Decimal) Decimal {
 }
 
 func tryMulU128(d, e Decimal, neg bool, prec uint8) (Decimal, error) {
-	if d.coef.overflow || e.coef.overflow {
+	if d.coef.overflow() || e.coef.overflow() {
 		return Decimal{}, errOverflow
 	}
 
@@ -483,7 +483,7 @@ func (d Decimal) Mul64(v uint64) Decimal {
 		return d
 	}
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		coef, err := d.coef.u128.Mul64(v)
 		if err == nil {
 			return newDecimal(d.neg, bintFromU128(coef), d.prec)
@@ -527,7 +527,7 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 }
 
 func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
-	if d.coef.overflow || e.coef.overflow {
+	if d.coef.overflow() || e.coef.overflow() {
 		return Decimal{}, errOverflow
 	}
 
@@ -557,7 +557,7 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 		return d, nil
 	}
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		d256 := d.coef.u128.MulToU256(pow10[defaultPrec-d.prec])
 		quo, _, err := d256.quoRem64Tou128(v)
 		if err == nil {
@@ -625,7 +625,7 @@ func (d Decimal) cmpDecSameSign(e Decimal) int {
 }
 
 func tryCmpU128(d, e Decimal) (int, error) {
-	if d.coef.overflow || e.coef.overflow {
+	if d.coef.overflow() || e.coef.overflow() {
 		return 0, errOverflow
 	}
 
@@ -742,7 +742,7 @@ func (d Decimal) RoundBank(prec uint8) Decimal {
 	factor := pow10[d.prec-prec]
 	lo := factor.lo / 2
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
 		if lo < r || (lo == r && q.lo%2 == 1) {
@@ -783,7 +783,7 @@ func (d Decimal) RoundHAZ(prec uint8) Decimal {
 	factor := pow10[d.prec-prec]
 	lo, _ := factor.QuoRem64(2)
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
 		if lo.Cmp64(r) <= 0 {
@@ -823,7 +823,7 @@ func (d Decimal) RoundHTZ(prec uint8) Decimal {
 	factor := pow10[d.prec-prec]
 	lo, _ := factor.QuoRem64(2)
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
 		if lo.Cmp64(r) < 0 {
@@ -853,7 +853,7 @@ func (d Decimal) Floor() Decimal {
 		return d
 	}
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(pow10[d.prec].lo)
 
@@ -885,7 +885,7 @@ func (d Decimal) Ceil() Decimal {
 		return d
 	}
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(pow10[d.prec].lo)
 
@@ -924,7 +924,7 @@ func (d Decimal) Trunc(prec uint8) Decimal {
 
 	factor := pow10[d.prec-prec]
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		q, _ := d.coef.u128.QuoRem64(factor.lo)
 		return newDecimal(d.neg, bintFromU128(q), prec)
 	}
@@ -936,7 +936,7 @@ func (d Decimal) Trunc(prec uint8) Decimal {
 }
 
 func (d Decimal) trimTrailingZeros() Decimal {
-	if d.coef.overflow {
+	if d.coef.overflow() {
 		zeros := trailingZerosBigInt(d.coef.bigInt)
 
 		var (
@@ -1152,7 +1152,7 @@ func (d Decimal) powIntInverse(e int) Decimal {
 }
 
 func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
-	if d.coef.overflow {
+	if d.coef.overflow() {
 		return Decimal{}, errOverflow
 	}
 
@@ -1206,7 +1206,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 }
 
 func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
-	if d.coef.overflow {
+	if d.coef.overflow() {
 		return Decimal{}, errOverflow
 	}
 
@@ -1293,7 +1293,7 @@ func (d Decimal) Sqrt() (Decimal, error) {
 		return One, nil
 	}
 
-	if !d.coef.overflow {
+	if !d.coef.overflow() {
 		q, err := d.sqrtU128()
 		if err == nil {
 			return q, nil
