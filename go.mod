@@ -3,7 +3,6 @@ module github.com/quagmt/udecimal
 go 1.23
 
 require (
-	github.com/govalues/decimal v0.1.31
 	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.9.0
 )
