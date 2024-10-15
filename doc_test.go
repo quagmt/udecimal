@@ -270,9 +270,9 @@ func ExampleDecimal_MarshalJSON() {
 	fmt.Println(string(b))
 	fmt.Println(string(c))
 	// Output:
-	// 1.23
-	// -1.2345
-	// 1234567890123456789.1234567890123456789
+	// "1.23"
+	// "-1.2345"
+	// "1234567890123456789.1234567890123456789"
 }
 
 func ExampleDecimal_Neg() {

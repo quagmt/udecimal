@@ -119,8 +119,8 @@ The `Decimal` type represents a fixed-point decimal number. It consists of three
 ```go
 // decimal value = (neg == true ? -1 : 1) * coef * 10^(-prec)
 type Decimal struct {
-	neg bool
 	coef bint
+	neg bool
 	prec uint8 // 0 <= prec <= 19
 }
 
@@ -136,14 +136,11 @@ You can notice that `coef` data type is `bint`, which is a custom data type:
 
 ```go
 type bint struct {
-	// Indicates if the coefficient exceeds 128-bit limit
-	overflow bool
+	// For coefficients exceeding u128
+	bigInt *big.Int
 
 	// For coefficients less than 2^128-1
 	u128 u128
-
-	// For coefficients exceeding u128
-	bigInt *big.Int
 }
 ```
 
