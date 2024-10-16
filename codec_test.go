@@ -147,11 +147,14 @@ type Test struct {
 	Test Decimal `json:"price"`
 }
 
-func TestUnmarshalNumber(t *testing.T) {
+func TestUnmarshalJSON(t *testing.T) {
 	testcases := []struct {
 		in      string
 		wantErr error
 	}{
+		{`""`, ErrEmptyString},
+		{`" "`, ErrInvalidFormat},
+		{`"abc"`, ErrInvalidFormat},
 		{"1234567890123.1234567890123", nil},
 		{"1234567890123.12345678901234567899", ErrPrecOutOfRange},
 		{`"1234567890123.1234567890123"`, nil},

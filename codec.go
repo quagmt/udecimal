@@ -239,7 +239,7 @@ func (d Decimal) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (d *Decimal) UnmarshalJSON(data []byte) error {
 	// Remove quotes if they exist.
-	if len(data) > 2 && data[0] == '"' && data[len(data)-1] == '"' {
+	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
 		data = data[1 : len(data)-1]
 	}
 
