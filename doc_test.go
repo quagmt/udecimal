@@ -271,6 +271,19 @@ func ExampleDecimal_MarshalJSON() {
 	// "1234567890123456789.1234567890123456789"
 }
 
+func ExampleDecimal_MarshalText() {
+	a, _ := MustParse("1.23").MarshalText()
+	b, _ := MustParse("-1.2345").MarshalText()
+	c, _ := MustParse("1234567890123456789.1234567890123456789").MarshalText()
+	fmt.Println(string(a))
+	fmt.Println(string(b))
+	fmt.Println(string(c))
+	// Output:
+	// 1.23
+	// -1.2345
+	// 1234567890123456789.1234567890123456789
+}
+
 func ExampleDecimal_Neg() {
 	fmt.Println(MustParse("1.23").Neg())
 	fmt.Println(MustParse("-1.23").Neg())
@@ -394,6 +407,14 @@ func ExampleDecimal_UnmarshalBinary() {
 func ExampleDecimal_UnmarshalJSON() {
 	var a Decimal
 	_ = a.UnmarshalJSON([]byte("1.23"))
+	fmt.Println(a)
+	// Output:
+	// 1.23
+}
+
+func ExampleDecimal_UnmarshalText() {
+	var a Decimal
+	_ = a.UnmarshalText([]byte("1.23"))
 	fmt.Println(a)
 	// Output:
 	// 1.23

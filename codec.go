@@ -1,12 +1,25 @@
 package udecimal
 
 import (
+	"database/sql"
 	"database/sql/driver"
+	"encoding"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/bits"
 	"unsafe"
+)
+
+var (
+	_ fmt.Stringer             = (*Decimal)(nil)
+	_ sql.Scanner              = (*Decimal)(nil)
+	_ driver.Valuer            = (*Decimal)(nil)
+	_ encoding.TextMarshaler   = (*Decimal)(nil)
+	_ encoding.TextUnmarshaler = (*Decimal)(nil)
+	_ json.Marshaler           = (*Decimal)(nil)
+	_ json.Unmarshaler         = (*Decimal)(nil)
 )
 
 // String returns the string representation of the decimal.
@@ -214,6 +227,7 @@ func unssafeStringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+// MarshalJSON implements the [json.Marshaler] interface.
 func (d Decimal) MarshalJSON() ([]byte, error) {
 	if !d.coef.overflow() {
 		return d.bytesU128(true, true), nil
@@ -222,13 +236,34 @@ func (d Decimal) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + d.stringBigInt(true) + `"`), nil
 }
 
+// UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (d *Decimal) UnmarshalJSON(data []byte) error {
+	// Remove quotes if they exist.
+	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
+		data = data[1 : len(data)-1]
+	}
+
+	return d.UnmarshalText(data)
+}
+
+// MarshalText implements the [encoding.TextMarshaler] interface.
+func (d Decimal) MarshalText() ([]byte, error) {
+	if !d.coef.overflow() {
+		// Return without quotes.
+		return d.bytesU128(true, false), nil
+	}
+
+	return []byte(d.stringBigInt(true)), nil
+}
+
+// UnmarshalText implements the [encoding.TextUnmarshaler] interface.
+func (d *Decimal) UnmarshalText(data []byte) error {
 	var err error
 	*d, err = parseBytes(data)
 	return err
 }
 
-// MarshalBinary implements encoding.BinaryMarshaler interface with custom binary format.
+// MarshalBinary implements [encoding.BinaryMarshaler] interface with custom binary format.
 //
 //	Binary format: [overflow + neg] [prec] [total bytes] [coef]
 //
@@ -386,7 +421,7 @@ func (d *Decimal) Scan(src any) error {
 	return err
 }
 
-// Value implements driver.Valuer interface.
+// Value implements [driver.Valuer] interface.
 func (d Decimal) Value() (driver.Value, error) {
 	return d.String(), nil
 }

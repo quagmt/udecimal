@@ -54,6 +54,63 @@ func TestStringFixed(t *testing.T) {
 	}
 }
 
+func TestMarshalText(t *testing.T) {
+	testcases := []struct {
+		in string
+	}{
+		{"123456789.123456789"},
+		{"0"},
+		{"1"},
+		{"-1"},
+		{"-123456789.123456789"},
+		{"0.000000001"},
+		{"-0.000000001"},
+		{"123.123"},
+		{"-123.123"},
+		{"12345678901234567890123456789.1234567890123456789"},
+		{"-12345678901234567890123456789.1234567890123456789"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			a := MustParse(tc.in)
+
+			b, err := a.MarshalText()
+			require.NoError(t, err)
+
+			var c Decimal
+			require.NoError(t, c.UnmarshalText(b))
+
+			require.Equal(t, a, c)
+		})
+	}
+}
+
+func TestUnmarshalText(t *testing.T) {
+	testcases := []struct {
+		in      string
+		wantErr error
+	}{
+		{"", ErrEmptyString},
+		{" ", ErrInvalidFormat},
+		{"abc", ErrInvalidFormat},
+		{"1234567890123.1234567890123", nil},
+		{"1234567890123.12345678901234567899", ErrPrecOutOfRange},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			var d Decimal
+			err := d.UnmarshalText([]byte(tc.in))
+			require.ErrorIs(t, err, tc.wantErr)
+
+			if tc.wantErr == nil {
+				require.Equal(t, MustParse(tc.in), d)
+			}
+		})
+	}
+}
+
 type A struct {
 	P Decimal `json:"a"`
 }
@@ -95,13 +152,16 @@ type Test struct {
 	Test Decimal `json:"price"`
 }
 
-func TestUnmarshalNumber(t *testing.T) {
+func TestUnmarshalJSON(t *testing.T) {
 	testcases := []struct {
 		in      string
 		wantErr error
 	}{
+		{`""`, ErrEmptyString},
+		{`" "`, ErrInvalidFormat},
+		{`"abc"`, ErrInvalidFormat},
 		{"1234567890123.1234567890123", nil},
-		{"1234567890123.12345678901234567899", fmt.Errorf("precision out of range. Only support maximum 19 digits after the decimal point")},
+		{"1234567890123.12345678901234567899", ErrPrecOutOfRange},
 		{`"1234567890123.1234567890123"`, nil},
 	}
 
@@ -111,13 +171,11 @@ func TestUnmarshalNumber(t *testing.T) {
 
 			var test Test
 			err := json.Unmarshal([]byte(s), &test)
-			if tc.wantErr != nil {
-				require.Equal(t, tc.wantErr, err)
-				return
-			}
+			require.ErrorIs(t, err, tc.wantErr)
 
-			require.NoError(t, err)
-			require.Equal(t, strings.Trim(tc.in, `"`), test.Test.String())
+			if tc.wantErr == nil {
+				require.Equal(t, strings.Trim(tc.in, `"`), test.Test.String())
+			}
 		})
 	}
 }

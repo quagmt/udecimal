@@ -77,11 +77,6 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 		return false, bint{}, 0, ErrMaxStrLen
 	}
 
-	// unQuote if the string is quoted, usually when unmarshalling from JSON
-	if len(s) > 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		s = s[1 : len(s)-1]
-	}
-
 	// if s has less than 41 characters, it can fit into u128
 	// 41 chars = maxLen(u128) + dot + sign = 39 + 1 + 1
 	if len(s) <= 41 {
