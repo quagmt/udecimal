@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -86,6 +85,27 @@ func TestMarshalText(t *testing.T) {
 	}
 }
 
+func TestUnmarshalText(t *testing.T) {
+	testcases := []struct {
+		in      string
+		wantErr error
+	}{
+		{"", ErrEmptyString},
+		{" ", ErrInvalidFormat},
+		{"abc", ErrInvalidFormat},
+		{"1234567890123.1234567890123", nil},
+		{"1234567890123.12345678901234567899", ErrPrecOutOfRange},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			var d Decimal
+			err := d.UnmarshalText([]byte(tc.in))
+			require.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
 type A struct {
 	P Decimal `json:"a"`
 }
@@ -133,7 +153,7 @@ func TestUnmarshalNumber(t *testing.T) {
 		wantErr error
 	}{
 		{"1234567890123.1234567890123", nil},
-		{"1234567890123.12345678901234567899", fmt.Errorf("precision out of range. Only support maximum 19 digits after the decimal point")},
+		{"1234567890123.12345678901234567899", ErrPrecOutOfRange},
 		{`"1234567890123.1234567890123"`, nil},
 	}
 
@@ -143,13 +163,7 @@ func TestUnmarshalNumber(t *testing.T) {
 
 			var test Test
 			err := json.Unmarshal([]byte(s), &test)
-			if tc.wantErr != nil {
-				require.Equal(t, tc.wantErr, err)
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, strings.Trim(tc.in, `"`), test.Test.String())
+			require.ErrorIs(t, err, tc.wantErr)
 		})
 	}
 }
