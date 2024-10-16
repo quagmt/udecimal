@@ -275,14 +275,12 @@ func Parse(s string) (Decimal, error) {
 }
 
 func parseBytes(b []byte) (Decimal, error) {
-
 	neg, bint, prec, err := parseBint(b)
 	if err != nil {
 		return Decimal{}, err
 	}
 
 	return newDecimal(neg, bint, prec), nil
-
 }
 
 // MustParse similars to Parse, but pacnis instead of returning error.

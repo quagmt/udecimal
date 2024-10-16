@@ -54,6 +54,38 @@ func TestStringFixed(t *testing.T) {
 	}
 }
 
+func TestMarshalText(t *testing.T) {
+	testcases := []struct {
+		in string
+	}{
+		{"123456789.123456789"},
+		{"0"},
+		{"1"},
+		{"-1"},
+		{"-123456789.123456789"},
+		{"0.000000001"},
+		{"-0.000000001"},
+		{"123.123"},
+		{"-123.123"},
+		{"12345678901234567890123456789.1234567890123456789"},
+		{"-12345678901234567890123456789.1234567890123456789"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			a := MustParse(tc.in)
+
+			b, err := a.MarshalText()
+			require.NoError(t, err)
+
+			var c Decimal
+			require.NoError(t, c.UnmarshalText(b))
+
+			require.Equal(t, a, c)
+		})
+	}
+}
+
 type A struct {
 	P Decimal `json:"a"`
 }
