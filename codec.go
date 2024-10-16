@@ -248,7 +248,12 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 
 // MarshalText implements the [encoding.TextMarshaler] interface.
 func (d Decimal) MarshalText() ([]byte, error) {
-	return []byte(d.String()), nil
+	if !d.coef.overflow() {
+		// Return without quotes.
+		return d.bytesU128(true, false), nil
+	}
+
+	return []byte(d.stringBigInt(true)), nil
 }
 
 // UnmarshalText implements the [encoding.TextUnmarshaler] interface.
