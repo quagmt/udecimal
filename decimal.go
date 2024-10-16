@@ -601,6 +601,11 @@ func (d Decimal) Cmp(e Decimal) int {
 	return d.cmpDecSameSign(e)
 }
 
+// Equal reports whether the two decimals d and e are equal.
+func (d Decimal) Equal(e Decimal) bool {
+	return d.Cmp(e) == 0
+}
+
 func (d Decimal) cmpDecSameSign(e Decimal) int {
 	result, err := tryCmpU128(d, e)
 	if err == nil {

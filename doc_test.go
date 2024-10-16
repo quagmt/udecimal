@@ -146,6 +146,14 @@ func ExampleDecimal_Cmp() {
 	// 1
 }
 
+func ExampleDecimal_Equal() {
+	fmt.Println(MustParse("1.123").Equal(MustParse("-1.123")))
+	fmt.Println(MustParse("1.123").Equal(MustParse("1.1230000")))
+	// Output:
+	// false
+	// true
+}
+
 func ExampleDecimal_Div() {
 	fmt.Println(MustParse("1.23").Div(MustParse("4.12475")))
 	fmt.Println(MustParse("1.23").Div(MustParse("0")))
