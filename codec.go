@@ -243,9 +243,7 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 		data = data[1 : len(data)-1]
 	}
 
-	var err error
-	*d, err = parseBytes(data)
-	return err
+	return d.UnmarshalText(data)
 }
 
 // MarshalText implements the [encoding.TextMarshaler] interface.
@@ -254,9 +252,9 @@ func (d Decimal) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements the [encoding.TextUnmarshaler] interface.
-func (t *Decimal) UnmarshalText(data []byte) error {
+func (d *Decimal) UnmarshalText(data []byte) error {
 	var err error
-	*t, err = parseBytes(data)
+	*d, err = parseBytes(data)
 	return err
 }
 
