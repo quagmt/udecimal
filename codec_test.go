@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -102,6 +103,10 @@ func TestUnmarshalText(t *testing.T) {
 			var d Decimal
 			err := d.UnmarshalText([]byte(tc.in))
 			require.ErrorIs(t, err, tc.wantErr)
+
+			if tc.wantErr == nil {
+				require.Equal(t, MustParse(tc.in), d)
+			}
 		})
 	}
 }
@@ -167,6 +172,10 @@ func TestUnmarshalJSON(t *testing.T) {
 			var test Test
 			err := json.Unmarshal([]byte(s), &test)
 			require.ErrorIs(t, err, tc.wantErr)
+
+			if tc.wantErr == nil {
+				require.Equal(t, strings.Trim(tc.in, `"`), test.Test.String())
+			}
 		})
 	}
 }
