@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1209,6 +1210,29 @@ func TestEqual(t *testing.T) {
 
 			cc := aa.Equal(bb)
 			require.Equal(t, cc, c)
+		})
+	}
+}
+
+func TestZeroValues(t *testing.T) {
+	testcases := map[string]Decimal{
+		"Zero":   Zero,
+		"0":      MustParse("0"),
+		"-0":     MustParse("-0"),
+		"+0":     MustParse("+0"),
+		"1 - 1":  MustParse("1").Sub(MustParse("1")),
+		"-1 + 1": MustParse("-1").Add(MustParse("1")),
+		"0 + 0":  MustParse("0").Add(MustParse("0")),
+		"0 x 0":  MustParse("0").Mul(MustParse("0")),
+		"1 x 0":  MustParse("1").Mul(MustParse("0")),
+		"0^1":    MustParse("0").PowInt(1),
+	}
+
+	for name, value := range testcases {
+		t.Run(name, func(t *testing.T) {
+			assert.True(t, value.IsZero())
+			assert.Equal(t, Zero, value)
+			assert.Equal(t, 0, Zero.Cmp(value))
 		})
 	}
 }

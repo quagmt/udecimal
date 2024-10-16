@@ -382,12 +382,12 @@ func (d Decimal) Sub(e Decimal) Decimal {
 
 	// same sign
 	switch dcoef.Cmp(ecoef) {
-	case 1:
-		// dcoef > ecoef, subtract can't overflow
+	case 0, 1:
+		// dcoef >= ecoef, subtract can't overflow
 		coef, _ := dcoef.Sub(ecoef)
 		return newDecimal(d.neg, coef, prec)
 	default:
-		// dcoef <= ecoef
+		// dcoef < ecoef
 		coef, _ := ecoef.Sub(dcoef)
 		return newDecimal(!d.neg, coef, prec)
 	}
