@@ -2290,3 +2290,34 @@ func TestCmpWithDiffPrec(t *testing.T) {
 		})
 	}
 }
+
+func TestPrecUint(t *testing.T) {
+	testcases := []struct {
+		a    string
+		want uint8
+	}{
+		{"0", 0},
+		{"0.123456789", 9},
+		{"-0.123456789", 9},
+		{"-123456789.123456789", 9},
+		{"1234567890123456789.1234567890123456789", 19},
+		{"-1234567890123456789.1234567890123456789", 19},
+		{"123456789123456789123456789.1234567890123456789", 19},
+		{"-123456789123456789123456789.1234567890123456789", 19},
+	}
+
+	oneUnit := MustParse("0.0001")
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("precUint(%s)", tc.a), func(t *testing.T) {
+			a := MustParse(tc.a)
+			require.Equal(t, tc.want, a.PrecUint())
+
+			b := a.Trunc(oneUnit.PrecUint())
+			if a.prec > oneUnit.prec {
+				require.Equal(t, oneUnit.prec, b.PrecUint())
+			}
+		})
+
+	}
+}
