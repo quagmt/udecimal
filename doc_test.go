@@ -308,6 +308,12 @@ func ExampleDecimal_Prec() {
 	// 2
 }
 
+func ExampleDecimal_PrecUint() {
+	fmt.Println(MustParse("1.23456").PrecUint())
+	// Output:
+	// 5
+}
+
 func ExampleDecimal_RoundBank() {
 	fmt.Println(MustParse("1.12345").RoundBank(4))
 	fmt.Println(MustParse("1.12335").RoundBank(4))

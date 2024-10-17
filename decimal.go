@@ -584,6 +584,19 @@ func (d Decimal) Prec() int {
 	return int(d.prec)
 }
 
+// PrecUint returns decimal precision as uint8
+// Useful when you want to use the precision
+// in other functions like Round or Trunc because they accept uint8
+//
+// Example:
+//
+//	u := MustParse("0.000001")
+//	d := MustParse("123.4567891") // 123.456, prec = 3
+//	d = d.Trunc(u.PrecUint()) // 123.456789
+func (d Decimal) PrecUint() uint8 {
+	return d.prec
+}
+
 // Cmp compares two decimals d,e and returns:
 //
 //	-1 if d < e
