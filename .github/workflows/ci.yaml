@@ -2,6 +2,12 @@ name: CI
 
 on:
   pull_request:
+    paths:
+      - "**.go"
+      - go.mod
+      - go.sum
+      - ".github/workflows/ci.yaml"
+      - ".golangci.yaml"
 
 jobs:
   lint:

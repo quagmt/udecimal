@@ -4,6 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/quagmt/udecimal)](https://goreportcard.com/report/github.com/quagmt/udecimal)
 [![codecov](https://codecov.io/gh/quagmt/udecimal/graph/badge.svg?token=662ET843EZ)](https://codecov.io/gh/quagmt/udecimal)
 [![GoDoc](https://pkg.go.dev/badge/github.com/quagmt/udecimal)](https://pkg.go.dev/github.com/quagmt/udecimal)
+[![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#financial)
 
 High performance, high precision, zero allocation fixed-point decimal number for financial applications.
 
@@ -139,7 +140,7 @@ type bint struct {
 	// For coefficients exceeding u128
 	bigInt *big.Int
 
-	// For coefficients less than 2^128-1
+	// For coefficients less than 2^128
 	u128 u128
 }
 ```

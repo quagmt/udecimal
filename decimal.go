@@ -169,6 +169,14 @@ func NewFromHiLo(neg bool, hi uint64, lo uint64, prec uint8) (Decimal, error) {
 
 // newDecimal return the decimal
 func newDecimal(neg bool, coef bint, prec uint8) Decimal {
+	if coef.IsZero() {
+		// make Zero consistent and avoid unexpected cases, such as:
+		// - coef = 0 and neg is true
+		// - coef = 0 and prec != 0
+		// These cases results in incorrect comparison between zero values
+		return Zero
+	}
+
 	return Decimal{neg: neg, coef: coef, prec: prec}
 }
 
@@ -678,12 +686,12 @@ func (d Decimal) rescale(prec uint8) Decimal {
 
 // Neg returns -d
 func (d Decimal) Neg() Decimal {
-	return Decimal{neg: !d.neg, coef: d.coef, prec: d.prec}
+	return newDecimal(!d.neg, d.coef, d.prec)
 }
 
 // Abs returns |d|
 func (d Decimal) Abs() Decimal {
-	return Decimal{neg: false, coef: d.coef, prec: d.prec}
+	return newDecimal(false, d.coef, d.prec)
 }
 
 // Sign returns:
