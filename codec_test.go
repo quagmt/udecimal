@@ -180,6 +180,13 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestUnmarshalJSONNull(t *testing.T) {
+	var test Test
+	err := json.Unmarshal([]byte(`{"price": null}`), &test)
+	require.NoError(t, err)
+	require.True(t, test.Test.IsZero())
+}
+
 func TestMarshalBinary(t *testing.T) {
 	testcases := []struct {
 		in string
