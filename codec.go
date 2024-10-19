@@ -1,6 +1,7 @@
 package udecimal
 
 import (
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding"
@@ -236,11 +237,19 @@ func (d Decimal) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + d.stringBigInt(true) + `"`), nil
 }
 
+// nullValue represents the JSON null value.
+var nullValue = []byte("null")
+
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (d *Decimal) UnmarshalJSON(data []byte) error {
 	// Remove quotes if they exist.
 	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
 		data = data[1 : len(data)-1]
+	}
+
+	// null value.
+	if bytes.Equal(data, nullValue) {
+		return nil
 	}
 
 	return d.UnmarshalText(data)
