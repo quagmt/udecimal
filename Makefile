@@ -1,4 +1,7 @@
 .PHONY: test lint fuzz fuzz-all
+	
+inline:
+	go build -gcflags='-m ' ./... | grep -v 'can inline'
 
 lint:
 	@golangci-lint --config=.golangci.yaml run ./... -v

@@ -72,14 +72,6 @@ func (u u128) Cmp64(v uint64) int {
 	}
 }
 
-func (u u128) LessThan(v u128) bool {
-	if u.hi < v.hi || (u.hi == v.hi && u.lo < v.lo) {
-		return true
-	}
-
-	return false
-}
-
 func (u u128) Add(v u128) (u128, error) {
 	lo, carry := bits.Add64(u.lo, v.lo, 0)
 	hi, carry := bits.Add64(u.hi, v.hi, carry)
@@ -283,36 +275,44 @@ func (u u128) ToBigInt() *big.Int {
 // getTrailingZeros64 returns the number of trailing zeros in u
 // NOTE: this only works when maxPrec is 19
 func getTrailingZeros64(u uint64) uint8 {
-	var z uint8
+	var zeros uint8
+
+	// max scale is 19, so we can start from 16
 	if u%1e16 == 0 {
-		z = 16
+		zeros += 16
+		u /= 1e16
 
-		if u%pow10[z+2].lo == 0 {
-			z += 2
+		// short path, because we know that max scale is 19
+		if u%100 == 0 {
+			zeros += 2
+			u /= 100
 		}
 
-		if u%pow10[z+1].lo == 0 {
-			z++
+		if u%10 == 0 {
+			zeros++
 		}
 
-		return z
+		return zeros
 	}
 
-	if u%pow10[8].lo == 0 {
-		z += 8
+	if u%1e8 == 0 {
+		zeros += 8
+		u /= 1e8
 	}
 
-	if u%pow10[z+4].lo == 0 {
-		z += 4
+	if u%1e4 == 0 {
+		zeros += 4
+		u /= 1e4
 	}
 
-	if u%pow10[z+2].lo == 0 {
-		z += 2
+	if u%100 == 0 {
+		zeros += 2
+		u /= 100
 	}
 
-	if u%pow10[z+1].lo == 0 {
-		z++
+	if u%10 == 0 {
+		zeros++
 	}
 
-	return z
+	return zeros
 }
