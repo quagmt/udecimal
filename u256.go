@@ -55,19 +55,6 @@ func (u u256) bitLen() int {
 // 	return s
 // }
 
-// Compare 2 u256, returns:
-//
-//	+1 when u > v
-//	 0 when u = v
-//	-1 when u < v
-func (u u256) cmp(v u256) int {
-	if k := u.carry.Cmp(v.carry); k != 0 {
-		return k
-	}
-
-	return u128FromHiLo(u.hi, u.lo).Cmp(u128FromHiLo(v.hi, v.lo))
-}
-
 // Compare u256 and U128, returns:
 //
 //	+1 when u > v
@@ -133,220 +120,126 @@ func (u u256) mul128(v u128) (u256, error) {
 	return u256{hi: a.hi, lo: a.lo, carry: c}, nil
 }
 
-func (u u256) sub(v u256) (u256, error) {
-	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
-	hi, borrow := bits.Sub64(u.hi, v.hi, borrow)
-
-	c, err := v.carry.Add64(borrow)
-	if err != nil {
-		return u256{}, err
-	}
-
-	c1, err := u.carry.Sub(c)
-	if err != nil {
-		return u256{}, err
-	}
-
-	return u256{lo: lo, hi: hi, carry: c1}, nil
-}
-
-func (u u256) rsh(n uint) (v u256) {
-	switch {
-	case n < 64:
-		v.carry = u.carry.Rsh(n)
-		v.hi = u.carry.lo<<(64-n) | u.hi>>n
-		v.lo = u.hi<<(64-n) | u.lo>>n
-
-	case 64 <= n && n < 128:
-		v.carry.hi = 0
-		v.carry.lo = u.carry.hi >> (n - 64)
-		v.hi = u.carry.hi<<(128-n) | u.carry.lo>>(n-64)
-		v.lo = u.carry.lo<<(128-n) | u.hi>>(n-64)
-
-	case n >= 128:
-		v.carry = u128{}
-		c := u128{hi: u.carry.hi, lo: u.carry.lo}.Rsh(n - 128)
-		v.hi, v.lo = c.hi, c.lo
-	default:
-		// n < 0, can't happen
-	}
-
-	return
-}
-
-// Quo only returns quotient of u/v
-// Fast divsion for U192 divided by U128 using Hacker's Delight multiword division algorithm
-// with some constraints regarding max coef and prec value, including:
-//
-//	max(coef) = 2^128-1
-//	max(prec) = 19
-//	max(u) = 2^192-1
+// fastQuo only returns quotient of u/v
 func (u u256) fastQuo(v u128) (u128, error) {
-	// if u >= 2^192, the quotient might won't fit in 128-bits number (overflow).
-	if u.carry.hi != 0 {
-		return u128{}, errOverflow
-	}
-
 	if u.carry.IsZero() {
 		q, _, err := u128FromHiLo(u.hi, u.lo).QuoRem(v)
 		return q, err
 	}
 
-	if v.hi == 0 {
-		q, _, err := u.quoRem64Tou128(v.lo)
+	if v.hi == 0 && u.carry.hi == 0 {
+		q, _, err := u.div192by64(v.lo)
 		return q, err
 	}
 
-	// Let q be the final quotient and tq be the 'trial quotient'
-	// The trial quotient tq is defined as tq = q + k, where k is a correction factor.
-	// Here's how we determine k using the following steps:
-
-	// 1. Compute the trial quotient tq as tq = [u1 / v1], where:
-	//    - u1 = [u / 2^(64 - shift)]
-	//    - v1 = [v / 2^(64 - shift)]
-	//    (This follows the Hacker's Delight multiword division algorithm)
-	// 2. Calculate vq = v * tq
-	// 3. If vq <= u, then q = tq
-	// 4. If vq > u, compute the difference vqu = vq - u, which can be expressed as:
-	//    vqu = v * (q + k) - (vq + r) = v * k - r = v * (k1 + 1) - r = v * k1 + v - r
-	// 5. Determine k1 as k1 = [vqu / v] and adjust k1 if necessary
-	//
-	// However, given that u < 2^192 and v < 2^128, and 0 <= k <= 2^64, it's possible for v * k to exceed 2^128,
-	// causing an overflow in vqu.
-	// To mitigate this, we need to find the minimum k.
-	// If even the minimum k leads to v * k > 2^128, we fall back to big.Int division
-	// due to the lack of a fast algorithm for dividing U192 by U128.
-	//
-	// tq = [u1 / v1] = [u / (v - rem(v, 2^(64 - n))]
-	// The minimum k is achieved when tq is minimized, which happens when rem(v, 2^(64 - n)) is minimized,
-	// --> 2^(64 - n) being minimized --> n should be maximized.
-	// n is the number of leading zeros in v, so 0 <= n <= 63.
-	// Technically, using n = 63 provides the optimal k.
-
-	// However, when n = 63:
-	// - u1 = [u / 2^(64 - 63)] = u >> 1
-	// - v1 = [v / 2^(64 - 63)] = v >> 1
-	// And if u1 is U192 and v1 is U128, we cannot find tq = [u1 / v1],
-	// since there's no U192/U128 division algorithm currently available.
-	//
-	// What we do have are fast algorithms for U192/U64 or U128/U128 division.
-	// Therefore, we can only compute tq by adjusting u and v to fit either U128/U128 or U192/U64.
-	// This might not be the best optimization, but it's the best we can achieve for now.
-	// If we later find a fast U192/U128 division algorithm, we can improve this process.
-	//
-	// As previously mentioned, if after finding the minimum k, v * k still exceeds 2^128, we will fall back to big.Int division.
-
-	// nolint: gosec
-	n := uint(bits.LeadingZeros64(v.hi))
-
-	// nolint: gosec
-	m := uint(bits.LeadingZeros64(u.carry.lo))
-
-	var (
-		v1, tq u128
-		u1     u256
-		err    error
-	)
-
-	if n >= m {
-		v1 = v.Lsh(n)
-		u1 = u.rsh(64 - n)
-		tq, _, err = u1.quoRem64Tou128(v1.hi)
-		if err != nil {
-			return u128{}, err
-		}
-	} else {
-		// n < m
-		v1 = v.Rsh(64 - m)
-		u1 = u.rsh(64 - m)
-
-		tq, _, err = u128FromHiLo(u1.hi, u1.lo).QuoRem(v1)
-		if err != nil {
-			return u128{}, err
-		}
-	}
-
-	vq := v.MulToU256(tq)
-
-	// let k = 1 + [(u*rem(v, 2^(64-n))) / (v*(v-rem(v, 2^(64-n)))]
-	// vq = v*tq = v(q + k)
-	if vq.cmp(u) <= 0 {
-		// vq <= u means tq = q
-		return tq, nil
-	}
-
-	// vqu = vq - u = v*(q+k) - (vq + r) = v*k - r
-	vqu, err := vq.sub(u)
-	if err != nil {
-		return u128{}, err
-	}
-
-	if !vqu.carry.IsZero() {
-		// v * k > 2^128, we can't find k
-		// fall back to big.Int division
+	// now we have u192 / u128 or u256 / u128
+	if u.carry.Cmp(v) >= 0 {
+		// obviously the result won't fit into u128
 		return u128{}, errOverflow
 	}
 
-	vqu128 := u128FromHiLo(vqu.hi, vqu.lo)
-
-	// k1 = k - 1
-	// vqu = v*k - r = v*(k1 + 1) - r = v*k1 + v - r
-	// k1 <= [vqu / v] <= k1 + 1
-	k1, _, err := vqu128.QuoRem(v)
-	if err != nil {
-		return u128{}, err
-	}
-
-	// adjust k1
-	vqu1, err := v.Mul(k1)
-	if err != nil {
-		return u128{}, err
-	}
-
-	// if [vqu / v] = k1 + 1, then we don't have to adjust because final k = k1 + 1
-	// if [vqu / v] = k1, then final k = k1 + 1
-	if vqu1.Cmp(vqu128) < 0 {
-		k1, err = k1.Add64(1)
-		if err != nil {
-			return u128{}, err
-		}
-	}
-
-	// final q = tq - k
-	tq, err = tq.Sub(k1)
-	if err != nil {
-		return u128{}, err
-	}
-
-	// we don't really need the remainder, might un-comment later if needed
-	// r, err := v.Sub(r1)
-	// if err != nil {
-	// 	return u128{}, u128{}, err
-	// }
-
-	return tq, nil
+	return u.div256by128(v), nil
 }
 
-// quoRem64Tou128 return q,r which:
-//
-//	q must be a u128
-//	u = q*v + r
-//	Return overflow if the result q doesn't fit in a u128
-func (u u256) quoRem64Tou128(v uint64) (u128, uint64, error) {
-	if u.carry.lo == 0 {
-		q, r := u128FromHiLo(u.hi, u.lo).QuoRem64(v)
-		return q, r, nil
-	}
-
-	quo, rem := u128FromHiLo(u.carry.lo, u.hi).QuoRem64(v)
-	if quo.hi != 0 {
+// div192by64 return q,r which:
+// q must be a u128
+// u = q*v + r
+// Returns error if u.carry >= v, because the result can't fit into u128
+func (u u256) div192by64(v uint64) (u128, uint64, error) {
+	if u.carry.Cmp64(v) >= 0 {
 		return u128{}, 0, errOverflow
 	}
 
-	hi := quo.lo
+	// can't panic because we already check u.carry < v (u.carry.hi == 0 && u.carry.lo < v)
+	hi, rem := bits.Div64(u.carry.lo, u.hi, v)
 
 	// can't panic because rem < v
 	lo, r := bits.Div64(rem, u.lo, v)
-
 	return u128FromHiLo(hi, lo), r, nil
+}
+
+// div256by128 performs u256 / u128, which u256.carry < u128
+// This implementation is based on divllu from https://github.com/ridiculousfish/libdivide
+// The algorithm is explained in this blog post: https://ridiculousfish.com/blog/posts/labor-of-division-episode-iv.html
+func (u u256) div256by128(v u128) u128 {
+	// normalize v
+	n := bits.LeadingZeros64(v.hi)
+
+	// nolint: gosec
+	v = v.Lsh(uint(n))
+
+	// shift u to the left by n bits (n < 64)
+	a := [4]uint64{}
+	a[0] = u.lo << n
+	a[1] = u.lo>>(64-n) | u.hi<<n
+	a[2] = u.hi>>(64-n) | u.carry.lo<<n
+	a[3] = u.carry.lo>>(64-n) | u.carry.hi<<n
+
+	// q = a / v
+	aLen := 3
+	if a[3] != 0 || (a[3] == 0 && a[2] > v.hi) {
+		aLen = 4
+	}
+
+	q := [2]uint64{}
+
+	for i := aLen - 3; i >= 0; i-- {
+		u2, u1, u0 := a[i+2], a[i+1], a[i]
+
+		// trial quotient tq = [u2,u1,u0] / v ~= [u2,u1] / v.hi
+		// tq <= q + 2
+		tq, r := bits.Div64(u2, u1, v.hi)
+
+		c1h, c1l := bits.Mul64(tq, v.lo)
+		c1 := u128{hi: c1h, lo: c1l}
+		c2 := u128{hi: r, lo: u0}
+
+		// adjust tq
+		var k uint64
+		if c1.Cmp(c2) > 0 {
+			k = 1
+
+			// d = c1 - c2
+			if subUnsafe(c1, c2).Cmp(v) > 0 {
+				k = 2
+			}
+		}
+
+		q[i] = tq - k
+
+		// true remainder rem = [u2,u1,u0] - q*v = c2 - c1 + k*v (k <= 2)
+		var rem u128
+		switch k {
+		case 0:
+			// rem = c2 - c1
+			rem = subUnsafe(c2, c1)
+		case 1:
+			// rem = c2 - c1 + v = v - (c1 - c2) with c1 > c2
+			rem = subUnsafe(c1, c2)
+			rem = subUnsafe(v, rem)
+		case 2:
+			// rem = c2 - c1 + 2*v = v + v - (c1 - c2) with c1 > c2
+			// v = max(u128) - not(v)
+			// --> rem = v - not(v) + max(u128) - (c1 - c2)
+			//  v >= not(v) because v is normalized. Hence, we can safely caculate rem without checking overflow
+			c12 := subUnsafe(c1, c2)
+			c12 = subUnsafe(max128, c12)
+			rem = subUnsafe(v, u128{hi: ^v.hi, lo: ^v.lo})
+
+			// this also can't overflow because rem < v <= max(u128)
+			rem, _ = rem.Add(c12)
+		}
+
+		a[i+1], a[i] = rem.hi, rem.lo
+	}
+
+	return u128{hi: q[1], lo: q[0]}
+}
+
+// subUnsafe returns u - v with u >= v
+// must be called only when u >= v or the result will be incorrect
+func subUnsafe(u, v u128) u128 {
+	lo, borrow := bits.Sub64(u.lo, v.lo, 0)
+	hi, _ := bits.Sub64(u.hi, v.hi, borrow)
+	return u128{hi: hi, lo: lo}
 }

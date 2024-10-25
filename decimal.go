@@ -565,10 +565,12 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 
 	if !d.coef.overflow() {
 		d256 := d.coef.u128.MulToU256(pow10[defaultPrec-d.prec])
-		quo, _, err := d256.quoRem64Tou128(v)
+		quo, _, err := d256.div192by64(v)
 		if err == nil {
 			return newDecimal(d.neg, bintFromU128(quo), defaultPrec), nil
 		}
+
+		// overflow, try with *big.Int
 	}
 
 	// overflow, try with *big.Int
