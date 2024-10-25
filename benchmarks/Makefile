@@ -13,5 +13,5 @@ bench-ss:
 	@go test -bench=./ss -benchmem -count=10 -timeout=1h> bench-ss.txt
 	@sed -i 's/ss\///g' bench-ss.txt
 
-stats: bench-ss bench-udec
+stats:
 	@benchstat shopspring=bench-ss.txt udecimal=bench-udec.txt > benchstat.txt

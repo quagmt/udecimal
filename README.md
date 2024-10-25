@@ -157,7 +157,11 @@ Therefore, in most cases you can expect high performance and no memory allocatio
 
 ## Credits
 
-This library is inspired by [govalues/decimal](https://github.com/govalues/decimal) and [lukechampine/uint128](https://github.com/lukechampine/uint128)
+This library is inspired by these repositories:
+
+- [govalues/decimal](https://github.com/govalues/decimal)
+- [lukechampine/uint128](https://github.com/lukechampine/uint128)
+- [ridiculousfish/libdivide](https://github.com/ridiculousfish/libdivide)
 
 ## License
 

@@ -257,15 +257,15 @@ func BenchmarkDiv(b *testing.B) {
 
 	for _, tc := range testcases {
 		// shopspring benchmark
-		// b.Run(fmt.Sprintf("ss/%s.Div(%s)", tc.a, tc.b), func(b *testing.B) {
-		// 	a := ss.RequireFromString(tc.a)
-		// 	bb := ss.RequireFromString(tc.b)
+		b.Run(fmt.Sprintf("ss/%s.Div(%s)", tc.a, tc.b), func(b *testing.B) {
+			a := ss.RequireFromString(tc.a)
+			bb := ss.RequireFromString(tc.b)
 
-		// 	b.ResetTimer()
-		// 	for range b.N {
-		// 		_ = a.Div(bb)
-		// 	}
-		// })
+			b.ResetTimer()
+			for range b.N {
+				_ = a.Div(bb)
+			}
+		})
 
 		b.Run(fmt.Sprintf("udec/%s.Div(%s)", tc.a, tc.b), func(b *testing.B) {
 			a, err := udecimal.Parse(tc.a)
