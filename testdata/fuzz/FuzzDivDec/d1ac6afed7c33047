@@ -1,0 +1,9 @@
+go test fuzz v1
+bool(true)
+uint64(1234567890123456789)
+uint64(90)
+byte('\x00')
+bool(true)
+uint64(44)
+uint64(55)
+byte('b')

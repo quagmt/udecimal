@@ -8,6 +8,7 @@ import (
 
 var (
 	one128 = u128{lo: 1}
+	max128 = u128{hi: ^uint64(0), lo: ^uint64(0)}
 )
 
 // u128 (big unsigned-integer) is a 128-bits unsigned integer

@@ -252,6 +252,7 @@ func BenchmarkDiv(b *testing.B) {
 		{"123456.123456", "999999"},
 		{"123456.123456", "456781244.1324897546"},
 		{"548751.15465466546", "1542.456487"},
+		{"22773757910726981402256170801141121114", "811656739243220271.159"},
 	}
 
 	for _, tc := range testcases {
@@ -281,7 +282,7 @@ func BenchmarkDiv(b *testing.B) {
 	}
 }
 
-func BenchmarkDivFallback(b *testing.B) {
+func BenchmarkFallbackDiv(b *testing.B) {
 	testcases := []struct {
 		a, b string
 	}{

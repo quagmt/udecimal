@@ -1,6 +1,7 @@
 
 bench:
-	@go test -bench BenchmarkMarshalJSON -benchmem -memprofile mem.out -cpuprofile cpu.out -run NONE
+	# @go test -bench BenchmarkMarshalJSON -benchmem -memprofile mem.out -cpuprofile cpu.out -run NONE
+	@go test -bench BenchmarkDiv -benchmem -count=10 -run NONE > new.txt
 
 bench-udec:
 	@rm -f bench-udec.txt
