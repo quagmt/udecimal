@@ -162,7 +162,3 @@ This library is inspired by these repositories:
 - [govalues/decimal](https://github.com/govalues/decimal)
 - [lukechampine/uint128](https://github.com/lukechampine/uint128)
 - [ridiculousfish/libdivide](https://github.com/ridiculousfish/libdivide)
-
-## License
-
-**MIT**
