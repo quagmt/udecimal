@@ -233,6 +233,7 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 	}{
 		{"empty", []byte{}, fmt.Errorf("invalid binary data")},
 		{"invalid", []byte{0x01, 0x02, 0x03}, fmt.Errorf("invalid binary data")},
+		{"total len mismatched", []byte{0x01, 0x02, 0x01, 0x04, 0x05}, fmt.Errorf("invalid binary data")},
 		{"len is less than 3", []byte{0x01, 0x02}, fmt.Errorf("invalid binary data")},
 		{"len is less than 3, bigInt", []byte{0x11, 0x02, 0x01}, fmt.Errorf("invalid binary data")},
 	}

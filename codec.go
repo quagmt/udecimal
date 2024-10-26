@@ -348,18 +348,19 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	d.prec = data[1]
 
 	totalBytes := data[2]
-
-	// for u128, totalBytes must be 11 or 19
-	if totalBytes != 11 && totalBytes != 19 {
+	if int(totalBytes) != len(data) {
 		return ErrInvalidBinaryData
 	}
 
 	coef := u128{}
-	if totalBytes == 11 {
-		coef.lo = binary.BigEndian.Uint64(data[3:])
-	} else {
+	switch totalBytes {
+	case 11:
+		coef = u128{lo: binary.BigEndian.Uint64(data[3:])}
+	case 19:
 		coef.hi = binary.BigEndian.Uint64(data[3:])
 		coef.lo = binary.BigEndian.Uint64(data[11:])
+	default:
+		return ErrInvalidBinaryData
 	}
 
 	d.coef.u128 = coef
@@ -371,8 +372,7 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 	d.prec = data[1]
 
 	totalBytes := data[2]
-
-	if totalBytes < 3 {
+	if int(totalBytes) != len(data) {
 		return ErrInvalidBinaryData
 	}
 
