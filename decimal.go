@@ -278,6 +278,7 @@ func (d Decimal) InexactFloat64() float64 {
 // Returns error if:
 //  1. empty/invalid string
 //  2. the number has more than 19 digits after the decimal point
+//  3. string length exceeds maxStrLen (which is 200 characters. See maxStrLen const for more details)
 func Parse(s string) (Decimal, error) {
 	return parseBytes(unsafeStringToBytes(s))
 }
