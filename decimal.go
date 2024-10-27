@@ -99,8 +99,9 @@ var (
 	ErrEmptyString = fmt.Errorf("parse empty string")
 
 	// ErrMaxStrLen is returned when the input string exceeds the maximum length
-	// This limitation is set to prevent large string input which can cause performance issue
-	// Maximum length is set to 200
+	// Maximum length is arbitrarily set to 200 so string length value can fit in 1 byte (for MarshalBinary).
+	// Also such that big number (more than 200 digits) is unrealistic in financial system
+	// which this library is mainly designed for.
 	ErrMaxStrLen = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
 
 	// ErrInvalidFormat is returned when the input string is not in the correct format
@@ -213,7 +214,7 @@ func NewFromInt64(coef int64, prec uint8) (Decimal, error) {
 		return Decimal{}, ErrPrecOutOfRange
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	return newDecimal(neg, bintFromU64(uint64(coef)), prec), nil
 }
 
@@ -278,6 +279,7 @@ func (d Decimal) InexactFloat64() float64 {
 // Returns error if:
 //  1. empty/invalid string
 //  2. the number has more than 19 digits after the decimal point
+//  3. string length exceeds maxStrLen (which is 200 characters. See [ErrMaxStrLen] for more details)
 func Parse(s string) (Decimal, error) {
 	return parseBytes(unsafeStringToBytes(s))
 }
@@ -429,10 +431,6 @@ func (d Decimal) Sub64(e uint64) Decimal {
 // Mul returns d * e.
 // The result will have at most defaultPrec digits after the decimal point.
 func (d Decimal) Mul(e Decimal) Decimal {
-	if e.coef.IsZero() {
-		return Decimal{}
-	}
-
 	prec := d.prec + e.prec
 	neg := d.neg != e.neg
 
@@ -1149,7 +1147,7 @@ func (d Decimal) PowInt(e int) Decimal {
 		neg = false
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision))
 }
 
@@ -1215,7 +1213,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 			return Decimal{}, errOverflow
 		}
 
-		// nolint: gosec
+		//nolint:gosec
 		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powPrecision)), nil
 	}
 
@@ -1269,7 +1267,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 			return Decimal{}, errOverflow
 		}
 
-		// nolint: gosec
+		//nolint:gosec
 		a256 := one128.MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 
 		q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
@@ -1288,7 +1286,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	}
 
 	// a256 = 10^(powPrecision + factor + defaultPrec)
-	// nolint: gosec
+	//nolint:gosec
 	a256 := pow10[factor].MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 	q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
@@ -1341,7 +1339,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	bitLen := uint(coef.bitLen()) // bitLen < 192
 
 	// initial guess = 2^((bitLen + 1) / 2) ≥ √coef

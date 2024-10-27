@@ -165,7 +165,7 @@ func (u u256) div256by128(v u128) u128 {
 	// normalize v
 	n := bits.LeadingZeros64(v.hi)
 
-	// nolint: gosec
+	//nolint:gosec
 	v = v.Lsh(uint(n))
 
 	// shift u to the left by n bits (n < 64)

@@ -1,9 +1,16 @@
 package udecimal
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"strings"
+)
+
+const (
+	// maxDigitU64 is the maximum digits of a number
+	// that can be safely stored in a uint64.
+	maxDigitU64 = 19
 )
 
 var (
@@ -171,7 +178,7 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	return neg, bintFromBigInt(dValue), uint8(prec), nil
 }
 
@@ -211,7 +218,7 @@ func parseBintFromU128(s []byte) (bool, bint, uint8, error) {
 		prec uint8
 	)
 
-	if len(s[pos:]) <= 19 {
+	if len(s[pos:]) <= maxDigitU64 {
 		coef, prec, err = parseSmallToU128(s[pos:])
 	} else {
 		coef, prec, err = parseLargeToU128(s[pos:])
@@ -237,7 +244,7 @@ func parseSmallToU128(s []byte) (u128, uint8, error) {
 				return u128{}, 0, ErrInvalidFormat
 			}
 
-			// nolint: gosec
+			//nolint:gosec
 			prec = uint8(len(s) - i - 1)
 
 			// prevent "123." or "-123."
@@ -269,25 +276,10 @@ func parseSmallToU128(s []byte) (u128, uint8, error) {
 func parseLargeToU128(s []byte) (u128, uint8, error) {
 	// find '.' position
 	l := len(s)
-	pos := -1
-
-	for i := 0; i < len(s); i++ {
-		if s[i] == '.' {
-			pos = i
-		}
-	}
-
+	pos := bytes.IndexByte(s, '.')
 	if pos == 0 || pos == l-1 {
+		// prevent ".123" or "123."
 		return u128{}, 0, ErrInvalidFormat
-	}
-
-	var prec uint8
-	if pos != -1 {
-		// nolint: gosec
-		prec = uint8(l - pos - 1)
-		if prec > defaultPrec {
-			return u128{}, 0, ErrPrecOutOfRange
-		}
 	}
 
 	if pos == -1 {
@@ -300,6 +292,13 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 		return coef, 0, nil
 	}
 
+	// now 0 < pos < l-1
+	//nolint:gosec
+	prec := uint8(l - pos - 1)
+	if prec > defaultPrec {
+		return u128{}, 0, ErrPrecOutOfRange
+	}
+
 	// number has a decimal point, split into 2 parts: integer and fraction
 	intPart, err := digitToU128(s[:pos])
 	if err != nil {
@@ -307,7 +306,7 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 	}
 
 	// because max prec is 19,
-	// factionPart can't be larger than 10%20-1 and will fit into uint64 (fractionPart.hi == 0)
+	// factionPart can't be larger than 10^19-1 and will fit into uint64 (fractionPart.hi == 0)
 	fractionPart, err := digitToU128(s[pos+1:])
 	if err != nil {
 		return u128{}, 0, err
@@ -328,7 +327,7 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 }
 
 func digitToU128(s []byte) (u128, error) {
-	if len(s) <= 19 {
+	if len(s) <= maxDigitU64 {
 		var u uint64
 		for i := 0; i < len(s); i++ {
 			if s[i] < '0' || s[i] > '9' {

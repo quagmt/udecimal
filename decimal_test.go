@@ -564,7 +564,6 @@ func TestAdd(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			// nolint: gosec
 			prec := int32(c.Prec())
 			cc := aa.Add(bb).Truncate(prec)
 
@@ -2337,14 +2336,5 @@ func TestPrecUint(t *testing.T) {
 				require.Equal(t, oneUnit.prec, b.PrecUint())
 			}
 		})
-	}
-}
-
-func BenchmarkDiv(b *testing.B) {
-	a := MustParse("22773757910726981402256170801141121114")
-	bb := MustParse("811656739243220271.159")
-
-	for i := 0; i < b.N; i++ {
-		_, _ = a.Div(bb)
 	}
 }
