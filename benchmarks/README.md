@@ -15,13 +15,15 @@ cd udecimal/benchmarks
 
 ### 2. Run benchmarks
 
-Run full benchmarks with benchstat comparison
+Run full benchmarks with benchstat comparison (it will take some time)
 
 ```bash
+make bench-ss
+make bench-udec
 make stats
 ```
 
-Or run benchmarks for `udecimal`
+Or run benchmarks for `udecimal` only
 
 ```bash
 make bench-udec
@@ -92,8 +94,8 @@ BenchmarkUnmarshalBinary/0.1234567890123456879-32                               
 ```powershell
                                                                                │   shopspring   │               udecimal               │
                                                                                │     sec/op     │    sec/op     vs base                │
-Parse/1234567890123456789.1234567890123456879-32                                  384.35n ± 10%   75.55n ±  3%  -80.34% (p=0.000 n=10)
-Parse/0.1234567890123456879-32                                                    262.30n ± 17%   40.64n ±  3%  -84.51% (p=0.000 n=10)
+Parse/1234567890123456789.1234567890123456879-32                                  384.35n ± 10%   38.55n ±  4%  -89.97% (p=0.000 n=10)
+Parse/0.1234567890123456879-32                                                    262.30n ± 17%   25.93n ±  3%  -90.11% (p=0.000 n=10)
 ParseFallBack/123456789123456789123456.1234567890123456-32                         373.2n ± 13%   418.3n ±  7%  +12.08% (p=0.000 n=10)
 ParseFallBack/111222333444555666777888999.1234567890123456789-32                   418.5n ±  5%   453.4n ±  9%   +8.33% (p=0.003 n=10)
 String/1234567890123456789.1234567890123456879-32                                 284.45n ± 26%   97.61n ± 11%  -65.68% (p=0.000 n=10)
