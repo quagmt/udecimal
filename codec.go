@@ -166,7 +166,6 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 		for ; rem != 0; rem /= 10 {
 			n++
 
-			// nolint: gosec
 			buf[l-n] = byte(rem%10) + '0'
 		}
 
@@ -188,8 +187,7 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 			q, r := quoRem64(quo, 10)
 			n++
 
-			// nolint: gosec
-			buf[l-n] = uint8(r%10) + '0'
+			buf[l-n] = byte(r%10) + '0'
 			if q.IsZero() {
 				break
 			}

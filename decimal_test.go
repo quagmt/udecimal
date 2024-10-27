@@ -564,7 +564,6 @@ func TestAdd(t *testing.T) {
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
-			// nolint: gosec
 			prec := int32(c.Prec())
 			cc := aa.Add(bb).Truncate(prec)
 

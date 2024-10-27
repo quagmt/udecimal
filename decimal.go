@@ -99,8 +99,9 @@ var (
 	ErrEmptyString = fmt.Errorf("parse empty string")
 
 	// ErrMaxStrLen is returned when the input string exceeds the maximum length
-	// This limitation is set to prevent large string input which can cause performance issue
-	// Maximum length is set to 200
+	// Maximum length is arbitrarily set to 200 so string length value can fit in 1 byte (for MarshalBinary).
+	// Also such that big number (more than 200 digits) is unrealistic in financial system
+	// which this library is mainly designed for.
 	ErrMaxStrLen = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
 
 	// ErrInvalidFormat is returned when the input string is not in the correct format
@@ -213,7 +214,7 @@ func NewFromInt64(coef int64, prec uint8) (Decimal, error) {
 		return Decimal{}, ErrPrecOutOfRange
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	return newDecimal(neg, bintFromU64(uint64(coef)), prec), nil
 }
 
@@ -278,7 +279,7 @@ func (d Decimal) InexactFloat64() float64 {
 // Returns error if:
 //  1. empty/invalid string
 //  2. the number has more than 19 digits after the decimal point
-//  3. string length exceeds maxStrLen (which is 200 characters. See maxStrLen const for more details)
+//  3. string length exceeds maxStrLen (which is 200 characters. See [ErrMaxStrLen] for more details)
 func Parse(s string) (Decimal, error) {
 	return parseBytes(unsafeStringToBytes(s))
 }
@@ -1146,7 +1147,7 @@ func (d Decimal) PowInt(e int) Decimal {
 		neg = false
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision))
 }
 
@@ -1212,7 +1213,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 			return Decimal{}, errOverflow
 		}
 
-		// nolint: gosec
+		//nolint:gosec
 		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powPrecision)), nil
 	}
 
@@ -1266,7 +1267,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 			return Decimal{}, errOverflow
 		}
 
-		// nolint: gosec
+		//nolint:gosec
 		a256 := one128.MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 
 		q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
@@ -1285,7 +1286,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	}
 
 	// a256 = 10^(powPrecision + factor + defaultPrec)
-	// nolint: gosec
+	//nolint:gosec
 	a256 := pow10[factor].MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 	q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
@@ -1338,7 +1339,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	// nolint: gosec
+	//nolint:gosec
 	bitLen := uint(coef.bitLen()) // bitLen < 192
 
 	// initial guess = 2^((bitLen + 1) / 2) ≥ √coef
@@ -1367,26 +1368,3 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 
 	return newDecimal(false, bintFromU128(x), defaultPrec), nil
 }
-
-// goos: linux
-// goarch: amd64
-// pkg: github.com/quagmt/udecimal/benchmarks
-// cpu: Intel(R) Core(TM) i9-14900HX
-// BenchmarkMul/ss/1234.1234567890123456879.Mul(1111.1789)-32         	10858572	       107.1 ns/op	      96 B/op	       2 allocs/op
-// BenchmarkMul/udec/1234.1234567890123456879.Mul(1111.1789)-32       	135126661	         8.835 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/1234.1234567890123456879.Mul(1111.1234567890123456789)-32         	11944191	       114.8 ns/op	      96 B/op	       2 allocs/op
-// BenchmarkMul/udec/1234.1234567890123456879.Mul(1111.1234567890123456789)-32       	136730773	         8.726 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/123.456.Mul(0.123)-32                                             	17990072	        95.37 ns/op	      80 B/op	       2 allocs/op
-// BenchmarkMul/udec/123.456.Mul(0.123)-32                                           	187649670	         6.191 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/3.Mul(7)-32                                                       	16913634	        98.32 ns/op	      80 B/op	       2 allocs/op
-// BenchmarkMul/udec/3.Mul(7)-32                                                     	194847196	         6.439 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/123456.123456.Mul(999999)-32                                      	14550664	       101.1 ns/op	      80 B/op	       2 allocs/op
-// BenchmarkMul/udec/123456.123456.Mul(999999)-32                                    	181630240	         6.359 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/123456.123456.Mul(456781244.1324897546)-32                        	23803376	        96.47 ns/op	      80 B/op	       2 allocs/op
-// BenchmarkMul/udec/123456.123456.Mul(456781244.1324897546)-32                      	188306853	         6.369 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/548751.15465466546.Mul(1542.456487)-32                            	29261016	        95.77 ns/op	      80 B/op	       2 allocs/op
-// BenchmarkMul/udec/548751.15465466546.Mul(1542.456487)-32                          	190835786	         6.227 ns/op	       0 B/op	       0 allocs/op
-// BenchmarkMul/ss/0.Mul(1542.456487)-32                                             	55620909	        39.04 ns/op	      32 B/op	       1 allocs/op
-// BenchmarkMul/udec/0.Mul(1542.456487)-32                                           	196583198	         6.225 ns/op	       0 B/op	       0 allocs/op
-// PASS
-// ok  	github.com/quagmt/udecimal/benchmarks	29.377
