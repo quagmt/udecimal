@@ -306,7 +306,8 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 		return u128{}, 0, err
 	}
 
-	// because max prec is 19, factionPart can't be larger than 10%20-1 and will fit into uint64
+	// because max prec is 19,
+	// factionPart can't be larger than 10%20-1 and will fit into uint64 (fractionPart.hi == 0)
 	fractionPart, err := digitToU128(s[pos+1:])
 	if err != nil {
 		return u128{}, 0, err
@@ -364,11 +365,6 @@ func digitToU128(s []byte) (u128, error) {
 
 	return u, nil
 }
-
-// func isValidDigits(u uint64) bool {
-// 	return ((u & 0xF0F0F0F0F0F0F0F0) == 0x3030303030303030) &&
-// 		((u+0x0606060606060606)&0xF0F0F0F0F0F0F0F0 == 0x3030303030303030)
-// }
 
 // GT returns true if u > v
 func (u bint) GT(v bint) bool {

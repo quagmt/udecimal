@@ -111,8 +111,6 @@ var (
 		34, 34, 34, 35, 35, 35, 35, 36, 36, 36, // 110-119 bits
 		37, 37, 37, 38, 38, 38, 38, 39, 39, // 120-128 bits
 	}
-
-	digitBytes = [10]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}
 )
 
 func (d Decimal) stringU128(trimTrailingZeros bool, withQuote bool) string {
@@ -167,7 +165,9 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 
 		for ; rem != 0; rem /= 10 {
 			n++
-			buf[l-n] = digitBytes[rem%10]
+
+			// nolint: gosec
+			buf[l-n] = byte(rem%10) + '0'
 		}
 
 		// fill remaining zeros
@@ -186,10 +186,10 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 	} else {
 		for {
 			q, r := quoRem64(quo, 10)
-
 			n++
-			buf[l-n] = digitBytes[r]
 
+			// nolint: gosec
+			buf[l-n] = uint8(r%10) + '0'
 			if q.IsZero() {
 				break
 			}

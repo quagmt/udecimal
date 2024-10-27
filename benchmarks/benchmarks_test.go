@@ -23,12 +23,12 @@ func BenchmarkParse(b *testing.B) {
 
 	for _, tc := range testcases {
 		// shopspring benchmark
-		// b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
-		// 	b.ResetTimer()
-		// 	for range b.N {
-		// 		_, _ = ss.NewFromString(tc)
-		// 	}
-		// })
+		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+			b.ResetTimer()
+			for range b.N {
+				_, _ = ss.NewFromString(tc)
+			}
+		})
 
 		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
 			b.ResetTimer()

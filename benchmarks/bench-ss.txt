@@ -52,6 +52,16 @@ BenchmarkParse/0.1234567890123456879-32                           	 4524166	    
 BenchmarkParse/0.1234567890123456879-32                           	 4930246	       243.4 ns/op	     144 B/op	       5 allocs/op
 BenchmarkParse/0.1234567890123456879-32                           	 4491036	       241.7 ns/op	     144 B/op	       5 allocs/op
 BenchmarkParse/0.1234567890123456879-32                           	 4911284	       219.5 ns/op	     144 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3649983	       313.6 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 4065206	       310.8 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3553578	       293.6 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 4134546	       326.1 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3722556	       294.2 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3730910	       337.1 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 4160892	       308.3 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3727047	       301.0 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3756850	       342.8 ns/op	     152 B/op	       5 allocs/op
+BenchmarkParse/12345678901234567890123456789.123-32         	 3766802	       335.8 ns/op	     152 B/op	       5 allocs/op
 BenchmarkParseFallBack/123456789123456789123456.1234567890123456-32         	 3580087	       325.3 ns/op	     168 B/op	       5 allocs/op
 BenchmarkParseFallBack/123456789123456789123456.1234567890123456-32         	 3728620	       309.6 ns/op	     168 B/op	       5 allocs/op
 BenchmarkParseFallBack/123456789123456789123456.1234567890123456-32         	 3925362	       328.2 ns/op	     168 B/op	       5 allocs/op

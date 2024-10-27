@@ -382,12 +382,12 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 	}
 }
 
-func BenchmarkParse(b *testing.B) {
+func BenchmarkString(b *testing.B) {
 	b.StopTimer()
-	s := "123456789"
+	a := MustParse("0.1234567890123456789")
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = Parse(s)
+		_ = a.String()
 	}
 }
