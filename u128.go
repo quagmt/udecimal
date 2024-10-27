@@ -137,6 +137,12 @@ func (u u128) Mul(v u128) (u128, error) {
 // MulToU256 returns u*v and carry.
 // The whole result will be stored in a 256-bits unsigned integer.
 func (u u128) MulToU256(v u128) u256 {
+	// short path for small numbers
+	if u.hi == 0 && v.hi == 0 {
+		hi, lo := bits.Mul64(u.lo, v.lo)
+		return u256{lo: lo, hi: hi}
+	}
+
 	hi, lo := bits.Mul64(u.lo, v.lo)
 	p0, p1 := bits.Mul64(u.hi, v.lo)
 	p2, p3 := bits.Mul64(u.lo, v.hi)

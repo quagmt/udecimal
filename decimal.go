@@ -429,10 +429,6 @@ func (d Decimal) Sub64(e uint64) Decimal {
 // Mul returns d * e.
 // The result will have at most defaultPrec digits after the decimal point.
 func (d Decimal) Mul(e Decimal) Decimal {
-	if e.coef.IsZero() {
-		return Decimal{}
-	}
-
 	prec := d.prec + e.prec
 	neg := d.neg != e.neg
 
@@ -1370,3 +1366,26 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 
 	return newDecimal(false, bintFromU128(x), defaultPrec), nil
 }
+
+// goos: linux
+// goarch: amd64
+// pkg: github.com/quagmt/udecimal/benchmarks
+// cpu: Intel(R) Core(TM) i9-14900HX
+// BenchmarkMul/ss/1234.1234567890123456879.Mul(1111.1789)-32         	10858572	       107.1 ns/op	      96 B/op	       2 allocs/op
+// BenchmarkMul/udec/1234.1234567890123456879.Mul(1111.1789)-32       	135126661	         8.835 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/1234.1234567890123456879.Mul(1111.1234567890123456789)-32         	11944191	       114.8 ns/op	      96 B/op	       2 allocs/op
+// BenchmarkMul/udec/1234.1234567890123456879.Mul(1111.1234567890123456789)-32       	136730773	         8.726 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/123.456.Mul(0.123)-32                                             	17990072	        95.37 ns/op	      80 B/op	       2 allocs/op
+// BenchmarkMul/udec/123.456.Mul(0.123)-32                                           	187649670	         6.191 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/3.Mul(7)-32                                                       	16913634	        98.32 ns/op	      80 B/op	       2 allocs/op
+// BenchmarkMul/udec/3.Mul(7)-32                                                     	194847196	         6.439 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/123456.123456.Mul(999999)-32                                      	14550664	       101.1 ns/op	      80 B/op	       2 allocs/op
+// BenchmarkMul/udec/123456.123456.Mul(999999)-32                                    	181630240	         6.359 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/123456.123456.Mul(456781244.1324897546)-32                        	23803376	        96.47 ns/op	      80 B/op	       2 allocs/op
+// BenchmarkMul/udec/123456.123456.Mul(456781244.1324897546)-32                      	188306853	         6.369 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/548751.15465466546.Mul(1542.456487)-32                            	29261016	        95.77 ns/op	      80 B/op	       2 allocs/op
+// BenchmarkMul/udec/548751.15465466546.Mul(1542.456487)-32                          	190835786	         6.227 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkMul/ss/0.Mul(1542.456487)-32                                             	55620909	        39.04 ns/op	      32 B/op	       1 allocs/op
+// BenchmarkMul/udec/0.Mul(1542.456487)-32                                           	196583198	         6.225 ns/op	       0 B/op	       0 allocs/op
+// PASS
+// ok  	github.com/quagmt/udecimal/benchmarks	29.377

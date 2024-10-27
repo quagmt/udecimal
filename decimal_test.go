@@ -2339,12 +2339,3 @@ func TestPrecUint(t *testing.T) {
 		})
 	}
 }
-
-func BenchmarkDiv(b *testing.B) {
-	a := MustParse("22773757910726981402256170801141121114")
-	bb := MustParse("811656739243220271.159")
-
-	for i := 0; i < b.N; i++ {
-		_, _ = a.Div(bb)
-	}
-}
