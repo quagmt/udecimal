@@ -61,9 +61,9 @@ BenchmarkPow/1.01.Pow(10)-32                                                    
 BenchmarkPow/1.01.Pow(100)-32                                                            	   994129	  1137 ns/op	 817 B/op	13 allocs/op
 
 # Parsing string
-BenchmarkParse/1234567890123456789.1234567890123456879-32                                  	 15700467	 78.16 ns/op	   0 B/op	 0 allocs/op
-BenchmarkParse/1234567890-32                                                               	 54752288	 22.86 ns/op	   0 B/op	 0 allocs/op
-BenchmarkParse/0.1234567890123456879-32                                                    	 28947921	 41.76 ns/op	   0 B/op	 0 allocs/op
+BenchmarkParse/1234567890123456789.1234567890123456879-32                                    32111433    38.21 ns/op       0 B/op    0 allocs/op
+BenchmarkParse/1234567890-32                                                                 98585916    12.58 ns/op       0 B/op    0 allocs/op
+BenchmarkParse/0.1234567890123456879-32                                                      44339668    26.45 ns/op       0 B/op    0 allocs/op
 BenchmarkParseFallBack/123456789123456789123456.1234567890123456-32                        	  2805122 	 473.3 ns/op	 192 B/op	 6 allocs/op
 BenchmarkParseFallBack/111222333444555666777888999.1234567890123456789-32                  	  2442004 	 500.8 ns/op	 216 B/op	 6 allocs/op
 BenchmarkString/1234567890123456789.1234567890123456879-32                                 	 12797790	 98.69 ns/op	  48 B/op	 1 allocs/op

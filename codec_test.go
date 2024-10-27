@@ -233,6 +233,7 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 	}{
 		{"empty", []byte{}, fmt.Errorf("invalid binary data")},
 		{"invalid", []byte{0x01, 0x02, 0x03}, fmt.Errorf("invalid binary data")},
+		{"total len mismatched", []byte{0x01, 0x02, 0x01, 0x04, 0x05}, fmt.Errorf("invalid binary data")},
 		{"len is less than 3", []byte{0x01, 0x02}, fmt.Errorf("invalid binary data")},
 		{"len is less than 3, bigInt", []byte{0x11, 0x02, 0x01}, fmt.Errorf("invalid binary data")},
 	}
@@ -370,17 +371,6 @@ func BenchmarkMarshalBinaryBigInt(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBinaryBigInt(b *testing.B) {
-	b.StopTimer()
-	data, _ := MustParse("12345678901234567890123456789.1234567890123456789").MarshalBinary()
-
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var d Decimal
-		_ = d.UnmarshalBinary(data)
-	}
-}
-
 func BenchmarkUnmarshalJSON(b *testing.B) {
 	b.StopTimer()
 	data := []byte("123456789.123456789")
@@ -389,5 +379,15 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var d Decimal
 		_ = d.UnmarshalJSON(data)
+	}
+}
+
+func BenchmarkString(b *testing.B) {
+	b.StopTimer()
+	a := MustParse("0.1234567890123456789")
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		_ = a.String()
 	}
 }
