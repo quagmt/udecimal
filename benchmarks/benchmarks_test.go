@@ -18,16 +18,17 @@ func BenchmarkParse(b *testing.B) {
 		"123456.123456",
 		"1234567890",
 		"0.1234567890123456879",
+		"12345678901234567890123456789.123",
 	}
 
 	for _, tc := range testcases {
 		// shopspring benchmark
-		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
-			b.ResetTimer()
-			for range b.N {
-				_, _ = ss.NewFromString(tc)
-			}
-		})
+		// b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+		// 	b.ResetTimer()
+		// 	for range b.N {
+		// 		_, _ = ss.NewFromString(tc)
+		// 	}
+		// })
 
 		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
 			b.ResetTimer()

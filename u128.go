@@ -85,6 +85,11 @@ func (u u128) Add(v u128) (u128, error) {
 
 // Add64 returns u+v where v is a 64-bits unsigned integer.
 func (u u128) Add64(v uint64) (u128, error) {
+	if u.hi == 0 {
+		lo, carry := bits.Add64(u.lo, v, 0)
+		return u128{lo: lo, hi: carry}, nil
+	}
+
 	return u.Add(u128{lo: v})
 }
 
@@ -101,6 +106,11 @@ func (u u128) Sub(v u128) (u128, error) {
 
 // Mul64 returns u*v. If the result is greater than 2^128-1, Mul64 returns an overflow error.
 func (u u128) Mul64(v uint64) (u128, error) {
+	if u.hi == 0 {
+		hi, lo := bits.Mul64(u.lo, v)
+		return u128{hi: hi, lo: lo}, nil
+	}
+
 	hi, lo := bits.Mul64(u.lo, v)
 	p0, p1 := bits.Mul64(u.hi, v)
 	hi, c0 := bits.Add64(hi, p1, 0)

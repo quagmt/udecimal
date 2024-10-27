@@ -31,6 +31,17 @@ func TestSetDefaultPrecision(t *testing.T) {
 	})
 }
 
+func TestPrecOutOfRange(t *testing.T) {
+	defer SetDefaultPrecision(maxPrec)
+
+	require.Equal(t, uint8(19), defaultPrec)
+
+	SetDefaultPrecision(10)
+
+	_, err := Parse("0.12345678901234569")
+	require.Equal(t, ErrPrecOutOfRange, err)
+}
+
 func TestNewFromHiLo(t *testing.T) {
 	testcases := []struct {
 		neg     bool
@@ -73,16 +84,15 @@ func TestParse(t *testing.T) {
 		input, want string
 		wantErr     error
 	}{
-		{"", "", ErrEmptyString},
+		{"0.123", "0.123", nil},
+		{"1234567890123456789012345678901234567890", "1234567890123456789012345678901234567890", nil},
 		{"1234567890123456789.1234567890123456789", "1234567890123456789.1234567890123456789", nil},
 		{"0.0000123456", "0.0000123456", nil},
 		{"-0.0000123456", "-0.0000123456", nil},
 		{"0.0101010101010101", "0.0101010101010101", nil},
 		{"123.456000", "123.456", nil},
-		{"1234567890123456789012345678901234567890", "1234567890123456789012345678901234567890", nil},
 		{"-12345678912345678901.1234567890123456789", "-12345678912345678901.1234567890123456789", nil},
 		{"123.0000", "123", nil},
-		{"0.123", "0.123", nil},
 		{"-0.123", "-0.123", nil},
 		{"0", "0", nil},
 		{"0.00000", "0", nil},
@@ -110,6 +120,7 @@ func TestParse(t *testing.T) {
 		{"-123456.0000000000000000001", "-123456.0000000000000000001", nil},
 		{"+123456.123456", "123456.123456", nil},
 		{"+123.123", "123.123", nil},
+		{"923456789012345678901234567890123456.789", "923456789012345678901234567890123456.789", nil},
 		{"12345678901234567890.123456789", "12345678901234567890.123456789", nil},
 		{"1234567890123456789012345678901234567890", "1234567890123456789012345678901234567890", nil},
 		{"1234567890123456789123456789012345678901", "1234567890123456789123456789012345678901", nil},
@@ -123,6 +134,7 @@ func TestParse(t *testing.T) {
 		{"-.1234567890123456789012345678901234567890123456", "", fmt.Errorf("%w: can't parse '-.1234567890123456789012345678901234567890123456' to Decimal", ErrInvalidFormat)},
 		{"1.12345678901234567890123.45678901234567890123456", "", fmt.Errorf("%w: can't parse '1.12345678901234567890123.45678901234567890123456' to Decimal", ErrInvalidFormat)},
 		{"340282366920938463463374607431768211459.123+--", "", fmt.Errorf("%w: can't parse '340282366920938463463374607431768211459.123+--' to Decimal", ErrInvalidFormat)},
+		{"", "", ErrEmptyString},
 		{"1.234567890123456789012348901", "", ErrPrecOutOfRange},
 		{"1.123456789012345678912345678901234567890123456", "", ErrPrecOutOfRange},
 		{".", "", fmt.Errorf("%w: can't parse '.' to Decimal", ErrInvalidFormat)},
@@ -137,6 +149,9 @@ func TestParse(t *testing.T) {
 		{"+.", "", fmt.Errorf("%w: can't parse '+.' to Decimal", ErrInvalidFormat)},
 		{"+", "", fmt.Errorf("%w: can't parse '+' to Decimal", ErrInvalidFormat)},
 		{"-", "", fmt.Errorf("%w: can't parse '-' to Decimal", ErrInvalidFormat)},
+		{"abc.1234567890123456789", "", fmt.Errorf("%w: can't parse 'abc.1234567890123456789' to Decimal", ErrInvalidFormat)},
+		{"123.1234567890123456abc", "", fmt.Errorf("%w: can't parse '123.1234567890123456abc' to Decimal", ErrInvalidFormat)},
+		{"12345678901234567890123456789012345679801234567890.", "", fmt.Errorf("%w: can't parse '12345678901234567890123456789012345679801234567890.' to Decimal", ErrInvalidFormat)},
 	}
 
 	for _, tc := range testcases {

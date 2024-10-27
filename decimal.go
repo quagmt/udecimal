@@ -279,7 +279,7 @@ func (d Decimal) InexactFloat64() float64 {
 //  1. empty/invalid string
 //  2. the number has more than 19 digits after the decimal point
 func Parse(s string) (Decimal, error) {
-	return parseBytes(unssafeStringToBytes(s))
+	return parseBytes(unsafeStringToBytes(s))
 }
 
 func parseBytes(b []byte) (Decimal, error) {

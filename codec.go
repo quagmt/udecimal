@@ -14,13 +14,15 @@ import (
 )
 
 var (
-	_ fmt.Stringer             = (*Decimal)(nil)
-	_ sql.Scanner              = (*Decimal)(nil)
-	_ driver.Valuer            = (*Decimal)(nil)
-	_ encoding.TextMarshaler   = (*Decimal)(nil)
-	_ encoding.TextUnmarshaler = (*Decimal)(nil)
-	_ json.Marshaler           = (*Decimal)(nil)
-	_ json.Unmarshaler         = (*Decimal)(nil)
+	_ fmt.Stringer               = (*Decimal)(nil)
+	_ sql.Scanner                = (*Decimal)(nil)
+	_ driver.Valuer              = (*Decimal)(nil)
+	_ encoding.TextMarshaler     = (*Decimal)(nil)
+	_ encoding.TextUnmarshaler   = (*Decimal)(nil)
+	_ encoding.BinaryMarshaler   = (*Decimal)(nil)
+	_ encoding.BinaryUnmarshaler = (*Decimal)(nil)
+	_ json.Marshaler             = (*Decimal)(nil)
+	_ json.Unmarshaler           = (*Decimal)(nil)
 )
 
 // String returns the string representation of the decimal.
@@ -122,21 +124,13 @@ func (d Decimal) bytesU128(trimTrailingZeros bool, withQuote bool) []byte {
 	var totalLen uint8
 	byteLen := maxByteMap[d.coef.u128.bitLen()]
 
-	if trimTrailingZeros {
-		// if d.prec > byteLen, that means we need to allocate upto d.prec to cover all the zeros of the fraction part
-		// e.g. 0.00000123, prec = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
-		if byteLen <= d.prec {
-			byteLen = d.prec + 1 // 1 for zero in the whole part
-		}
-
-		totalLen = byteLen + 2
-	} else {
-		// if not trimming trailing zeros, we can safely allocate 41 bytes
-		// 1 sign + 1 dot + len(u128) (which is max to 39 bytes)
-		// buf = []byte("00000000000000000000000000000000000000000")
-		totalLen = 41
+	// if d.prec > byteLen, that means we need to allocate upto d.prec to cover all the zeros of the fraction part
+	// e.g. 0.00000123, prec = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
+	if byteLen <= d.prec {
+		byteLen = d.prec + 1 // 1 for zero in the whole part
 	}
 
+	totalLen = byteLen + 2
 	if withQuote {
 		// if withQuote is true, we need to add quotes at the beginning and the end
 		totalLen += 2
@@ -224,7 +218,7 @@ func unsafeBytesToString(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-func unssafeStringToBytes(s string) []byte {
+func unsafeStringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 

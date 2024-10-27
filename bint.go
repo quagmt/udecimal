@@ -210,49 +210,165 @@ func parseBintFromU128(s []byte) (bool, bint, uint8, error) {
 		coef u128
 		prec uint8
 	)
-	for ; pos < width; pos++ {
-		if s[pos] == '.' {
+
+	if len(s[pos:]) <= 19 {
+		coef, prec, err = parseSmallToU128(s[pos:])
+	} else {
+		coef, prec, err = parseLargeToU128(s[pos:])
+	}
+
+	if err == ErrInvalidFormat {
+		return neg, bint{}, 0, errInvalidFormat(s)
+	}
+
+	return neg, bint{u128: coef}, prec, err
+}
+
+func parseSmallToU128(s []byte) (u128, uint8, error) {
+	var (
+		coef uint64
+		prec uint8
+	)
+
+	for i := 0; i < len(s); i++ {
+		if s[i] == '.' {
 			// return err if we encounter the '.' more than once
 			if prec != 0 {
-				return false, bint{}, 0, errInvalidFormat(s)
+				return u128{}, 0, ErrInvalidFormat
 			}
 
 			// nolint: gosec
-			prec = uint8(width - pos - 1)
+			prec = uint8(len(s) - i - 1)
 
 			// prevent "123." or "-123."
 			if prec == 0 {
-				return false, bint{}, 0, errInvalidFormat(s)
+				return u128{}, 0, ErrInvalidFormat
 			}
 
 			if prec > defaultPrec {
-				return false, bint{}, 0, ErrPrecOutOfRange
+				return u128{}, 0, ErrPrecOutOfRange
 			}
 
 			continue
 		}
 
-		if s[pos] < '0' || s[pos] > '9' {
-			return false, bint{}, 0, errInvalidFormat(s)
+		if s[i] < '0' || s[i] > '9' {
+			return u128{}, 0, ErrInvalidFormat
 		}
 
-		coef, err = coef.Mul64(10)
-		if err != nil {
-			return false, bint{}, 0, err
-		}
-
-		coef, err = coef.Add64(uint64(s[pos] - '0'))
-		if err != nil {
-			return false, bint{}, 0, err
-		}
+		coef = coef*10 + uint64(s[i]-'0')
 	}
 
-	if coef.IsZero() {
-		return false, bint{}, 0, nil
+	if coef == 0 {
+		return u128{}, 0, nil
 	}
 
-	return neg, bint{u128: coef}, prec, nil
+	return u128{lo: coef}, prec, nil
 }
+
+func parseLargeToU128(s []byte) (u128, uint8, error) {
+	// find '.' position
+	l := len(s)
+	pos := -1
+
+	for i := 0; i < len(s); i++ {
+		if s[i] == '.' {
+			pos = i
+		}
+	}
+
+	if pos == 0 || pos == l-1 {
+		return u128{}, 0, ErrInvalidFormat
+	}
+
+	var prec uint8
+	if pos != -1 {
+		// nolint: gosec
+		prec = uint8(l - pos - 1)
+		if prec > defaultPrec {
+			return u128{}, 0, ErrPrecOutOfRange
+		}
+	}
+
+	if pos == -1 {
+		// no decimal point
+		coef, err := digitToU128(s)
+		if err != nil {
+			return u128{}, 0, err
+		}
+
+		return coef, 0, nil
+	}
+
+	// number has a decimal point, split into 2 parts: integer and fraction
+	intPart, err := digitToU128(s[:pos])
+	if err != nil {
+		return u128{}, 0, err
+	}
+
+	// because max prec is 19, factionPart can't be larger than 10%20-1 and will fit into uint64
+	fractionPart, err := digitToU128(s[pos+1:])
+	if err != nil {
+		return u128{}, 0, err
+	}
+
+	// combine
+	coef, err := intPart.Mul64(pow10[uint64(prec)].lo)
+	if err != nil {
+		return u128{}, 0, err
+	}
+
+	coef, err = coef.Add64(fractionPart.lo)
+	if err != nil {
+		return u128{}, 0, err
+	}
+
+	return coef, prec, nil
+}
+
+func digitToU128(s []byte) (u128, error) {
+	if len(s) <= 19 {
+		var u uint64
+		for i := 0; i < len(s); i++ {
+			if s[i] < '0' || s[i] > '9' {
+				return u128{}, ErrInvalidFormat
+			}
+
+			u = u*10 + uint64(s[i]-'0')
+		}
+
+		return u128{lo: u}, nil
+	}
+
+	// number is too large
+	var (
+		u   u128
+		err error
+	)
+
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return u128{}, ErrInvalidFormat
+		}
+
+		u, err = u.Mul64(10)
+		if err != nil {
+			return u128{}, err
+		}
+
+		u, err = u.Add64(uint64(s[i] - '0'))
+		if err != nil {
+			return u128{}, err
+		}
+	}
+
+	return u, nil
+}
+
+// func isValidDigits(u uint64) bool {
+// 	return ((u & 0xF0F0F0F0F0F0F0F0) == 0x3030303030303030) &&
+// 		((u+0x0606060606060606)&0xF0F0F0F0F0F0F0F0 == 0x3030303030303030)
+// }
 
 // GT returns true if u > v
 func (u bint) GT(v bint) bool {

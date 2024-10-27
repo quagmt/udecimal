@@ -371,17 +371,6 @@ func BenchmarkMarshalBinaryBigInt(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalBinaryBigInt(b *testing.B) {
-	b.StopTimer()
-	data, _ := MustParse("12345678901234567890123456789.1234567890123456789").MarshalBinary()
-
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var d Decimal
-		_ = d.UnmarshalBinary(data)
-	}
-}
-
 func BenchmarkUnmarshalJSON(b *testing.B) {
 	b.StopTimer()
 	data := []byte("123456789.123456789")
@@ -390,5 +379,15 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var d Decimal
 		_ = d.UnmarshalJSON(data)
+	}
+}
+
+func BenchmarkParse(b *testing.B) {
+	b.StopTimer()
+	s := "123456789"
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = Parse(s)
 	}
 }
