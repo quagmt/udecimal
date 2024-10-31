@@ -400,7 +400,7 @@ func (d *Decimal) Scan(src any) error {
 	var err error
 	switch v := src.(type) {
 	case []byte:
-		*d, err = Parse(unsafeBytesToString(v))
+		*d, err = parseBytes(v)
 	case string:
 		*d, err = Parse(v)
 	case uint64:
