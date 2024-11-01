@@ -19,15 +19,6 @@ type u128 struct {
 	lo uint64
 }
 
-// bitLen returns the number of bits required to represent u
-func (u u128) bitLen() int {
-	if u.hi != 0 {
-		return bits.Len64(u.hi) + 64
-	}
-
-	return bits.Len64(u.lo)
-}
-
 // IsZero returns true if u is zero
 func (u u128) IsZero() bool {
 	return u == u128{}

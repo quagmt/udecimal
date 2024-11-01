@@ -139,6 +139,8 @@ func TestMarshalJSON(t *testing.T) {
 			b, err := json.Marshal(a)
 			require.NoError(t, err)
 
+			require.Equal(t, fmt.Sprintf(`{"a":"%s"}`, tc.in), string(b))
+
 			// unmarshal back
 			var c A
 			require.NoError(t, json.Unmarshal(b, &c))
@@ -383,8 +385,9 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 }
 
 func BenchmarkString(b *testing.B) {
-	a := MustParse("123456")
-	b.ResetTimer()
+	b.StopTimer()
+	a := MustParse("123456.123456")
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		_ = a.String()
 	}

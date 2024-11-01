@@ -94,65 +94,71 @@ func (d Decimal) stringBigInt(trimTrailingZeros bool) string {
 	return number
 }
 
+func (d Decimal) stringU128(trimTrailingZeros bool, withQuote bool) string {
+	// Some important notes:
+	// 1. If the size of buffer is already known at compile time, the compiler can allocate it on the stack (if it's small enough)
+	// and it will only be moved to the heap when string() is called.
+	// 2. When calling string(), the actual number of bytes used will be calculated. So we can safely use a large buffer
+	// without worrying it will affect the memory usage. It will be optimized anyway.
+	// 3. The actual bytes allocated is somehow weird, for example:
+	//   - make([]byte,5) --> allocate 5 bytes
+	//   - make([]byte,6) --> allocate 8 bytes
+	//   - make([]byte,17) --> allocate 24 bytes
+	//   - make([]byte,33) --> allocate 48 bytes
+	// So, trying to optimize the total bytes allocated by pre-defining the capacity is not worth it
+	// cuz the compiler optimizes it differently. My assumption is 16-byte alignment optimization in the compiler.
+	// However, I haven't found where this behavior is documented, just discovered it by testing.
+
+	buf := make([]byte, 43) // 43 bytes = max(u128) + 2 (for quotes) + 1 (for sign) + 1 (for dot)
+	if withQuote {
+		// if withQuote is true, we need to add quotes at the beginning and the end
+		n := d.fillBuffer(buf[:len(buf)-1], trimTrailingZeros)
+		buf[len(buf)-1] = '"'
+		buf[n] = '"'
+		return string(buf[n:])
+	}
+
+	n := d.fillBuffer(buf, trimTrailingZeros)
+	return string(buf[n+1:])
+}
+
 var (
-	// maxByteMap is a map of maximum byte needed to represent an u128 number, indexed by the number of bits.
-	maxByteMap = [129]byte{
-		1, 1, 1, 1, 2, 2, 2, 3, 3, 3, // 0-9 bits
-		4, 4, 4, 4, 5, 5, 5, 6, 6, 6, // 10-19 bits
-		7, 7, 7, 7, 8, 8, 8, 9, 9, 9, // 20-29 bits
-		10, 10, 10, 10, 11, 11, 11, 12, 12, 12, // 30-39 bits
-		13, 13, 13, 13, 14, 14, 14, 15, 15, 15, // 40-49 bits
-		16, 16, 16, 16, 17, 17, 17, 18, 18, 18, // 50-59 bits
-		19, 19, 19, 19, 20, 20, 20, 21, 21, 21, // 60-69 bits
-		22, 22, 22, 22, 23, 23, 23, 24, 24, 24, // 70-79 bits
-		25, 25, 25, 25, 26, 26, 26, 27, 27, 27, // 80-89 bits
-		28, 28, 28, 28, 29, 29, 29, 30, 30, 30, // 90-99 bits
-		31, 31, 31, 32, 32, 32, 32, 33, 33, 33, // 100-109 bits
-		34, 34, 34, 35, 35, 35, 35, 36, 36, 36, // 110-119 bits
-		37, 37, 37, 38, 38, 38, 38, 39, 39, // 120-128 bits
+	// lookup table for 00 -> 99
+	table = [200]byte{
+		0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35,
+		0x30, 0x36, 0x30, 0x37, 0x30, 0x38, 0x30, 0x39, 0x31, 0x30, 0x31, 0x31,
+		0x31, 0x32, 0x31, 0x33, 0x31, 0x34, 0x31, 0x35, 0x31, 0x36, 0x31, 0x37,
+		0x31, 0x38, 0x31, 0x39, 0x32, 0x30, 0x32, 0x31, 0x32, 0x32, 0x32, 0x33,
+		0x32, 0x34, 0x32, 0x35, 0x32, 0x36, 0x32, 0x37, 0x32, 0x38, 0x32, 0x39,
+		0x33, 0x30, 0x33, 0x31, 0x33, 0x32, 0x33, 0x33, 0x33, 0x34, 0x33, 0x35,
+		0x33, 0x36, 0x33, 0x37, 0x33, 0x38, 0x33, 0x39, 0x34, 0x30, 0x34, 0x31,
+		0x34, 0x32, 0x34, 0x33, 0x34, 0x34, 0x34, 0x35, 0x34, 0x36, 0x34, 0x37,
+		0x34, 0x38, 0x34, 0x39, 0x35, 0x30, 0x35, 0x31, 0x35, 0x32, 0x35, 0x33,
+		0x35, 0x34, 0x35, 0x35, 0x35, 0x36, 0x35, 0x37, 0x35, 0x38, 0x35, 0x39,
+		0x36, 0x30, 0x36, 0x31, 0x36, 0x32, 0x36, 0x33, 0x36, 0x34, 0x36, 0x35,
+		0x36, 0x36, 0x36, 0x37, 0x36, 0x38, 0x36, 0x39, 0x37, 0x30, 0x37, 0x31,
+		0x37, 0x32, 0x37, 0x33, 0x37, 0x34, 0x37, 0x35, 0x37, 0x36, 0x37, 0x37,
+		0x37, 0x38, 0x37, 0x39, 0x38, 0x30, 0x38, 0x31, 0x38, 0x32, 0x38, 0x33,
+		0x38, 0x34, 0x38, 0x35, 0x38, 0x36, 0x38, 0x37, 0x38, 0x38, 0x38, 0x39,
+		0x39, 0x30, 0x39, 0x31, 0x39, 0x32, 0x39, 0x33, 0x39, 0x34, 0x39, 0x35,
+		0x39, 0x36, 0x39, 0x37, 0x39, 0x38, 0x39, 0x39,
 	}
 )
 
-func (d Decimal) stringU128(trimTrailingZeros bool, withQuote bool) string {
-	return unsafeBytesToString(d.bytesU128(trimTrailingZeros, withQuote))
-}
-
-// bytesU128 returns the byte representation of the decimal if the coefficient is u128.
-func (d Decimal) bytesU128(trimTrailingZeros bool, withQuote bool) []byte {
-	var totalLen uint8
-	byteLen := maxByteMap[d.coef.u128.bitLen()]
-
-	// if d.prec > byteLen, that means we need to allocate upto d.prec to cover all the zeros of the fraction part
-	// e.g. 0.00000123, prec = 8, byteLen = 3 --> we need to allocate 8 bytes for the fraction part
-	if byteLen <= d.prec {
-		byteLen = d.prec + 1 // 1 for zero in the whole part
-	}
-
-	totalLen = byteLen + 2
-	if withQuote {
-		// if withQuote is true, we need to add quotes at the beginning and the end
-		totalLen += 2
-		buf := make([]byte, totalLen)
-		n := d.fillBuffer(buf[1:len(buf)-1], trimTrailingZeros)
-
-		n += 2 // 1 for quote offset at buf[l-1], 1 for moving the index to next position
-		l := len(buf)
-		buf[l-1], buf[l-n] = '"', '"'
-		return buf[l-n:]
-	}
-
-	buf := make([]byte, totalLen)
-	n := d.fillBuffer(buf, trimTrailingZeros)
-
-	return buf[len(buf)-n:]
-}
-
 func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
-	quo, rem := d.coef.u128.QuoRem64(pow10[d.prec].lo) // max prec is 19, so we can safely use QuoRem64
+	var (
+		quo u128
+		rem uint64
+	)
+
+	if d.prec == 0 {
+		quo = d.coef.u128
+	} else {
+		quo, rem = d.coef.u128.QuoRem64(pow10[d.prec].lo) // max prec is 19, so we can safely use QuoRem64
+	}
 
 	prec := d.prec
-	l := len(buf)
-	n := 0
+	n := len(buf) - 1
 
 	if rem != 0 {
 		if trimTrailingZeros {
@@ -163,42 +169,62 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 			prec -= zeros
 		}
 
-		for ; rem != 0; rem /= 10 {
-			n++
+		// fill fractional part
+		for rem >= 100 {
+			r := rem % 100 * 2
+			rem /= 100
+			buf[n] = table[r+1]
+			buf[n-1] = table[r]
+			n -= 2
+		}
 
-			buf[l-n] = byte(rem%10) + '0'
+		if rem >= 10 {
+			r := rem * 2
+			buf[n] = table[r+1]
+			buf[n-1] = table[r]
+			n -= 2
+		} else {
+			buf[n] = byte(rem) + '0'
+			n--
 		}
 
 		// fill remaining zeros
-		for i := n + 1; i <= int(prec); i++ {
-			buf[l-i] = '0'
+		for i := n; i > len(buf)-1-int(prec); i-- {
+			buf[i] = '0'
 		}
 
-		buf[l-1-int(prec)] = '.'
-		n = int(prec + 1)
+		buf[len(buf)-int(prec)-1] = '.'
+		n = len(buf) - int(prec) - 2
 	}
 
 	if quo.IsZero() {
 		// quo is zero, we need to print at least one zero
-		n++
-		buf[l-n] = '0'
+		buf[n] = '0'
+		n--
 	} else {
-		for {
-			q, r := quoRem64(quo, 10)
-			n++
-
-			buf[l-n] = byte(r%10) + '0'
-			if q.IsZero() {
-				break
-			}
-
+		for quo.Cmp64(100) >= 0 {
+			q, r := quoRem64(quo, 100)
+			r = r * 2
 			quo = q
+
+			buf[n] = table[r+1]
+			buf[n-1] = table[r]
+			n -= 2
+		}
+
+		if quo.Cmp64(10) >= 0 {
+			buf[n] = table[quo.lo*2+1]
+			buf[n-1] = table[quo.lo*2]
+			n -= 2
+		} else {
+			buf[n] = byte(quo.lo) + '0'
+			n--
 		}
 	}
 
 	if d.neg {
-		n++
-		buf[l-n] = '-'
+		buf[n] = '-'
+		n--
 	}
 
 	return n
@@ -212,9 +238,9 @@ func quoRem64(u u128, v uint64) (q u128, r uint64) {
 	return u.QuoRem64(v)
 }
 
-func unsafeBytesToString(b []byte) string {
-	return unsafe.String(unsafe.SliceData(b), len(b))
-}
+// func unsafeBytesToString(b []byte) string {
+// 	return unsafe.String(unsafe.SliceData(b), len(b))
+// }
 
 func unsafeStringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
@@ -223,7 +249,7 @@ func unsafeStringToBytes(s string) []byte {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (d Decimal) MarshalJSON() ([]byte, error) {
 	if !d.coef.overflow() {
-		return d.bytesU128(true, true), nil
+		return unsafeStringToBytes(d.stringU128(true, true)), nil
 	}
 
 	return []byte(`"` + d.stringBigInt(true) + `"`), nil
@@ -251,7 +277,7 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 func (d Decimal) MarshalText() ([]byte, error) {
 	if !d.coef.overflow() {
 		// Return without quotes.
-		return d.bytesU128(true, false), nil
+		return unsafeStringToBytes(d.stringU128(true, false)), nil
 	}
 
 	return []byte(d.stringBigInt(true)), nil
