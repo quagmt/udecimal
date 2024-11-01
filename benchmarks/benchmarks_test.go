@@ -70,6 +70,7 @@ func BenchmarkString(b *testing.B) {
 		"123456.123456",
 		"1234567890",
 		"0.1234567890123456879",
+		"12345.1234567890123456789",
 	}
 
 	for _, tc := range testcases {

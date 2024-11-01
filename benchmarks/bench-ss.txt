@@ -132,6 +132,16 @@ BenchmarkString/0.1234567890123456879-32                                    	 64
 BenchmarkString/0.1234567890123456879-32                                    	 6106804	       182.6 ns/op	      80 B/op	       4 allocs/op
 BenchmarkString/0.1234567890123456879-32                                    	 8340056	       170.9 ns/op	      80 B/op	       4 allocs/op
 BenchmarkString/0.1234567890123456879-32                                    	 7816422	       144.5 ns/op	      80 B/op	       4 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 4406620	       262.8 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 4715979	       240.2 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 5084666	       232.1 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 5469702	       250.0 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 5063049	       242.4 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 4717598	       225.0 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 4795444	       241.4 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 4823866	       251.8 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 5811994	       236.4 ns/op	     176 B/op	       5 allocs/op
+BenchmarkString/12345.1234567890123456789-32                                	 4685367	       242.8 ns/op	     176 B/op	       5 allocs/op
 BenchmarkStringFallBack/123456789123456789123456.1234567890123456-32        	 3008487	       382.0 ns/op	     272 B/op	       5 allocs/op
 BenchmarkStringFallBack/123456789123456789123456.1234567890123456-32        	 4295414	       329.6 ns/op	     272 B/op	       5 allocs/op
 BenchmarkStringFallBack/123456789123456789123456.1234567890123456-32        	 3388437	       372.2 ns/op	     272 B/op	       5 allocs/op
