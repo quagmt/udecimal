@@ -238,10 +238,6 @@ func quoRem64(u u128, v uint64) (q u128, r uint64) {
 	return u.QuoRem64(v)
 }
 
-// func unsafeBytesToString(b []byte) string {
-// 	return unsafe.String(unsafe.SliceData(b), len(b))
-// }
-
 func unsafeStringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
