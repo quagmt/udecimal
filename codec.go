@@ -312,29 +312,29 @@ func (d Decimal) MarshalBinary() ([]byte, error) {
 
 func (d Decimal) marshalBinaryU128() ([]byte, error) {
 	coef := d.coef.u128
-	totalBytes := 19
 
-	if coef.hi == 0 {
-		totalBytes = 11
-	}
+	var (
+		buf []byte
+		neg uint8
+	)
 
-	buf := make([]byte, totalBytes)
-	var neg int
 	if d.neg {
 		neg = 1
 	}
 
-	// overflow + neg with overflow = false (always 0)
-	buf[0] = byte(neg)
-	buf[1] = byte(d.prec)
-	buf[2] = byte(totalBytes)
-
-	if coef.hi != 0 {
+	if coef.hi == 0 {
+		buf = make([]byte, 11)
+		buf[2] = 11
+		copyUint64ToBytes(buf[3:], coef.lo)
+	} else {
+		buf = make([]byte, 19)
+		buf[2] = 19
 		copyUint64ToBytes(buf[3:], coef.hi)
 		copyUint64ToBytes(buf[11:], coef.lo)
-	} else {
-		copyUint64ToBytes(buf[3:], coef.lo)
 	}
+
+	buf[0] = neg
+	buf[1] = d.prec
 
 	return buf, nil
 }
@@ -369,7 +369,7 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	coef := u128{}
 	switch totalBytes {
 	case 11:
-		coef = u128{lo: binary.BigEndian.Uint64(data[3:])}
+		coef.lo = binary.BigEndian.Uint64(data[3:])
 	case 19:
 		coef.hi = binary.BigEndian.Uint64(data[3:])
 		coef.lo = binary.BigEndian.Uint64(data[11:])
