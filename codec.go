@@ -467,7 +467,7 @@ func (d *NullDecimal) Scan(src any) error {
 	var err error
 	switch v := src.(type) {
 	case []byte:
-		d.Decimal, err = Parse(string(v))
+		d.Decimal, err = parseBytes(v)
 	case string:
 		d.Decimal, err = Parse(v)
 	case uint64:
