@@ -791,6 +791,48 @@ func (d Decimal) RoundBank(prec uint8) Decimal {
 	return newDecimal(d.neg, bintFromBigInt(q), prec)
 }
 
+// RoundAwayFromZero rounds the decimal to the specified prec using AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_away_from_zero).
+// If differs from HALF AWAY FROM ZERO in a way that the number is always rounded away from zero (or to infinity)
+// no matter if is 0.5 or not.
+// In other libraries or languages, this method is also known as ROUND_UP.
+//
+// Examples:
+//
+//	Round(1.12, 1) = 1.2
+//	Round(1.15, 1) = 1.2
+//	Round(-1.12, 1) = -1.12
+//	Round(-1.15, 1) = -1.12
+func (d Decimal) RoundAwayFromZero(prec uint8) Decimal {
+	if prec >= d.prec {
+		return d
+	}
+
+	factor := pow10[d.prec-prec]
+
+	if !d.coef.overflow() {
+		var err error
+		q, r := d.coef.u128.QuoRem64(factor.lo)
+
+		if r != 0 {
+			q, err = q.Add64(1)
+		}
+
+		if err == nil {
+			return newDecimal(d.neg, bintFromU128(q), prec)
+		}
+	}
+
+	// overflow, fallback to big.Int
+	dBig := d.coef.GetBig()
+	q, r := new(big.Int).QuoRem(dBig, factor.ToBigInt(), new(big.Int))
+
+	if r.Cmp(bigZero) != 0 {
+		q.Add(q, bigOne)
+	}
+
+	return newDecimal(d.neg, bintFromBigInt(q), prec)
+}
+
 // RoundHAZ rounds the decimal to the specified prec using HALF AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero).
 //
 // Examples:
@@ -805,12 +847,12 @@ func (d Decimal) RoundHAZ(prec uint8) Decimal {
 	}
 
 	factor := pow10[d.prec-prec]
-	lo, _ := factor.QuoRem64(2)
+	half, _ := factor.QuoRem64(2)
 
 	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
-		if lo.Cmp64(r) <= 0 {
+		if half.Cmp64(r) <= 0 {
 			q, err = q.Add64(1)
 		}
 
@@ -823,7 +865,7 @@ func (d Decimal) RoundHAZ(prec uint8) Decimal {
 	dBig := d.coef.GetBig()
 	q, r := new(big.Int).QuoRem(dBig, factor.ToBigInt(), new(big.Int))
 
-	loBig := lo.ToBigInt()
+	loBig := half.ToBigInt()
 	if r.Cmp(loBig) >= 0 {
 		q.Add(q, bigOne)
 	}
@@ -845,12 +887,12 @@ func (d Decimal) RoundHTZ(prec uint8) Decimal {
 	}
 
 	factor := pow10[d.prec-prec]
-	lo, _ := factor.QuoRem64(2)
+	half, _ := factor.QuoRem64(2)
 
 	if !d.coef.overflow() {
 		var err error
 		q, r := d.coef.u128.QuoRem64(factor.lo)
-		if lo.Cmp64(r) < 0 {
+		if half.Cmp64(r) < 0 {
 			q, err = q.Add64(1)
 		}
 
@@ -863,7 +905,7 @@ func (d Decimal) RoundHTZ(prec uint8) Decimal {
 	dBig := d.coef.GetBig()
 	q, r := new(big.Int).QuoRem(dBig, factor.ToBigInt(), new(big.Int))
 
-	loBig := lo.ToBigInt()
+	loBig := half.ToBigInt()
 	if r.Cmp(loBig) > 0 {
 		q.Add(q, bigOne)
 	}
@@ -1180,8 +1222,8 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	if d.coef.u128.hi != 0 && e >= 3 {
-		// e > 3 and u128.hi != 0 means the result will >= 2^192,
+	if d.coef.u128.hi != 0 && e >= 4 {
+		// e >= 4 and u128.hi != 0 means the result will >= 2^256,
 		// which we can't use fast division. So we need to use big.Int instead
 		return Decimal{}, errOverflow
 	}
