@@ -694,7 +694,10 @@ func (d Decimal) rescale(prec uint8) Decimal {
 	diff := prec - dTrim.prec
 	coef := dTrim.coef.Mul(bintFromU128(pow10[diff]))
 
-	return newDecimal(dTrim.neg, coef, prec)
+	// only this case we're not using  newDecimal to apply exact precision to zero value
+	// this happens when calling StringFixed with 0: 0.StringFixed(5) -> "0.00000"
+	// If we use newDecimal, the precision will always be 0, then 0.StringFixed(5) -> "0"
+	return Decimal{neg: dTrim.neg, coef: coef, prec: prec}
 }
 
 // Neg returns -d
