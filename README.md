@@ -22,6 +22,7 @@ go get github.com/quagmt/udecimal
 - **Immutable**: All arithmetic operations return a new `Decimal` value, preserving the original value and safe for concurrent use.
 - **Versatile Rounding Methods**: Includes HALF AWAY FROM ZERO, HALF TOWARD ZERO, and Banker's rounding.
   <br/>
+- **Correctness**: All arithmetic operations are fuzz tested and cross-checked with `shopspring/decimal` library to ensure correctness.
 
 **NOTE**: This library does not perform implicit rounding. If the result of an operation exceeds the maximum precision, extra digits are truncated. All rounding methods must be explicitly invoked. (see [Rounding Methods](#rounding-methods) for more details)
 
@@ -56,6 +57,7 @@ func main() {
 
 	// Rounding
 	fmt.Println(c.RoundBank(3)) // banker's rounding: 1.2345 -> 1.234
+	fmt.Println(c.RoundAwayFromZero(2)) // round away from zero: 1.2345 -> 1.24
 	fmt.Println(c.RoundHAZ(3))  // half away from zero: 1.2345 -> 1.235
 	fmt.Println(c.RoundHTZ(3))  // half towards zero: 1.2345 -> 1.234
 	fmt.Println(c.Trunc(2))     // truncate: 1.2345 -> 1.23
@@ -86,6 +88,7 @@ Rounding numbers can often be challenging and confusing due to the [variety of m
 This issue is particularly critical in financial applications, where even minor rounding errors can accumulate and lead to significant financial losses. To mitigate such errors, this library intentionally avoids implicit rounding. If the result of an operation exceeds the maximum precision specified by developers beforehand, **extra digits are truncated**. Developers need to explicitly choose the rounding method they want to use. The supported rounding methods are:
 
 - [Banker's rounding](https://en.wikipedia.org/wiki/Rounding#Rounding_half_to_even) or round half to even
+- [Round away from zero](https://en.wikipedia.org/wiki/Rounding#Rounding_away_from_zero)
 - [Half away from zero](https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero) (HAZ)
 - [Half toward zero](https://en.wikipedia.org/wiki/Rounding#Rounding_half_toward_zero) (HTZ)
 
@@ -102,18 +105,19 @@ import (
 
 func main() {
 	// Create a new decimal number
-	a, _ := udecimal.NewFromFloat64(1.45) // a = 1.45
+	a, _ := udecimal.NewFromFloat64(1.345) // a = 1.345
 
 	// Rounding
-	fmt.Println(a.RoundBank(1)) // banker's rounding: 1.45 -> 1.4
-	fmt.Println(a.RoundHAZ(1))  // half away from zero: 1.45 -> 1.5
-	fmt.Println(a.RoundHTZ(1))  // half towards zero: 1.45 -> 1.4
+	fmt.Println(a.RoundBank(2)) // banker's rounding: 1.345 -> 1.34
+	fmt.Println(a.RoundAwayFromZero(2)) // round away from zero: 1.345 -> 1.35
+	fmt.Println(a.RoundHAZ(2))  // half away from zero: 1.45 -> 1.35
+	fmt.Println(a.RoundHTZ(2))  // half towards zero: 1.45 -> 1.34
 }
 ```
 
 ## How it works
 
-As mentioned above, this library is not always memory allocation free. However, those cases where we need to allocate memory are incredily rare. To understand why, let's take a look at how the `Decimal` type is implemented.
+As mentioned above, this library is not always memory allocation free. However, those cases where we need to allocate memory are incredibly rare. To understand why, let's take a look at how the `Decimal` type is implemented.
 
 The `Decimal` type represents a fixed-point decimal number. It consists of three components: sign, coefficient, and prec. The number is represented as:
 
