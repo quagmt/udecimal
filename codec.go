@@ -41,10 +41,21 @@ func (d Decimal) String() string {
 
 // StringFixed returns the string representation of the decimal with fixed prec.
 // Trailing zeros will not be removed.
+// If the decimal is integer, the fractional part will be padded with zeros.
+// If prec is smaller then d.prec, the number will stay the same as the original.
 //
-// Special case: if the decimal is zero, it will return "0" regardless of the prec.
+// Example:
+//
+//	1.23.StringFixed(4) -> 1.2300
+//	-1.23.StringFixed(4) -> -1.2300
+//	5.StringFixed(2) -> 5.00
+//	5.123.StringFixed(2) -> 5.123
 func (d Decimal) StringFixed(prec uint8) string {
 	d1 := d.rescale(prec)
+
+	if prec < d1.prec {
+		return d1.String()
+	}
 
 	if !d1.coef.overflow() {
 		return d1.stringU128(false, false)
@@ -160,7 +171,19 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 	prec := d.prec
 	n := len(buf) - 1
 
-	if rem != 0 {
+	if rem == 0 {
+		// rem == 0, however, we still need to fill the fractional part with zeros
+		// this applied to StringFixed() where trimTrailingZeros is false
+		if !trimTrailingZeros && prec > 0 {
+			for i := n; i > len(buf)-1-int(prec); i-- {
+				buf[i] = '0'
+			}
+
+			buf[len(buf)-int(prec)-1] = '.'
+			n = len(buf) - int(prec) - 2
+		}
+	} else {
+		// rem != 0, fill the fractional part
 		if trimTrailingZeros {
 			// remove trailing zeros, e.g. 1.2300 -> 1.23
 			// both prec and rem will be adjusted

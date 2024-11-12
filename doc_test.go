@@ -326,6 +326,18 @@ func ExampleDecimal_RoundBank() {
 	// -2
 }
 
+func ExampleDecimal_RoundAwayFromZero() {
+	fmt.Println(MustParse("1.12").RoundAwayFromZero(1))
+	fmt.Println(MustParse("1.15").RoundAwayFromZero(1))
+	fmt.Println(MustParse("-1.12").RoundAwayFromZero(1))
+	fmt.Println(MustParse("-1.15").RoundAwayFromZero(1))
+	// Output:
+	// 1.2
+	// 1.2
+	// -1.2
+	// -1.2
+}
+
 func ExampleDecimal_RoundHAZ() {
 	fmt.Println(MustParse("1.12345").RoundHAZ(4))
 	fmt.Println(MustParse("1.12335").RoundHAZ(4))
@@ -387,9 +399,11 @@ func ExampleDecimal_String() {
 }
 
 func ExampleDecimal_StringFixed() {
+	fmt.Println(MustParse("1").StringFixed(2))
 	fmt.Println(MustParse("1.23").StringFixed(4))
 	fmt.Println(MustParse("-1.230000").StringFixed(5))
 	// Output:
+	// 1.00
 	// 1.2300
 	// -1.23000
 }

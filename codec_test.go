@@ -17,10 +17,12 @@ func TestStringFixed(t *testing.T) {
 		prec uint8
 		want string
 	}{
-		{"0", 1, "0"},
+		{"0", 3, "0.000"},
+		{"0", 1, "0.0"},
 		{"0", 0, "0"},
-		{"0", 2, "0"},
-		{"0", 3, "0"},
+		{"0", 2, "0.00"},
+		{"1", 3, "1.000"},
+		{"-10", 10, "-10.0000000000"},
 		{"123.123", 0, "123.123"},
 		{"123.123", 1, "123.123"},
 		{"123.123", 2, "123.123"},
@@ -47,7 +49,7 @@ func TestStringFixed(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		t.Run(tc.in, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s.StringFixed(%d)", tc.in, tc.prec), func(t *testing.T) {
 			d := MustParse(tc.in)
 			require.Equal(t, tc.want, d.StringFixed(tc.prec))
 		})

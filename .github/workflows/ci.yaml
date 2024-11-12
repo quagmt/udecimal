@@ -69,4 +69,4 @@ jobs:
           go-version-file: go.mod
 
       - name: Run fuzz tests
-        run: make fuzz-all 30
+        run: make fuzz-all 20

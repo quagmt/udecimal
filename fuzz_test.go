@@ -417,7 +417,46 @@ func FuzzRoundBank(f *testing.F) {
 		i32Round := int32(roundPrecision % maxPrec)
 		cc := ss.RequireFromString(cstr).RoundBank(i32Round)
 
-		require.Equal(t, cc.String(), cround.String(), "round %s %d", c, roundPrecision)
+		require.Equal(t, cc.String(), cround.String(), "roundBank %s %d", c, roundPrecision)
+	})
+}
+
+func FuzzRoundAwayFromZero(f *testing.F) {
+	for _, c := range corpus {
+		for _, d := range corpus {
+			roundPrecision := uint8(rand.N(20))
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec, roundPrecision)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		require.NoError(t, err)
+
+		c := a.Mul(b)
+		if c.coef.overflow() {
+			require.NotNil(t, c.coef.bigInt)
+			require.Equal(t, u128{}, c.coef.u128)
+		} else {
+			require.Nil(t, c.coef.bigInt)
+		}
+
+		cstr := c.String()
+
+		u8Round := uint8(roundPrecision % maxPrec)
+		cround := c.RoundAwayFromZero(u8Round)
+
+		// compare with shopspring/decimal
+		i32Round := int32(roundPrecision % maxPrec)
+		cc := ss.RequireFromString(cstr).RoundUp(i32Round)
+
+		require.Equal(t, cc.String(), cround.String(), "roundAwayFromZero %s %d", c, roundPrecision)
 	})
 }
 
