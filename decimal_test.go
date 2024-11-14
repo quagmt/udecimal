@@ -2243,6 +2243,133 @@ func TestRandomPow(t *testing.T) {
 	}
 }
 
+func TestPowInt32(t *testing.T) {
+	testcases := []struct {
+		a       string
+		b       int32
+		want    string
+		wantErr error
+	}{
+		{"123456789012345678901234567890123456789.9999999999999999999", 2, "15241578753238836750495351562566681945252248135650053345652796829976527968319.753086421975308642", nil},
+		{"0.5", -14, "16384", nil},
+		{"5", -18, "0.000000000000262144", nil},
+		{"-96", 384, "155651563400161893689540829251750532876602528021691915200061141022544075854496838643052295888420136905906567539126502582243693732125449523059780613380755061052491943449381255863820131332142779769865996188291542971996702478765598563482106934995948481892528830806840727897892513634949541154348143236794203399068607458789100280733156671481421737413484548654754828937861442964361485155011834501441449057827522043722520499866143913624005535732240536689495728164138830318329923569260213567200238743687906030695515032990022513102670332644203639546984105586335760789206424524917450457774575904047665710191104154700220406574406611422191187238002842748820651406984670104474060413271629299557918370269495849383625416400964818595369246834495413046931303826618633216386400256", nil},
+		{"-70", -8, "0.0000000000000017346", nil},
+		{"0.12", 100, "0", nil},
+		{"0", 0, "1", nil},
+		{"0", -1, "0", ErrZeroPowNegative},
+		{"0", 1, "0", nil},
+		{"0", 10, "0", nil},
+		{"1.12345", 4, "1.5929971334827095062", nil},
+		{"123456789012345678901234567890123456789.9999999999999999999", 0, "1", nil},
+		{"123456789012345678901234567890123456789.9999999999999999999", 1, "123456789012345678901234567890123456789.9999999999999999999", nil},
+		{"1.5", 3, "3.375", nil},
+		{"1.12345", 1, "1.12345", nil},
+		{"1.12345", 2, "1.2621399025", nil},
+		{"1.12345", 3, "1.417951073463625", nil},
+		{"1.12345", 4, "1.5929971334827095062", nil},
+		{"1.12345", 5, "1.7896526296111499947", nil},
+		{"1.12345", 6, "2.0105852467366464616", nil},
+		{"1.12345", 7, "2.2587919954462854673", nil},
+		{"-1.12345", 4, "1.5929971334827095062", nil},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s.pow(%d)", tc.a, tc.b), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			aStr := a.String()
+
+			b, err := a.PowInt32(tc.b)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.Equal(t, tc.want, b.String())
+
+			// make sure a is immutable
+			require.Equal(t, aStr, a.String())
+
+			// cross check with shopspring/decimal
+
+			aa := decimal.RequireFromString(tc.a)
+			aa, err = aa.PowWithPrecision(decimal.New(int64(tc.b), 0), int32(b.prec)+4)
+
+			// special case for 0^0
+			// udecimal: 0^0 = 1
+			// shopspring/decimal: 0^0 is undefined and will return an error
+			if tc.a == "0" && tc.b == 0 {
+				require.EqualError(t, err, "cannot represent undefined value of 0**0")
+				return
+			}
+
+			require.NoError(t, err)
+
+			aa = aa.Truncate(int32(b.prec))
+
+			require.Equal(t, aa.String(), b.String())
+		})
+	}
+}
+
+func TestRandomPowInt32(t *testing.T) {
+	inputs := []string{
+		"0.1234",
+		"-0.1234",
+		"1.123456789012345679",
+		"-1.123456789012345679",
+		"1.12345",
+		"-1.12345",
+		"123456789012345678901234567890123456789.9999999999999999999",
+		"123456789012345678901234567890123456789.9999999999999999999",
+		"1.5",
+		"123456.789",
+		"123.4",
+		"1234567890123456789.1234567890123456789",
+		"-1234567890123456789.1234567890123456789",
+	}
+
+	for _, input := range inputs {
+		t.Run(fmt.Sprintf("pow(%s)", input), func(t *testing.T) {
+			a := MustParse(input)
+
+			for i := 0; i <= 1000; i++ {
+				b, err := a.PowInt32(int32(i))
+				require.NoError(t, err)
+
+				aa := decimal.RequireFromString(input)
+				aa, err = aa.PowWithPrecision(decimal.New(int64(i), 0), int32(b.prec)+4)
+				require.NoError(t, err)
+
+				aa = aa.Truncate(int32(b.prec))
+
+				require.Equal(t, aa.String(), b.String(), "%s.pow(%d)", input, i)
+			}
+		})
+	}
+
+	for _, input := range inputs {
+		t.Run(fmt.Sprintf("powInverse(%s)", input), func(t *testing.T) {
+			a := MustParse(input)
+
+			for i := 0; i >= -100; i-- {
+				b, err := a.PowInt32(int32(i))
+				require.NoError(t, err)
+
+				aa := decimal.RequireFromString(input)
+				aa, err = aa.PowWithPrecision(decimal.New(int64(i), 0), int32(b.prec)+4)
+				require.NoError(t, err)
+
+				aa = aa.Truncate(int32(b.prec))
+
+				require.Equal(t, aa.String(), b.String(), "%s.pow(%d)", input, i)
+			}
+		})
+	}
+}
+
 func TestSqrt(t *testing.T) {
 	testcases := []struct {
 		a       string

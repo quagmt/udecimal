@@ -571,7 +571,7 @@ func FuzzTrunc(f *testing.F) {
 	})
 }
 
-func FuzzPowInt(f *testing.F) {
+func FuzzDepcrecatedPowInt(f *testing.F) {
 	for _, c := range corpus {
 		f.Add(c.neg, c.hi, c.lo, c.prec, rand.Int())
 	}
@@ -600,6 +600,55 @@ func FuzzPowInt(f *testing.F) {
 
 		prec := int32(c.Prec())
 		aa = aa.Pow(ss.NewFromInt(int64(p))).Truncate(prec)
+
+		require.Equal(t, aa.String(), c.String(), "powInt %s %d", a, p)
+	})
+}
+
+func FuzzPowInt32(f *testing.F) {
+	for _, c := range corpus {
+		f.Add(c.neg, c.hi, c.lo, c.prec, rand.Int())
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, pow int) {
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		if err == ErrPrecOutOfRange {
+			t.Skip()
+		} else {
+			require.NoError(t, err)
+		}
+
+		// use pow less than 10000
+		p := pow % 10000
+
+		c, err := a.PowInt32(int32(p))
+		if a.IsZero() && p < 0 {
+			require.Equal(t, err, ErrDivideByZero)
+			return
+		}
+
+		if c.coef.overflow() {
+			require.NotNil(t, c.coef.bigInt)
+			require.Equal(t, u128{}, c.coef.u128)
+		} else {
+			require.Nil(t, c.coef.bigInt)
+		}
+
+		// compare with shopspring/decimal
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		aa, err = aa.PowWithPrecision(ss.New(int64(p), 0), int32(c.prec)+4)
+
+		// special case for 0^0
+		// udecimal: 0^0 = 1
+		// shopspring/decimal: 0^0 is undefined and will return an error
+		if a.IsZero() && p == 0 {
+			require.EqualError(t, err, "cannot represent undefined value of 0**0")
+			require.Equal(t, "1", c.String())
+			return
+		}
+
+		require.NoError(t, err)
+		aa = aa.Truncate(int32(c.prec))
 
 		require.Equal(t, aa.String(), c.String(), "powInt %s %d", a, p)
 	})

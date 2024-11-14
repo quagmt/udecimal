@@ -117,6 +117,9 @@ var (
 	// ErrInvalidBinaryData is returned when unmarshalling invalid binary data
 	// The binary data should follow the format as described in MarshalBinary
 	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
+
+	// ErrZeroPowNegative is returned when raising zero to a negative power
+	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")
 )
 
 var (
@@ -1141,11 +1144,23 @@ func trailingZerosU128(n u128) uint8 {
 	return zeros
 }
 
-// PowInt returns d^e where e is an integer.
+// Deprecated: Use PowInt32 instead for correct handling of 0^0 and negative exponents.
+// This function treats 0 raised to any power as 0, which may not align with mathematical conventions
+// but is practical in certain cases. See: https://github.com/quagmt/udecimal/issues/25.
+//
+// PowInt raises the decimal d to the integer power e (d^e).
+//
+// Special cases:
+//   - 0^e = 0 for any integer e
+//   - d^0 = 1 for any decimal d ≠ 0
 //
 // Examples:
 //
-//	PowInt(2.5, 2) = 6.25
+//	PowInt(0, 0)    = 0
+//	PowInt(0, 1)    = 0
+//	PowInt(0, -1)   = 0
+//	PowInt(2, 0)    = 1
+//	PowInt(2.5, 2)  = 6.25
 //	PowInt(2.5, -2) = 0.16
 func (d Decimal) PowInt(e int) Decimal {
 	// check 0 first to avoid 0^0 = 1
@@ -1194,6 +1209,76 @@ func (d Decimal) PowInt(e int) Decimal {
 
 	//nolint:gosec
 	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision))
+}
+
+// PowInt32 returns d raised to the power of e, where e is an int32.
+//
+// Returns:
+//
+//	The result of d raised to the power of e.
+//	 An error if d is zero and e is a negative integer.
+//
+// Special cases:
+//
+//	0^0 = 1
+//	0^(any negative integer) results in an error
+//
+// Examples:
+//
+//	PowInt32(0, 0) = 1
+//	PowInt32(2, 0) = 1
+//	PowInt32(0, 1) = 0
+//	PowInt32(0, -1) results in an error
+//	PowInt32(2.5, 2) = 6.25
+//	PowInt32(2.5, -2) = 0.16
+func (d Decimal) PowInt32(e int32) (Decimal, error) {
+	// special case: 0 raised to a negative power
+	if d.coef.IsZero() && e < 0 {
+		return Decimal{}, ErrZeroPowNegative
+	}
+
+	if e == 0 {
+		return One, nil
+	}
+
+	if e == 1 {
+		return d, nil
+	}
+
+	// Rescale first to remove trailing zeros
+	dTrim := d.trimTrailingZeros()
+
+	if e < 0 {
+		return dTrim.powIntInverse(int(-e)), nil
+	}
+
+	// e > 1 && d != 0
+	q, err := dTrim.tryPowIntU128(int(e))
+	if err == nil {
+		return q, nil
+	}
+
+	// overflow, fallback to big.Int
+	dBig := dTrim.coef.GetBig()
+
+	var factor int32
+	powPrecision := int32(dTrim.prec) * e
+	if powPrecision >= int32(defaultPrec) {
+		factor = powPrecision - int32(defaultPrec)
+		powPrecision = int32(defaultPrec)
+	}
+
+	m := new(big.Int).Exp(bigTen, big.NewInt(int64(factor)), nil)
+	dBig = new(big.Int).Exp(dBig, big.NewInt(int64(e)), nil)
+	qBig := dBig.Quo(dBig, m)
+
+	neg := d.neg
+	if e%2 == 0 {
+		neg = false
+	}
+
+	//nolint:gosec
+	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision)), nil
 }
 
 // powIntInverse returns d^(-e), with e > 0
@@ -1279,8 +1364,8 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	if d.coef.u128.hi != 0 && e >= 3 {
-		// e > 3 and u128.hi != 0 means the result will >= 2^192,
+	if d.coef.u128.hi != 0 && e >= 4 {
+		// e >= 4 and u128.hi != 0 means the result will >= 2^256,
 		// which we can't use fast division. So we need to use big.Int instead
 		return Decimal{}, errOverflow
 	}
