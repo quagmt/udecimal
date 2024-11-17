@@ -467,11 +467,10 @@ func tryMulU128(d, e Decimal, neg bool, prec uint8) (Decimal, error) {
 		}
 
 		coef := u128{hi: rcoef.hi, lo: rcoef.lo}
-
 		return newDecimal(neg, bintFromU128(coef), prec), nil
 	}
 
-	q, err := rcoef.fastQuo(pow10[prec-defaultPrec])
+	q, _, err := rcoef.fastQuo(pow10[prec-defaultPrec])
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -543,7 +542,7 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	factor := defaultPrec - (d.prec - e.prec)
 
 	d256 := d.coef.u128.MulToU256(pow10[factor])
-	quo, err := d256.fastQuo(e.coef.u128)
+	quo, _, err := d256.fastQuo(e.coef.u128)
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -580,6 +579,83 @@ func (d Decimal) Div64(v uint64) (Decimal, error) {
 	dBig.Div(dBig, new(big.Int).SetUint64(v))
 
 	return newDecimal(d.neg, bintFromBigInt(dBig), defaultPrec), nil
+}
+
+// QuoRem returns q and r where
+// - q = d / e and  q is an integer
+// - r = d - q * e (r < e and r has the same sign as d)
+//
+// The implementation is similar to C's fmod function.
+// Returns divide by zero error when e is zero
+func (d Decimal) QuoRem(e Decimal) (Decimal, Decimal, error) {
+	if e.coef.IsZero() {
+		return Decimal{}, Decimal{}, ErrDivideByZero
+	}
+
+	q, r, err := tryQuoRemU128(d, e)
+	if err == nil {
+		return q, r, nil
+	}
+
+	factor := max(d.prec, e.prec)
+
+	// overflow, try with *big.Int
+	dBig := d.coef.GetBig()
+	eBig := e.coef.GetBig()
+
+	dBig.Mul(dBig, pow10[factor-d.prec].ToBigInt())
+	eBig.Mul(eBig, pow10[factor-e.prec].ToBigInt())
+
+	qBig, rBig := new(big.Int), new(big.Int)
+	qBig.QuoRem(dBig, eBig, rBig)
+
+	q = newDecimal(d.neg != e.neg, bintFromBigInt(qBig), 0)
+	r = newDecimal(d.neg, bintFromBigInt(rBig), factor)
+	return q, r, nil
+}
+
+func tryQuoRemU128(d, e Decimal) (Decimal, Decimal, error) {
+	if d.coef.overflow() || e.coef.overflow() {
+		return Decimal{}, Decimal{}, errOverflow
+	}
+
+	var (
+		factor uint8
+		d256   u256
+		e128   u128
+		err    error
+	)
+
+	if d.prec == e.prec {
+		factor = d.prec
+		d256 = u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
+		e128 = e.coef.u128
+	} else {
+		factor = max(d.prec, e.prec)
+		d256 = d.coef.u128.MulToU256(pow10[factor-d.prec])
+
+		// If divisor >= 2^128, we can't use fastQuo and have to fallback to big.Int
+		e128, err = e.coef.u128.Mul(pow10[factor-e.prec])
+		if err != nil {
+			return Decimal{}, Decimal{}, err
+		}
+	}
+
+	q1, r1, err := d256.fastQuo(e128)
+	if err != nil {
+		return Decimal{}, Decimal{}, err
+	}
+
+	q := newDecimal(d.neg != e.neg, bintFromU128(q1), 0)
+	r := newDecimal(d.neg, bintFromU128(r1), factor)
+
+	return q, r, nil
+}
+
+// Mod is similar to [Decimal.QuoRem] but only returns the remainder
+func (d Decimal) Mod(e Decimal) (Decimal, error) {
+	_, r, err := d.QuoRem(e)
+	return r, err
 }
 
 // Prec returns decimal precision
@@ -1351,7 +1427,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	q, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
+	q, _, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -1400,7 +1476,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		//nolint:gosec
 		a256 := one128.MulToU256(pow10[defaultPrec+uint8(powPrecision)])
 
-		q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
+		q, _, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 		if err != nil {
 			return Decimal{}, err
 		}
@@ -1418,7 +1494,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	// a256 = 10^(powPrecision + factor + defaultPrec)
 	//nolint:gosec
 	a256 := pow10[factor].MulToU256(pow10[defaultPrec+uint8(powPrecision)])
-	q, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
+	q, _, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -1470,7 +1546,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 	}
 
 	//nolint:gosec
-	bitLen := uint(coef.bitLen()) // bitLen < 192
+	bitLen := uint(coef.bitLen()) // bitLen < 256
 
 	// initial guess = 2^((bitLen + 1) / 2) ≥ √coef
 	x := one128.Lsh((bitLen + 1) / 2)
@@ -1478,7 +1554,7 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 	// Newton-Raphson method
 	for {
 		// calculate x1 = (x + coef/x) / 2
-		y, err := coef.fastQuo(x)
+		y, _, err := coef.fastQuo(x)
 		if err != nil {
 			return Decimal{}, err
 		}

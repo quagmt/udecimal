@@ -120,25 +120,26 @@ func (u u256) mul128(v u128) (u256, error) {
 	return u256{hi: a.hi, lo: a.lo, carry: c}, nil
 }
 
-// fastQuo only returns quotient of u/v
-func (u u256) fastQuo(v u128) (u128, error) {
+// fastQuo returns quotient and remainder of u/v
+func (u u256) fastQuo(v u128) (u128, u128, error) {
 	if u.carry.IsZero() {
-		q, _, err := u128FromHiLo(u.hi, u.lo).QuoRem(v)
-		return q, err
+		q, r, err := u128FromHiLo(u.hi, u.lo).QuoRem(v)
+		return q, r, err
 	}
 
 	if v.hi == 0 && u.carry.hi == 0 {
-		q, _, err := u.div192by64(v.lo)
-		return q, err
+		q, r, err := u.div192by64(v.lo)
+		return q, u128{lo: r}, err
 	}
 
 	// now we have u192 / u128 or u256 / u128
 	if u.carry.Cmp(v) >= 0 {
 		// obviously the result won't fit into u128
-		return u128{}, errOverflow
+		return u128{}, u128{}, errOverflow
 	}
 
-	return u.div256by128(v), nil
+	q, r := u.div256by128(v)
+	return q, r, nil
 }
 
 // div192by64 return q,r which:
@@ -159,9 +160,10 @@ func (u u256) div192by64(v uint64) (u128, uint64, error) {
 }
 
 // div256by128 performs u256 / u128, which u256.carry < u128
+// Returns both quotient and remainder
 // This implementation is based on divllu from https://github.com/ridiculousfish/libdivide
 // The algorithm is explained in this blog post: https://ridiculousfish.com/blog/posts/labor-of-division-episode-iv.html
-func (u u256) div256by128(v u128) u128 {
+func (u u256) div256by128(v u128) (u128, u128) {
 	// normalize v
 	n := bits.LeadingZeros64(v.hi)
 
@@ -233,7 +235,10 @@ func (u u256) div256by128(v u128) u128 {
 		a[i+1], a[i] = rem.hi, rem.lo
 	}
 
-	return u128{hi: q[1], lo: q[0]}
+	//nolint:gosec
+	r := u128{hi: a[1], lo: a[0]}.Rsh(uint(n))
+
+	return u128{hi: q[1], lo: q[0]}, r
 }
 
 // subUnsafe returns u - v with u >= v
