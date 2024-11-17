@@ -382,6 +382,43 @@ func FuzzDiv64(f *testing.F) {
 	})
 }
 
+func FuzzQuoRem(f *testing.F) {
+	for _, c := range corpus {
+		for _, d := range corpus {
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		require.NoError(t, err)
+
+		q, r, err := a.QuoRem(b)
+
+		if b.IsZero() {
+			require.Equal(t, ErrDivideByZero, err)
+			return
+		}
+
+		require.NoError(t, err)
+
+		// compare with shopspring/decimal
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec)
+
+		qq, rr := aa.QuoRem(bb, 0)
+
+		require.Equal(t, qq.String(), q.String(), "quo %s %s", a, b)
+		require.Equal(t, rr.String(), r.String(), "rem %s %s", a, b)
+	})
+}
+
 func FuzzRoundBank(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
