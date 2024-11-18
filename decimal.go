@@ -120,6 +120,9 @@ var (
 
 	// ErrZeroPowNegative is returned when raising zero to a negative power
 	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")
+
+	// ErrExponentTooLarge is returned when the exponent is too large
+	ErrExponentTooLarge = fmt.Errorf("exponent is too large. Must be less than math.MaxInt32")
 )
 
 var (
@@ -1218,6 +1221,49 @@ func trailingZerosU128(n u128) uint8 {
 	}
 
 	return zeros
+}
+
+// PowToIntPart raises the decimal d to the power of integer part of e (d^int(e)).
+// This is useful when the exponent is an integer but stored in Decimal.
+//
+// Returns error if:
+//   - d is zero and e is a negative integer.
+//   - |int(e)| > math.MaxInt32 (because MaxInt32 is already ~2 billion, supporting more than that value is not practical and unnecessary).
+//
+// Special cases:
+//
+//	0^0 = 1
+//	0^(any negative integer) results in an error
+//
+// Examples:
+//
+//	PowInt32(0, 0) = 1
+//	PowInt32(2, 0) = 1
+//	PowInt32(0, 1) = 0
+//	PowInt32(0, -1) results in an error
+//	PowInt32(2.5, 2.6) = 2.5^2 = 6.25
+//	PowInt32(2.5, -2.123) = 2.5^(-2) = 0.16
+func (d Decimal) PowToIntPart(e Decimal) (Decimal, error) {
+	if d.coef.IsZero() && e.neg {
+		return Decimal{}, ErrZeroPowNegative
+	}
+
+	eInt := e.Trunc(0)
+	if eInt.coef.overflow() || eInt.coef.u128.Cmp64(math.MaxInt32) > 0 {
+		return Decimal{}, ErrExponentTooLarge
+	}
+
+	// convert eInt to int32
+	var exponent int32
+
+	//nolint:gosec // Can be safely converted to int32 because u128.lo is already checked to be less than math.MaxInt32
+	exponent = int32(eInt.coef.u128.lo)
+
+	if eInt.neg {
+		exponent = -exponent
+	}
+
+	return d.PowInt32(exponent)
 }
 
 // Deprecated: Use PowInt32 instead for correct handling of 0^0 and negative exponents.

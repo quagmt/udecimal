@@ -318,6 +318,21 @@ func ExampleDecimal_PowInt() {
 	// 0.6609822195782933439
 }
 
+func ExampleDecimal_PowToIntPart() {
+	fmt.Println(MustParse("1.23").PowToIntPart(MustParse("2.123")))
+	fmt.Println(MustParse("1.23").PowToIntPart(MustParse("0.123")))
+	fmt.Println(MustParse("1.23").PowToIntPart(MustParse("-2.123")))
+	fmt.Println(MustParse("0").PowToIntPart(MustParse("0.123")))
+	fmt.Println(MustParse("0").PowToIntPart(MustParse("-2.123")))
+	// Output:
+	// 1.5129 <nil>
+	// 1 <nil>
+	// 0.6609822195782933439 <nil>
+	// 1 <nil>
+	// 0 can't raise zero to a negative power
+
+}
+
 func ExampleDecimal_PowInt32() {
 	fmt.Println(MustParse("1.23").PowInt32(2))
 	fmt.Println(MustParse("1.23").PowInt32(0))
