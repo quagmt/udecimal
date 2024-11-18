@@ -1397,15 +1397,10 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		neg = false
 	}
 
-	powPrecision := int(d.prec) * e
-	if powPrecision > int(defaultPrec)+38 {
+	exponent := int(d.prec) * e
+	if exponent > int(defaultPrec)+38 {
+		// we can't do adjustment if exponent > defaultPrec + 38 (can't find pow10[exponent - defaultPrec])
 		return Decimal{}, errOverflow
-	}
-
-	factor := 0
-	if powPrecision > int(defaultPrec) {
-		factor = powPrecision - int(defaultPrec)
-		powPrecision = int(defaultPrec)
 	}
 
 	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
@@ -1414,20 +1409,19 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	if factor == 0 {
+	// exponent <= defaultPrec, no need to adjust the result
+	if exponent <= int(defaultPrec) {
 		if !result.carry.IsZero() {
 			return Decimal{}, errOverflow
 		}
 
 		//nolint:gosec
-		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powPrecision)), nil
+		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(exponent)), nil
 	}
 
-	if result.carry.hi != 0 {
-		return Decimal{}, errOverflow
-	}
-
-	q, _, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
+	// exponent > defaultPrec, adjust the result to u128 by dividing it with 10^(exponent - defaultPrec)
+	factor := exponent - int(defaultPrec)
+	q, _, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38 (conditional check above)
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -1451,15 +1445,17 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		neg = false
 	}
 
-	powPrecision := int(d.prec) * e
-	if powPrecision > int(defaultPrec)+38 {
+	// d^(-e) = 10^(defaultPrec + d.prec * e) / (d.coef)^e (with defaultPrec digits after the decimal point)
+	// let exponent = defaultPrec + d.prec * e and B = (d.coef)^e
+	// --> d^(-e) = 10^exponent / B
+	// Can only use fastQuo if 10^exponent < 2^256 and B < 2^128
+	// --> defaultPrec + d.prec * e < log10(2) * 256 != 77
+	//
+	// Choose exponent <= 76 so if exponent > 38, it's safe to use 10^exponent = pow10[exponent - 38] * pow10[38]
+	// as 0 < exponent - 38 <= 38 and max(pow10) = 10^38
+	exponent := int(d.prec)*e + int(defaultPrec)
+	if exponent > 76 {
 		return Decimal{}, errOverflow
-	}
-
-	factor := 0
-	if powPrecision > int(defaultPrec) {
-		factor = powPrecision - int(defaultPrec)
-		powPrecision = int(defaultPrec)
 	}
 
 	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
@@ -1468,15 +1464,13 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	if factor == 0 {
-		if !result.carry.IsZero() {
-			return Decimal{}, errOverflow
-		}
+	if !result.carry.IsZero() {
+		// can't use fastQuo to adjust result if result >= 2^128
+		return Decimal{}, errOverflow
+	}
 
-		//nolint:gosec
-		a256 := one128.MulToU256(pow10[defaultPrec+uint8(powPrecision)])
-
-		q, _, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
+	if exponent <= 38 {
+		q, _, err := pow10[exponent].QuoRem(u128{hi: result.hi, lo: result.lo})
 		if err != nil {
 			return Decimal{}, err
 		}
@@ -1484,16 +1478,8 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 	}
 
-	// if result is not u128, one solution is adjusting it to u128 by dividing it with 10^factor
-	// in some cases, this adjustment creates a big difference in the final result
-	// so to be safe, use big.Int instead
-	if !result.carry.IsZero() {
-		return Decimal{}, errOverflow
-	}
-
-	// a256 = 10^(powPrecision + factor + defaultPrec)
-	//nolint:gosec
-	a256 := pow10[factor].MulToU256(pow10[defaultPrec+uint8(powPrecision)])
+	// exponent > 38 --> 10^exponent = pow10[exponent - 38] * pow10[38]
+	a256 := pow10[exponent-38].MulToU256(pow10[38])
 	q, _, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
 		return Decimal{}, err
