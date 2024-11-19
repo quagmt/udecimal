@@ -642,6 +642,67 @@ func FuzzDepcrecatedPowInt(f *testing.F) {
 	})
 }
 
+func FuzzPowToIntPart(f *testing.F) {
+	for _, c := range corpus {
+		for _, d := range corpus {
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		require.NoError(t, err)
+
+		// use pow less than 10000
+		b, err = b.Mod(MustFromInt64(10000, 0))
+		require.NoError(t, err)
+
+		c, err := a.PowToIntPart(b)
+		if a.IsZero() && b.IsNeg() {
+			require.Equal(t, ErrZeroPowNegative, err, "zero pow negative, %s %s", a, b)
+			return
+		}
+
+		d := b.Trunc(0)
+		if d.coef.overflow() || d.coef.u128.Cmp64(math.MaxInt32) > 0 {
+			require.Equal(t, ErrExponentTooLarge, err, "exponent too large, %s %s", a, b)
+			return
+		}
+
+		if c.coef.overflow() {
+			require.NotNil(t, c.coef.bigInt)
+			require.Equal(t, u128{}, c.coef.u128)
+		} else {
+			require.Nil(t, c.coef.bigInt)
+		}
+
+		// compare with shopspring/decimal
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec).Mod(ss.NewFromInt(10000))
+		aa, err = aa.PowWithPrecision(bb.Truncate(0), int32(c.prec)+4)
+
+		// special case for 0^0
+		// udecimal: 0^0 = 1
+		// shopspring/decimal: 0^0 is undefined and will return an error
+		if a.IsZero() && d.IsZero() {
+			require.EqualError(t, err, "cannot represent undefined value of 0**0", "a = %s, b = %s", a, b)
+			require.Equal(t, "1", c.String())
+			return
+		}
+
+		require.NoError(t, err)
+		aa = aa.Truncate(int32(c.prec))
+
+		require.Equal(t, aa.String(), c.String(), "PowToIntPart %s %s", a, b)
+	})
+}
+
 func FuzzPowInt32(f *testing.F) {
 	for _, c := range corpus {
 		f.Add(c.neg, c.hi, c.lo, c.prec, rand.Int())
@@ -660,7 +721,7 @@ func FuzzPowInt32(f *testing.F) {
 
 		c, err := a.PowInt32(int32(p))
 		if a.IsZero() && p < 0 {
-			require.Equal(t, err, ErrDivideByZero)
+			require.Equal(t, ErrZeroPowNegative, err)
 			return
 		}
 

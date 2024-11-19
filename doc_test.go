@@ -228,6 +228,22 @@ func ExampleDecimal_Floor() {
 	// -2
 }
 
+func ExampleDecimal_Int64() {
+	fmt.Println(MustParse("1.23").Int64())
+	fmt.Println(MustParse("1234567890123456789.1234567890123456789").Int64())
+	fmt.Println(MustParse("-1234567890123456789.1234567890123456789").Int64())
+	fmt.Println(MustParse("0.123").Int64())
+	fmt.Println(MustParse("-0.123").Int64())
+	fmt.Println(MustParse("12345678901234567890123456.123456").Int64())
+	// Output:
+	// 1 <nil>
+	// 1234567890123456789 <nil>
+	// -1234567890123456789 <nil>
+	// 0 <nil>
+	// 0 <nil>
+	// 0 integer part is too large to fit in int64
+}
+
 func ExampleDecimal_InexactFloat64() {
 	fmt.Println(MustParse("1.23").InexactFloat64())
 	fmt.Println(MustParse("123456789.123456789").InexactFloat64())
@@ -316,6 +332,21 @@ func ExampleDecimal_PowInt() {
 	// 1.5129
 	// 1
 	// 0.6609822195782933439
+}
+
+func ExampleDecimal_PowToIntPart() {
+	fmt.Println(MustParse("1.23").PowToIntPart(MustParse("2.123")))
+	fmt.Println(MustParse("1.23").PowToIntPart(MustParse("0.123")))
+	fmt.Println(MustParse("1.23").PowToIntPart(MustParse("-2.123")))
+	fmt.Println(MustParse("0").PowToIntPart(MustParse("0.123")))
+	fmt.Println(MustParse("0").PowToIntPart(MustParse("-2.123")))
+	// Output:
+	// 1.5129 <nil>
+	// 1 <nil>
+	// 0.6609822195782933439 <nil>
+	// 1 <nil>
+	// 0 can't raise zero to a negative power
+
 }
 
 func ExampleDecimal_PowInt32() {

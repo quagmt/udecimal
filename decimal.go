@@ -120,6 +120,12 @@ var (
 
 	// ErrZeroPowNegative is returned when raising zero to a negative power
 	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")
+
+	// ErrExponentTooLarge is returned when the exponent is too large and becomes impractical.
+	ErrExponentTooLarge = fmt.Errorf("exponent is too large. Must be less than or equal math.MaxInt32")
+
+	// ErrIntPartOverflow is returned when the integer part of the decimal is too large to fit in int64
+	ErrIntPartOverflow = fmt.Errorf("integer part is too large to fit in int64")
 )
 
 var (
@@ -161,7 +167,7 @@ func SetDefaultPrecision(prec uint8) {
 	defaultPrec = prec
 }
 
-// NewFromHiLo returns Decimal from 128-bit unsigned integer (hi,lo)
+// NewFromHiLo returns a decimal from 128-bit unsigned integer (hi,lo)
 func NewFromHiLo(neg bool, hi uint64, lo uint64, prec uint8) (Decimal, error) {
 	if prec > defaultPrec {
 		return Decimal{}, ErrPrecOutOfRange
@@ -171,7 +177,9 @@ func NewFromHiLo(neg bool, hi uint64, lo uint64, prec uint8) (Decimal, error) {
 	return newDecimal(neg, bintFromU128(coef), prec), nil
 }
 
-// newDecimal return the decimal
+// newDecimal return the decimal.
+// This function should be used internally to create a new decimal
+// to ensure the Zero value is consistent and avoid unexpected cases.
 func newDecimal(neg bool, coef bint, prec uint8) Decimal {
 	if coef.IsZero() {
 		// make Zero consistent and avoid unexpected cases, such as:
@@ -231,7 +239,7 @@ func MustFromInt64(coef int64, prec uint8) Decimal {
 	return d
 }
 
-// NewFromFloat64 returns decimal from float64.
+// NewFromFloat64 returns a decimal from float64.
 //
 // **NOTE**: you'll expect to lose some precision for this method due to FormatFloat. See: https://github.com/golang/go/issues/29491
 //
@@ -265,6 +273,28 @@ func MustFromFloat64(f float64) Decimal {
 	return d
 }
 
+// Int64 returns the integer part of the decimal.
+// Return error if the decimal is too large to fit in int64.
+func (d Decimal) Int64() (int64, error) {
+	d1 := d.Trunc(0)
+
+	if d1.coef.overflow() {
+		return 0, ErrIntPartOverflow
+	}
+
+	if d1.coef.u128.Cmp64(math.MaxInt64) > 0 {
+		return 0, ErrIntPartOverflow
+	}
+
+	//nolint:gosec // can be safely converted as we already checked if coef.u128 is less than math.MaxInt64 above
+	int64Part := int64(d1.coef.u128.lo)
+	if d1.neg {
+		int64Part = -int64Part
+	}
+
+	return int64Part, nil
+}
+
 // InexactFloat64 returns the float64 representation of the decimal.
 // The result may not be 100% accurate due to the limitation of float64 (less decimal precision).
 //
@@ -276,7 +306,7 @@ func (d Decimal) InexactFloat64() float64 {
 	return f
 }
 
-// Parse parses a number in string to Decimal.
+// Parse parses a number in string to a decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
 //
 // Returns error if:
@@ -504,7 +534,7 @@ func (d Decimal) Mul64(v uint64) Decimal {
 }
 
 // Div returns d / e.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// If the result has more than defaultPrec fraction digits, it will be truncated to defaultPrec digits.
 //
 // Returns divide by zero error when e is zero
 func (d Decimal) Div(e Decimal) (Decimal, error) {
@@ -551,7 +581,7 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 }
 
 // Div64 returns d / e where e is a uint64.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// If the result has more than defaultPrec fraction digits, it will be truncated to defaultPrec digits.
 //
 // Returns divide by zero error when e is zero
 func (d Decimal) Div64(v uint64) (Decimal, error) {
@@ -658,14 +688,14 @@ func (d Decimal) Mod(e Decimal) (Decimal, error) {
 	return r, err
 }
 
-// Prec returns decimal precision
+// Prec returns decimal precision as an integer
 func (d Decimal) Prec() int {
 	return int(d.prec)
 }
 
 // PrecUint returns decimal precision as uint8
 // Useful when you want to use the precision
-// in other functions like Round or Trunc because they accept uint8
+// in other functions like [Decimal.RoundBank] or [Decimal.Trunc] because they accept uint8
 //
 // Example:
 //
@@ -874,8 +904,7 @@ func (d Decimal) RoundBank(prec uint8) Decimal {
 }
 
 // RoundAwayFromZero rounds the decimal to the specified prec using AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_away_from_zero).
-// If differs from HALF AWAY FROM ZERO in a way that the number is always rounded away from zero (or to infinity)
-// no matter if is 0.5 or not.
+// If differs from HALF AWAY FROM ZERO in a way that the number is always rounded away from zero (or to infinity) no matter if is 0.5 or not.
 // In other libraries or languages, this method is also known as ROUND_UP.
 //
 // Examples:
@@ -1220,7 +1249,49 @@ func trailingZerosU128(n u128) uint8 {
 	return zeros
 }
 
-// Deprecated: Use PowInt32 instead for correct handling of 0^0 and negative exponents.
+// PowToIntPart raises the decimal d to the power of integer part of e (d^int(e)).
+// This is useful when the exponent is an integer but stored in [Decimal].
+//
+// Returns error if:
+//   - d is zero and e is a negative integer.
+//   - |int(e)| > [math.MaxInt32] (because MaxInt32 is already ~2 billion, supporting more than that value is not practical and unnecessary).
+//
+// Special cases:
+//   - 0^0 = 1
+//   - 0^(any negative integer) results in [ErrZeroPowNegative]
+//
+// Examples:
+//
+//	PowInt32(0, 0) = 1
+//	PowInt32(2, 0) = 1
+//	PowInt32(0, 1) = 0
+//	PowInt32(0, -1) results in an error
+//	PowInt32(2.5, 2.6) = 2.5^2 = 6.25
+//	PowInt32(2.5, -2.123) = 2.5^(-2) = 0.16
+func (d Decimal) PowToIntPart(e Decimal) (Decimal, error) {
+	if d.coef.IsZero() && e.neg {
+		return Decimal{}, ErrZeroPowNegative
+	}
+
+	eInt := e.Trunc(0)
+	if eInt.coef.overflow() || eInt.coef.u128.Cmp64(math.MaxInt32) > 0 {
+		return Decimal{}, ErrExponentTooLarge
+	}
+
+	// convert eInt to int32
+	var exponent int32
+
+	//nolint:gosec // Can be safely converted to int32 because u128.lo is already checked to be less than math.MaxInt32
+	exponent = int32(eInt.coef.u128.lo)
+
+	if eInt.neg {
+		exponent = -exponent
+	}
+
+	return d.PowInt32(exponent)
+}
+
+// Deprecated: Use [PowInt32] instead for correct handling of 0^0 and negative exponents.
 // This function treats 0 raised to any power as 0, which may not align with mathematical conventions
 // but is practical in certain cases. See: https://github.com/quagmt/udecimal/issues/25.
 //
@@ -1290,14 +1361,12 @@ func (d Decimal) PowInt(e int) Decimal {
 // PowInt32 returns d raised to the power of e, where e is an int32.
 //
 // Returns:
-//
-//	The result of d raised to the power of e.
-//	 An error if d is zero and e is a negative integer.
+//   - The result of d raised to the power of e.
+//   - An error if d is zero and e is a negative integer.
 //
 // Special cases:
-//
-//	0^0 = 1
-//	0^(any negative integer) results in an error
+//   - 0^0 = 1
+//   - 0^(any negative integer) results in [ErrZeroPowNegative]
 //
 // Examples:
 //
@@ -1397,15 +1466,10 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		neg = false
 	}
 
-	powPrecision := int(d.prec) * e
-	if powPrecision > int(defaultPrec)+38 {
+	exponent := int(d.prec) * e
+	if exponent > int(defaultPrec)+38 {
+		// we can't do adjustment if exponent > defaultPrec + 38 (can't find pow10[exponent - defaultPrec])
 		return Decimal{}, errOverflow
-	}
-
-	factor := 0
-	if powPrecision > int(defaultPrec) {
-		factor = powPrecision - int(defaultPrec)
-		powPrecision = int(defaultPrec)
 	}
 
 	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
@@ -1414,20 +1478,19 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	if factor == 0 {
+	// exponent <= defaultPrec, no need to adjust the result
+	if exponent <= int(defaultPrec) {
 		if !result.carry.IsZero() {
 			return Decimal{}, errOverflow
 		}
 
 		//nolint:gosec
-		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(powPrecision)), nil
+		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(exponent)), nil
 	}
 
-	if result.carry.hi != 0 {
-		return Decimal{}, errOverflow
-	}
-
-	q, _, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38
+	// exponent > defaultPrec, adjust the result to u128 by dividing it with 10^(exponent - defaultPrec)
+	factor := exponent - int(defaultPrec)
+	q, _, err := result.fastQuo(pow10[factor]) // it's safe to use pow10[factor] as factor <= 38 (conditional check above)
 	if err != nil {
 		return Decimal{}, err
 	}
@@ -1451,15 +1514,17 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		neg = false
 	}
 
-	powPrecision := int(d.prec) * e
-	if powPrecision > int(defaultPrec)+38 {
+	// d^(-e) = 10^(defaultPrec + d.prec * e) / (d.coef)^e (with defaultPrec digits after the decimal point)
+	// let exponent = defaultPrec + d.prec * e and B = (d.coef)^e
+	// --> d^(-e) = 10^exponent / B
+	// Can only use fastQuo if 10^exponent < 2^256 and B < 2^128
+	// --> defaultPrec + d.prec * e < log10(2) * 256 != 77
+	//
+	// Choose exponent <= 76 so if exponent > 38, it's safe to use 10^exponent = pow10[exponent - 38] * pow10[38]
+	// as 0 < exponent - 38 <= 38 and max(pow10) = 10^38
+	exponent := int(d.prec)*e + int(defaultPrec)
+	if exponent > 76 {
 		return Decimal{}, errOverflow
-	}
-
-	factor := 0
-	if powPrecision > int(defaultPrec) {
-		factor = powPrecision - int(defaultPrec)
-		powPrecision = int(defaultPrec)
 	}
 
 	d256 := u256{lo: d.coef.u128.lo, hi: d.coef.u128.hi}
@@ -1468,15 +1533,13 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		return Decimal{}, err
 	}
 
-	if factor == 0 {
-		if !result.carry.IsZero() {
-			return Decimal{}, errOverflow
-		}
+	if !result.carry.IsZero() {
+		// can't use fastQuo to adjust result if result >= 2^128
+		return Decimal{}, errOverflow
+	}
 
-		//nolint:gosec
-		a256 := one128.MulToU256(pow10[defaultPrec+uint8(powPrecision)])
-
-		q, _, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
+	if exponent <= 38 {
+		q, _, err := pow10[exponent].QuoRem(u128{hi: result.hi, lo: result.lo})
 		if err != nil {
 			return Decimal{}, err
 		}
@@ -1484,16 +1547,8 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 		return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 	}
 
-	// if result is not u128, one solution is adjusting it to u128 by dividing it with 10^factor
-	// in some cases, this adjustment creates a big difference in the final result
-	// so to be safe, use big.Int instead
-	if !result.carry.IsZero() {
-		return Decimal{}, errOverflow
-	}
-
-	// a256 = 10^(powPrecision + factor + defaultPrec)
-	//nolint:gosec
-	a256 := pow10[factor].MulToU256(pow10[defaultPrec+uint8(powPrecision)])
+	// exponent > 38 --> 10^exponent = pow10[exponent - 38] * pow10[38]
+	a256 := pow10[exponent-38].MulToU256(pow10[38])
 	q, _, err := a256.fastQuo(u128{hi: result.hi, lo: result.lo})
 	if err != nil {
 		return Decimal{}, err
@@ -1502,7 +1557,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 }
 
-// Sqrt returns the square root of d using Newton-Raphson method.
+// Sqrt returns the square root of d using Newton-Raphson method. (https://en.wikipedia.org/wiki/Newton%27s_method)
 // The result will have at most defaultPrec digits after the decimal point.
 // Returns error if d < 0
 //

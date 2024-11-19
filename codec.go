@@ -440,7 +440,9 @@ func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
 	return buf, nil
 }
 
-// Scan implements sql.Scanner interface.
+// Scan implements [sql.Scanner] interface.
+//
+// [sql.Scanner]: https://pkg.go.dev/database/sql#Scanner
 func (d *Decimal) Scan(src any) error {
 	var err error
 	switch v := src.(type) {
@@ -468,6 +470,8 @@ func (d *Decimal) Scan(src any) error {
 }
 
 // Value implements [driver.Valuer] interface.
+//
+// [driver.Valuer]: https://pkg.go.dev/database/sql/driver#Valuer
 func (d Decimal) Value() (driver.Value, error) {
 	return d.String(), nil
 }
