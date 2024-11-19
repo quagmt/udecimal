@@ -1,4 +1,4 @@
-name: CI
+name: Lint and Test
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
       - "**.go"
       - go.mod
       - go.sum
-      - ".github/workflows/ci.yaml"
+      - ".github/workflows/test.yaml"
       - ".golangci.yaml"
 
 jobs:
@@ -54,19 +54,3 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-
-  fuzz:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Run fuzz tests
-        run: make fuzz-all 20
