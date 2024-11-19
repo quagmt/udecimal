@@ -123,6 +123,9 @@ var (
 
 	// ErrExponentTooLarge is returned when the exponent is too large and becomes impractical.
 	ErrExponentTooLarge = fmt.Errorf("exponent is too large. Must be less than or equal math.MaxInt32")
+
+	// ErrIntPartOverflow is returned when the integer part of the decimal is too large to fit in int64
+	ErrIntPartOverflow = fmt.Errorf("integer part is too large to fit in int64")
 )
 
 var (
@@ -268,6 +271,28 @@ func MustFromFloat64(f float64) Decimal {
 	}
 
 	return d
+}
+
+// Int64 returns the integer part of the decimal.
+// Return error if the decimal is too large to fit in int64.
+func (d Decimal) Int64() (int64, error) {
+	d1 := d.Trunc(0)
+
+	if d1.coef.overflow() {
+		return 0, ErrIntPartOverflow
+	}
+
+	if d1.coef.u128.Cmp64(math.MaxInt64) > 0 {
+		return 0, ErrIntPartOverflow
+	}
+
+	//nolint:gosec // can be safely converted as we already checked if coef.u128 is less than math.MaxInt64 above
+	int64Part := int64(d1.coef.u128.lo)
+	if d1.neg {
+		int64Part = -int64Part
+	}
+
+	return int64Part, nil
 }
 
 // InexactFloat64 returns the float64 representation of the decimal.

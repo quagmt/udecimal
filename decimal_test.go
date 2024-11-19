@@ -2680,6 +2680,46 @@ func TestRandomSqrt(t *testing.T) {
 	}
 }
 
+func TestInt64(t *testing.T) {
+	testcases := []struct {
+		a       string
+		want    int64
+		wantErr error
+	}{
+		{"0.123", 0, nil},
+		{"-0.123", 0, nil},
+		{"0", 0, nil},
+		{"1", 1, nil},
+		{"1.12345", 1, nil},
+		{"-1.12345", -1, nil},
+		{"123456789.123456789", 123456789, nil},
+		{"-123456789.123456789", -123456789, nil},
+		{"1234567890123456789.1234567890123456789", 1234567890123456789, nil},
+		{"-1234567890123456789.1234567890123456789", -1234567890123456789, nil},
+		{"12345678901234567890123456789", 0, ErrIntPartOverflow},
+		{"9223372036854775807", 9223372036854775807, nil},
+		{"-9223372036854775807", -9223372036854775807, nil},
+		{"9223372036854775808", 0, ErrIntPartOverflow},
+		{"-9223372036854775808", 0, ErrIntPartOverflow},
+		{"12345678901234567890123456789.1234567890123456789", 0, ErrIntPartOverflow},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("int64(%s)", tc.a), func(t *testing.T) {
+			a := MustParse(tc.a)
+
+			got, err := a.Int64()
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestInexactFloat64(t *testing.T) {
 	testcases := []struct {
 		a    string

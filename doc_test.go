@@ -228,6 +228,22 @@ func ExampleDecimal_Floor() {
 	// -2
 }
 
+func ExampleDecimal_Int64() {
+	fmt.Println(MustParse("1.23").Int64())
+	fmt.Println(MustParse("1234567890123456789.1234567890123456789").Int64())
+	fmt.Println(MustParse("-1234567890123456789.1234567890123456789").Int64())
+	fmt.Println(MustParse("0.123").Int64())
+	fmt.Println(MustParse("-0.123").Int64())
+	fmt.Println(MustParse("12345678901234567890123456.123456").Int64())
+	// Output:
+	// 1 <nil>
+	// 1234567890123456789 <nil>
+	// -1234567890123456789 <nil>
+	// 0 <nil>
+	// 0 <nil>
+	// 0 integer part is too large to fit in int64
+}
+
 func ExampleDecimal_InexactFloat64() {
 	fmt.Println(MustParse("1.23").InexactFloat64())
 	fmt.Println(MustParse("123456789.123456789").InexactFloat64())
