@@ -225,7 +225,7 @@ func NewFromInt64(coef int64, prec uint8) (Decimal, error) {
 		return Decimal{}, ErrPrecOutOfRange
 	}
 
-	//nolint:gosec
+	//nolint:gosec // coef is positive, so it's safe to convert to uint64
 	return newDecimal(neg, bintFromU64(uint64(coef)), prec), nil
 }
 
@@ -1354,7 +1354,7 @@ func (d Decimal) PowInt(e int) Decimal {
 		neg = false
 	}
 
-	//nolint:gosec
+	//nolint:gosec // powPrecision <= defaultPrec, so it's safe to convert to uint8
 	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision))
 }
 
@@ -1422,7 +1422,7 @@ func (d Decimal) PowInt32(e int32) (Decimal, error) {
 		neg = false
 	}
 
-	//nolint:gosec
+	//nolint:gosec // powPrecision <= defaultPrec, so it's safe to convert to uint8
 	return newDecimal(neg, bintFromBigInt(qBig), uint8(powPrecision)), nil
 }
 
@@ -1484,7 +1484,7 @@ func (d Decimal) tryPowIntU128(e int) (Decimal, error) {
 			return Decimal{}, errOverflow
 		}
 
-		//nolint:gosec
+		//nolint:gosec // exponent <= defaultPrec, so it's safe to convert to uint8
 		return newDecimal(neg, bintFromU128(u128{hi: result.hi, lo: result.lo}), uint8(exponent)), nil
 	}
 
@@ -1600,8 +1600,8 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 		return Decimal{}, errOverflow
 	}
 
-	//nolint:gosec
-	bitLen := uint(coef.bitLen()) // bitLen < 256
+	//nolint:gosec // 0 <= coef.bitLen() < 256, so it's safe to convert to uint
+	bitLen := uint(coef.bitLen())
 
 	// initial guess = 2^((bitLen + 1) / 2) ≥ √coef
 	x := one128.Lsh((bitLen + 1) / 2)

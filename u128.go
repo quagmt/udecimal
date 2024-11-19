@@ -180,7 +180,7 @@ func (u u128) QuoRem(v u128) (q, r u128, err error) {
 		// generate a "trial quotient," guaranteed to be within 1 of the actual
 		// quotient, then adjust.
 
-		//nolint:gosec
+		//nolint:gosec // 0 <= bits.LeadingZeros64(v.hi) <= 63, so it's safe to convert to uint
 		n := uint(bits.LeadingZeros64(v.hi))
 		v1 := v.Lsh(n)
 		u1 := u.Rsh(1)
