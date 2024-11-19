@@ -121,8 +121,8 @@ var (
 	// ErrZeroPowNegative is returned when raising zero to a negative power
 	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")
 
-	// ErrExponentTooLarge is returned when the exponent is too large
-	ErrExponentTooLarge = fmt.Errorf("exponent is too large. Must be less than math.MaxInt32")
+	// ErrExponentTooLarge is returned when the exponent is too large and becomes impractical.
+	ErrExponentTooLarge = fmt.Errorf("exponent is too large. Must be less than or equal math.MaxInt32")
 )
 
 var (
@@ -164,7 +164,7 @@ func SetDefaultPrecision(prec uint8) {
 	defaultPrec = prec
 }
 
-// NewFromHiLo returns Decimal from 128-bit unsigned integer (hi,lo)
+// NewFromHiLo returns a decimal from 128-bit unsigned integer (hi,lo)
 func NewFromHiLo(neg bool, hi uint64, lo uint64, prec uint8) (Decimal, error) {
 	if prec > defaultPrec {
 		return Decimal{}, ErrPrecOutOfRange
@@ -174,7 +174,9 @@ func NewFromHiLo(neg bool, hi uint64, lo uint64, prec uint8) (Decimal, error) {
 	return newDecimal(neg, bintFromU128(coef), prec), nil
 }
 
-// newDecimal return the decimal
+// newDecimal return the decimal.
+// This function should be used internally to create a new decimal
+// to ensure the Zero value is consistent and avoid unexpected cases.
 func newDecimal(neg bool, coef bint, prec uint8) Decimal {
 	if coef.IsZero() {
 		// make Zero consistent and avoid unexpected cases, such as:
@@ -234,7 +236,7 @@ func MustFromInt64(coef int64, prec uint8) Decimal {
 	return d
 }
 
-// NewFromFloat64 returns decimal from float64.
+// NewFromFloat64 returns a decimal from float64.
 //
 // **NOTE**: you'll expect to lose some precision for this method due to FormatFloat. See: https://github.com/golang/go/issues/29491
 //
@@ -279,7 +281,7 @@ func (d Decimal) InexactFloat64() float64 {
 	return f
 }
 
-// Parse parses a number in string to Decimal.
+// Parse parses a number in string to a decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
 //
 // Returns error if:
@@ -507,7 +509,7 @@ func (d Decimal) Mul64(v uint64) Decimal {
 }
 
 // Div returns d / e.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// If the result has more than defaultPrec fraction digits, it will be truncated to defaultPrec digits.
 //
 // Returns divide by zero error when e is zero
 func (d Decimal) Div(e Decimal) (Decimal, error) {
@@ -554,7 +556,7 @@ func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 }
 
 // Div64 returns d / e where e is a uint64.
-// If the result has more than 19 fraction digits, it will be truncated to 19 digits.
+// If the result has more than defaultPrec fraction digits, it will be truncated to defaultPrec digits.
 //
 // Returns divide by zero error when e is zero
 func (d Decimal) Div64(v uint64) (Decimal, error) {
@@ -661,14 +663,14 @@ func (d Decimal) Mod(e Decimal) (Decimal, error) {
 	return r, err
 }
 
-// Prec returns decimal precision
+// Prec returns decimal precision as an integer
 func (d Decimal) Prec() int {
 	return int(d.prec)
 }
 
 // PrecUint returns decimal precision as uint8
 // Useful when you want to use the precision
-// in other functions like Round or Trunc because they accept uint8
+// in other functions like [Decimal.RoundBank] or [Decimal.Trunc] because they accept uint8
 //
 // Example:
 //
@@ -877,8 +879,7 @@ func (d Decimal) RoundBank(prec uint8) Decimal {
 }
 
 // RoundAwayFromZero rounds the decimal to the specified prec using AWAY FROM ZERO method (https://en.wikipedia.org/wiki/Rounding#Rounding_away_from_zero).
-// If differs from HALF AWAY FROM ZERO in a way that the number is always rounded away from zero (or to infinity)
-// no matter if is 0.5 or not.
+// If differs from HALF AWAY FROM ZERO in a way that the number is always rounded away from zero (or to infinity) no matter if is 0.5 or not.
 // In other libraries or languages, this method is also known as ROUND_UP.
 //
 // Examples:
@@ -1224,16 +1225,15 @@ func trailingZerosU128(n u128) uint8 {
 }
 
 // PowToIntPart raises the decimal d to the power of integer part of e (d^int(e)).
-// This is useful when the exponent is an integer but stored in Decimal.
+// This is useful when the exponent is an integer but stored in [Decimal].
 //
 // Returns error if:
 //   - d is zero and e is a negative integer.
-//   - |int(e)| > math.MaxInt32 (because MaxInt32 is already ~2 billion, supporting more than that value is not practical and unnecessary).
+//   - |int(e)| > [math.MaxInt32] (because MaxInt32 is already ~2 billion, supporting more than that value is not practical and unnecessary).
 //
 // Special cases:
-//
-//	0^0 = 1
-//	0^(any negative integer) results in an error
+//   - 0^0 = 1
+//   - 0^(any negative integer) results in [ErrZeroPowNegative]
 //
 // Examples:
 //
@@ -1266,7 +1266,7 @@ func (d Decimal) PowToIntPart(e Decimal) (Decimal, error) {
 	return d.PowInt32(exponent)
 }
 
-// Deprecated: Use PowInt32 instead for correct handling of 0^0 and negative exponents.
+// Deprecated: Use [PowInt32] instead for correct handling of 0^0 and negative exponents.
 // This function treats 0 raised to any power as 0, which may not align with mathematical conventions
 // but is practical in certain cases. See: https://github.com/quagmt/udecimal/issues/25.
 //
@@ -1336,14 +1336,12 @@ func (d Decimal) PowInt(e int) Decimal {
 // PowInt32 returns d raised to the power of e, where e is an int32.
 //
 // Returns:
-//
-//	The result of d raised to the power of e.
-//	 An error if d is zero and e is a negative integer.
+//   - The result of d raised to the power of e.
+//   - An error if d is zero and e is a negative integer.
 //
 // Special cases:
-//
-//	0^0 = 1
-//	0^(any negative integer) results in an error
+//   - 0^0 = 1
+//   - 0^(any negative integer) results in [ErrZeroPowNegative]
 //
 // Examples:
 //
@@ -1534,7 +1532,7 @@ func (d Decimal) tryInversePowIntU128(e int) (Decimal, error) {
 	return newDecimal(neg, bintFromU128(q), defaultPrec), nil
 }
 
-// Sqrt returns the square root of d using Newton-Raphson method.
+// Sqrt returns the square root of d using Newton-Raphson method. (https://en.wikipedia.org/wiki/Newton%27s_method)
 // The result will have at most defaultPrec digits after the decimal point.
 // Returns error if d < 0
 //

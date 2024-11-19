@@ -1,7 +1,6 @@
 package udecimal
 
 import (
-	"fmt"
 	"math/bits"
 )
 
@@ -68,10 +67,13 @@ func (u u256) cmp128(v u128) int {
 	return u128FromHiLo(u.hi, u.lo).Cmp(v)
 }
 
+// pow returns u^e (with e > 0)
+// Use int instead of uint to avoid unnecessary checks for type conversion
 func (u u256) pow(e int) (u256, error) {
-	if e <= 0 {
-		return u256{}, fmt.Errorf("invalid exponent %d. Must be greater than 0", e)
-	}
+	// e should be greater than 0 already. No need to check
+	// if e <= 0 {
+	// 	return u256{}, fmt.Errorf("invalid exponent %d. Must be greater than 0", e)
+	// }
 
 	result := u256{lo: 1}
 	d256 := u
