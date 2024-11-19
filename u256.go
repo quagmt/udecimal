@@ -167,7 +167,7 @@ func (u u256) div256by128(v u128) (u128, u128) {
 	// normalize v
 	n := bits.LeadingZeros64(v.hi)
 
-	//nolint:gosec
+	//nolint:gosec // 0 <= n <= 63, so it's safe to convert to uint
 	v = v.Lsh(uint(n))
 
 	// shift u to the left by n bits (n < 64)
@@ -235,7 +235,7 @@ func (u u256) div256by128(v u128) (u128, u128) {
 		a[i+1], a[i] = rem.hi, rem.lo
 	}
 
-	//nolint:gosec
+	//nolint:gosec // 0 <= n <= 63, so it's safe to convert to uint
 	r := u128{hi: a[1], lo: a[0]}.Rsh(uint(n))
 
 	return u128{hi: q[1], lo: q[0]}, r

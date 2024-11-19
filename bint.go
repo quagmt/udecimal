@@ -178,7 +178,7 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
-	//nolint:gosec
+	//nolint:gosec // prec <= maxPrec (19) and can be safely converted to uint8
 	return neg, bintFromBigInt(dValue), uint8(prec), nil
 }
 
@@ -244,7 +244,7 @@ func parseSmallToU128(s []byte) (u128, uint8, error) {
 				return u128{}, 0, ErrInvalidFormat
 			}
 
-			//nolint:gosec
+			//nolint:gosec // len(s) <= maxDigitU64 and len(s)-i-1 >= 0, can be safely converted to uint8
 			prec = uint8(len(s) - i - 1)
 
 			// prevent "123." or "-123."
@@ -293,7 +293,7 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 	}
 
 	// now 0 < pos < l-1
-	//nolint:gosec
+	//nolint:gosec // l < maxStrLen, so 0 < l-pos-1 < 256, can be safely converted to uint8
 	prec := uint8(l - pos - 1)
 	if prec > defaultPrec {
 		return u128{}, 0, ErrPrecOutOfRange

@@ -4,31 +4,6 @@ This section provides benchmarks for the `udecimal` library in comparision with 
 
 For full benchmark details, checkout [benchmark-udec.txt](./bench-ss.txt) and [benchstat.txt](./benchstat.txt)
 
-## How to run benchmarks
-
-### 1. Clone the repository and go to the benchmarks directory
-
-```bash
-git clone https://github.com/quagmt/udecimal.git
-cd udecimal/benchmarks
-```
-
-### 2. Run benchmarks
-
-Run full benchmarks with benchstat comparison (it will take some time)
-
-```bash
-make bench-ss
-make bench-udec
-make stats
-```
-
-Or run benchmarks for `udecimal` only
-
-```bash
-make bench-udec
-```
-
 ## Benchmark Results
 
 <i>**NOTE**: The results are for references and can be varied depending on the hardware</i>
@@ -63,15 +38,15 @@ BenchmarkPow/1.01.Pow(10)-32                                                    
 BenchmarkPow/1.01.Pow(100)-32                                                            	   994129	  1137 ns/op	 817 B/op	13 allocs/op
 
 # Parsing string
-BenchmarkParse/1234567890123456789.1234567890123456879-32                                    32111433    38.21 ns/op       0 B/op    0 allocs/op
-BenchmarkParse/1234567890-32                                                                 98585916    12.58 ns/op       0 B/op    0 allocs/op
-BenchmarkParse/0.1234567890123456879-32                                                      44339668    26.45 ns/op       0 B/op    0 allocs/op
-BenchmarkParseFallBack/123456789123456789123456.1234567890123456-32                        	  2805122 	 473.3 ns/op	 192 B/op	 6 allocs/op
-BenchmarkParseFallBack/111222333444555666777888999.1234567890123456789-32                  	  2442004 	 500.8 ns/op	 216 B/op	 6 allocs/op
+BenchmarkParse/1234567890123456789.1234567890123456879-32                                  	 32111433	 38.21 ns/op	   0 B/op	 0 allocs/op
+BenchmarkParse/1234567890-32                                                               	 98585916	 12.58 ns/op	   0 B/op	 0 allocs/op
+BenchmarkParse/0.1234567890123456879-32                                                    	 44339668	 26.45 ns/op	   0 B/op	 0 allocs/op
+BenchmarkParseFallBack/123456789123456789123456.1234567890123456-32                        	  2805122	 473.3 ns/op	 192 B/op	 6 allocs/op
+BenchmarkParseFallBack/111222333444555666777888999.1234567890123456789-32                  	  2442004	 500.8 ns/op	 216 B/op	 6 allocs/op
 BenchmarkString/1234567890123456789.1234567890123456879-32                                 	 14577884	 76.50 ns/op	  48 B/op	 1 allocs/op
 BenchmarkString/0.1234567890123456879-32                                                   	 41109242	 40.02 ns/op	  24 B/op	 1 allocs/op
-BenchmarkStringFallBack/123456789123456789123456.1234567890123456-32                       	  4147044 	 256.2 ns/op	 208 B/op	 4 allocs/op
-BenchmarkStringFallBack/111222333444555666777888999.1234567890123456789-32                 	  3808071 	 313.3 ns/op	 208 B/op	 4 allocs/op
+BenchmarkStringFallBack/123456789123456789123456.1234567890123456-32                       	  4147044	 256.2 ns/op	 208 B/op	 4 allocs/op
+BenchmarkStringFallBack/111222333444555666777888999.1234567890123456789-32                 	  3808071	 313.3 ns/op	 208 B/op	 4 allocs/op
 
 # Marshal/Unmarshal
 BenchmarkMarshalJSON/1234567890123456789.1234567890123456879-32                            	 13965998	 77.22 ns/op	  48 B/op	 1 allocs/op

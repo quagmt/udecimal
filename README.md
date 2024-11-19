@@ -56,13 +56,13 @@ func main() {
 	fmt.Println(a.Div(d)) // 123.456 / 4123547.1234567890123456789 = 0.0000299392722585176
 
 	// Rounding
-	fmt.Println(c.RoundBank(3)) // banker's rounding: 1.2345 -> 1.234
+	fmt.Println(c.RoundBank(3))         // banker's rounding: 1.2345 -> 1.234
 	fmt.Println(c.RoundAwayFromZero(2)) // round away from zero: 1.2345 -> 1.24
-	fmt.Println(c.RoundHAZ(3))  // half away from zero: 1.2345 -> 1.235
-	fmt.Println(c.RoundHTZ(3))  // half towards zero: 1.2345 -> 1.234
-	fmt.Println(c.Trunc(2))     // truncate: 1.2345 -> 1.23
-	fmt.Println(c.Floor())      // floor: 1.2345 -> 1
-	fmt.Println(c.Ceil())       // ceil: 1.2345 -> 2
+	fmt.Println(c.RoundHAZ(3))          // half away from zero: 1.2345 -> 1.235
+	fmt.Println(c.RoundHTZ(3))          // half towards zero: 1.2345 -> 1.234
+	fmt.Println(c.Trunc(2))             // truncate: 1.2345 -> 1.23
+	fmt.Println(c.Floor())              // floor: 1.2345 -> 1
+	fmt.Println(c.Ceil())               // ceil: 1.2345 -> 2
 
 	// Display
 	fmt.Println(a.String())         // 123.456
@@ -108,10 +108,10 @@ func main() {
 	a, _ := udecimal.NewFromFloat64(1.345) // a = 1.345
 
 	// Rounding
-	fmt.Println(a.RoundBank(2)) // banker's rounding: 1.345 -> 1.34
+	fmt.Println(a.RoundBank(2))         // banker's rounding: 1.345 -> 1.34
 	fmt.Println(a.RoundAwayFromZero(2)) // round away from zero: 1.345 -> 1.35
-	fmt.Println(a.RoundHAZ(2))  // half away from zero: 1.45 -> 1.35
-	fmt.Println(a.RoundHTZ(2))  // half towards zero: 1.45 -> 1.34
+	fmt.Println(a.RoundHAZ(2))          // half away from zero: 1.45 -> 1.35
+	fmt.Println(a.RoundHTZ(2))          // half towards zero: 1.45 -> 1.34
 }
 ```
 
