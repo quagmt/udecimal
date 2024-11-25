@@ -110,8 +110,8 @@ func main() {
 	// Rounding
 	fmt.Println(a.RoundBank(2))         // banker's rounding: 1.345 -> 1.34
 	fmt.Println(a.RoundAwayFromZero(2)) // round away from zero: 1.345 -> 1.35
-	fmt.Println(a.RoundHAZ(2))          // half away from zero: 1.45 -> 1.35
-	fmt.Println(a.RoundHTZ(2))          // half towards zero: 1.45 -> 1.34
+	fmt.Println(a.RoundHAZ(2))          // half away from zero: 1.345 -> 1.35
+	fmt.Println(a.RoundHTZ(2))          // half towards zero: 1.345 -> 1.34
 }
 ```
 
