@@ -8,8 +8,17 @@ import (
 
 	"github.com/quagmt/udecimal"
 
+	ed "github.com/ericlagergren/decimal"
 	ss "github.com/shopspring/decimal"
 )
+
+func edDecimal(s string) *ed.Big {
+	var a ed.Big
+	a.Context.Precision = 19
+	a.Context.RoundingMode = ed.ToNearestEven
+	a.SetString(s)
+	return &a
+}
 
 func BenchmarkParse(b *testing.B) {
 	testcases := []string{
@@ -27,6 +36,15 @@ func BenchmarkParse(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_, _ = ss.NewFromString(tc)
+			}
+		})
+
+		// ericlagergren benchmark
+		b.Run(fmt.Sprintf("eric/%s", tc), func(b *testing.B) {
+			a := ed.New(0, 0)
+			b.ResetTimer()
+			for range b.N {
+				_, _ = a.SetString(tc)
 			}
 		})
 
@@ -81,6 +99,19 @@ func BenchmarkString(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_ = bb.String()
+			}
+		})
+
+		// ericlagergren benchmark
+		b.Run(fmt.Sprintf("eric/%s", tc), func(b *testing.B) {
+			var a ed.Big
+			a.Context.Precision = 19
+			a.Context.RoundingMode = ed.ToNearestEven
+			a.SetString(tc)
+
+			b.ResetTimer()
+			for range b.N {
+				_ = a.String()
 			}
 		})
 
@@ -148,6 +179,17 @@ func BenchmarkAdd(b *testing.B) {
 			}
 		})
 
+		// ericlargergren benchmark
+		b.Run(fmt.Sprintf("eric/%s.Add(%s)", tc.a, tc.b), func(b *testing.B) {
+			a := edDecimal(tc.a)
+			bb := edDecimal(tc.b)
+
+			b.ResetTimer()
+			for range b.N {
+				_ = a.Add(a, bb)
+			}
+		})
+
 		b.Run(fmt.Sprintf("udec/%s.Add(%s)", tc.a, tc.b), func(b *testing.B) {
 			a, err := udecimal.Parse(tc.a)
 			require.NoError(b, err)
@@ -184,6 +226,17 @@ func BenchmarkSub(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_ = a.Sub(bb)
+			}
+		})
+
+		// ericlargergren benchmark
+		b.Run(fmt.Sprintf("eric/%s.Sub(%s)", tc.a, tc.b), func(b *testing.B) {
+			a := edDecimal(tc.a)
+			bb := edDecimal(tc.b)
+
+			b.ResetTimer()
+			for range b.N {
+				_ = a.Sub(a, bb)
 			}
 		})
 
@@ -227,6 +280,17 @@ func BenchmarkMul(b *testing.B) {
 			}
 		})
 
+		// ericlargergren benchmark
+		b.Run(fmt.Sprintf("eric/%s.Mul(%s)", tc.a, tc.b), func(b *testing.B) {
+			a := edDecimal(tc.a)
+			bb := edDecimal(tc.b)
+
+			b.ResetTimer()
+			for range b.N {
+				_ = a.Mul(a, bb)
+			}
+		})
+
 		b.Run(fmt.Sprintf("udec/%s.Mul(%s)", tc.a, tc.b), func(b *testing.B) {
 			a, err := udecimal.Parse(tc.a)
 			require.NoError(b, err)
@@ -266,6 +330,17 @@ func BenchmarkDiv(b *testing.B) {
 			b.ResetTimer()
 			for range b.N {
 				_ = a.Div(bb)
+			}
+		})
+
+		// ericlargergren benchmark
+		b.Run(fmt.Sprintf("eric/%s.Div(%s)", tc.a, tc.b), func(b *testing.B) {
+			a := edDecimal(tc.a)
+			bb := edDecimal(tc.b)
+
+			b.ResetTimer()
+			for range b.N {
+				_ = a.Quo(a, bb)
 			}
 		})
 
@@ -362,6 +437,7 @@ func BenchmarkMarshalJSON(b *testing.B) {
 	}
 
 	for _, tc := range testcases {
+		// shopspring benchmark
 		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
 			bb := ss.RequireFromString(tc)
 
@@ -393,6 +469,7 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 	}
 
 	for _, tc := range testcases {
+		// shopspring benchmark
 		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
 			data, _ := ss.RequireFromString(tc).MarshalJSON()
 
