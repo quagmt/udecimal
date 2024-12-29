@@ -306,8 +306,8 @@ func (d Decimal) InexactFloat64() float64 {
 	return f
 }
 
-// HiLo returns the internal representation of the decimal.
-func (d Decimal) HiLo() (neg bool, hi uint64, lo uint64, prec uint8, ok bool) {
+// ToHiLo returns the internal representation of the decimal.
+func (d Decimal) ToHiLo() (neg bool, hi uint64, lo uint64, prec uint8, ok bool) {
 	if d.coef.bigInt != nil {
 		return
 	}

@@ -2882,7 +2882,7 @@ func TestHiLo(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(fmt.Sprintf("hiLo(%s)", tc.a), func(t *testing.T) {
 			a := MustParse(tc.a)
-			neg, hi, lo, prec, ok := a.HiLo()
+			neg, hi, lo, prec, ok := a.ToHiLo()
 			if tc.neg != neg || tc.hi != hi || tc.lo != lo || tc.prec != prec || tc.ok != ok {
 				t.Errorf("got: %v, %v, %v, %v, %v; want: %v, %v, %v, %v, %v", neg, hi, lo, prec, ok, tc.neg, tc.hi, tc.lo, tc.prec, tc.ok)
 			}
@@ -2912,7 +2912,7 @@ func TestConversionHiLo(t *testing.T) {
 		t.Run(fmt.Sprintf("conversionHiLo(%s)", tc.a), func(t *testing.T) {
 			a := MustParse(tc.a)
 
-			neg, hi, lo, prec, _ := a.HiLo()
+			neg, hi, lo, prec, _ := a.ToHiLo()
 			b, _ := NewFromHiLo(neg, hi, lo, prec)
 
 			require.Equal(t, tc.want, b.String())
