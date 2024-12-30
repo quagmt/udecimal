@@ -306,6 +306,14 @@ func (d Decimal) InexactFloat64() float64 {
 	return f
 }
 
+// ToHiLo returns the internal representation of the decimal.
+func (d Decimal) ToHiLo() (neg bool, hi uint64, lo uint64, prec uint8, ok bool) {
+	if d.coef.bigInt != nil {
+		return
+	}
+	return d.neg, d.coef.u128.hi, d.coef.u128.lo, d.prec, true
+}
+
 // Parse parses a number in string to a decimal.
 // The string must be in the format of: [+-]d{1,19}[.d{1,19}]
 //
