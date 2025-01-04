@@ -9,6 +9,7 @@ on:
       - go.mod
       - go.sum
       - ".github/workflows/codecov.yaml"
+      - "!benchmarks/**"
 
 jobs:
   test:
