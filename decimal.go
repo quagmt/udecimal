@@ -742,6 +742,49 @@ func (d Decimal) Equal(e Decimal) bool {
 	return d.Cmp(e) == 0
 }
 
+// LessThan reports whether d < e.
+func (d Decimal) LessThan(e Decimal) bool {
+	return d.Cmp(e) == -1
+}
+
+// LessThanOrEqual reports whether d <= e.
+func (d Decimal) LessThanOrEqual(e Decimal) bool {
+	return d.Cmp(e) <= 0
+}
+
+// GreaterThan reports whether d > e.
+func (d Decimal) GreaterThan(e Decimal) bool {
+	return d.Cmp(e) == 1
+}
+
+// GreaterThanOrEqual reports whether d >= e.
+func (d Decimal) GreaterThanOrEqual(e Decimal) bool {
+	return d.Cmp(e) >= 0
+}
+
+// Max returns the maximum decimal from the list of decimals.
+func Max(a Decimal, b ...Decimal) Decimal {
+	result := a
+	for _, v := range b {
+		if v.GreaterThan(result) {
+			result = v
+		}
+	}
+
+	return result
+}
+
+func Min(a Decimal, b ...Decimal) Decimal {
+	result := a
+	for _, v := range b {
+		if v.LessThan(result) {
+			result = v
+		}
+	}
+
+	return result
+}
+
 func (d Decimal) cmpDecSameSign(e Decimal) int {
 	result, err := tryCmpU128(d, e)
 	if err == nil {

@@ -1275,36 +1275,40 @@ func TestCmp(t *testing.T) {
 	}
 }
 
-func TestEqual(t *testing.T) {
+func TestComparisionUtils(t *testing.T) {
 	testcases := []struct {
-		a, b string
-		want bool
+		a, b      string
+		wantEqual bool
+		wantLT    bool
+		wantLTE   bool
+		wantGT    bool
+		wantGTE   bool
 	}{
-		{"1234567890123456789", "0", false},
-		{"123.123", "-123.123", false},
-		{"-123.123", "123.123", false},
-		{"-123.123", "-123.123", true},
-		{"-123.123", "-123.1234567890123456789", false},
-		{"123.123", "123.1234567890123456789", false},
-		{"123.123", "123.1230000000000000001", false},
-		{"-123.123", "-123.1230000000000000001", false},
-		{"123.1230000000000000002", "123.1230000000000000001", false},
-		{"-123.1230000000000000002", "-123.1230000000000000001", false},
-		{"123.1230000000000000002", "123.123000000001", false},
-		{"-123.1230000000000000002", "-123.123000000001", false},
-		{"123.123", "123.1230000", true},
-		{"123.101", "123.1001", false},
-		{"1000000000000000000000000.1234567890123456789", "1.1234567890123456789", false},
-		{"-1000000000000000000000000.1234567890123456789", "1.1234567890123456789", false},
-		{"-1000000000000000000000000.1234567890123456789", "-1.1234567890123456789", false},
-		{"1000000000000000000000000.1234567890123456789", "1000000000000000000000000.1234567890123456789", true},
-		{"-1000000000000000000000000.1234567890123456789", "-1000000000000000000000000.1234567890123456789", true},
-		{"1000000000000000000000000.1234567890123456789", "1000000000000000000000000.1234567890123456788", false},
-		{"-1000000000000000000000000.1234567890123456789", "-1000000000000000000000000.1234567890123456788", false},
-		{"1000000000000000000000000.12345678901234", "1000000000000000000000000.1234567890123456788", false},
-		{"-1000000000000000000000000.12345678901234", "-1000000000000000000000000.1234567890123456788", false},
-		{"1000000000000000000000000.1234567890123456788", "1000000000000000000000000.12345678901234", false},
-		{"-1000000000000000000000000.1234567890123456788", "-1000000000000000000000000.12345678901234", false},
+		{"1234567890123456789", "0", false, false, false, true, true},
+		{"123.123", "-123.123", false, false, false, true, true},
+		{"-123.123", "123.123", false, true, true, false, false},
+		{"-123.123", "-123.123", true, false, true, false, true},
+		{"-123.123", "-123.1234567890123456789", false, false, false, true, true},
+		{"123.123", "123.1234567890123456789", false, true, true, false, false},
+		{"123.123", "123.1230000000000000001", false, true, true, false, false},
+		{"-123.123", "-123.1230000000000000001", false, false, false, true, true},
+		{"123.1230000000000000002", "123.1230000000000000001", false, false, false, true, true},
+		{"-123.1230000000000000002", "-123.1230000000000000001", false, true, true, false, false},
+		{"123.1230000000000000002", "123.123000000001", false, true, true, false, false},
+		{"-123.1230000000000000002", "-123.123000000001", false, false, false, true, true},
+		{"123.123", "123.1230000", true, false, true, false, true},
+		{"123.101", "123.1001", false, false, false, true, true},
+		{"1000000000000000000000000.1234567890123456789", "1.1234567890123456789", false, false, false, true, true},
+		{"-1000000000000000000000000.1234567890123456789", "1.1234567890123456789", false, true, true, false, false},
+		{"-1000000000000000000000000.1234567890123456789", "-1.1234567890123456789", false, true, true, false, false},
+		{"1000000000000000000000000.1234567890123456789", "1000000000000000000000000.1234567890123456789", true, false, true, false, true},
+		{"-1000000000000000000000000.1234567890123456789", "-1000000000000000000000000.1234567890123456789", true, false, true, false, true},
+		{"1000000000000000000000000.1234567890123456789", "1000000000000000000000000.1234567890123456788", false, false, false, true, true},
+		{"-1000000000000000000000000.1234567890123456789", "-1000000000000000000000000.1234567890123456788", false, true, true, false, false},
+		{"1000000000000000000000000.12345678901234", "1000000000000000000000000.1234567890123456788", false, true, true, false, false},
+		{"-1000000000000000000000000.12345678901234", "-1000000000000000000000000.1234567890123456788", false, false, false, true, true},
+		{"1000000000000000000000000.1234567890123456788", "1000000000000000000000000.12345678901234", false, false, false, true, true},
+		{"-1000000000000000000000000.1234567890123456788", "-1000000000000000000000000.12345678901234", false, true, true, false, false},
 	}
 
 	for _, tc := range testcases {
@@ -1315,15 +1319,72 @@ func TestEqual(t *testing.T) {
 			b, err := Parse(tc.b)
 			require.NoError(t, err)
 
-			c := a.Equal(b)
-			require.Equal(t, tc.want, c)
-
-			// compare with shopspring/decimal
 			aa := decimal.RequireFromString(tc.a)
 			bb := decimal.RequireFromString(tc.b)
 
+			// test equal
+			c := a.Equal(b)
 			cc := aa.Equal(bb)
+			require.Equal(t, tc.wantEqual, c)
 			require.Equal(t, cc, c)
+
+			// test less than
+			c = a.LessThan(b)
+			cc = aa.LessThan(bb)
+			require.Equal(t, tc.wantLT, c)
+			require.Equal(t, cc, c)
+
+			// test less than or equal
+			c = a.LessThanOrEqual(b)
+			cc = aa.LessThanOrEqual(bb)
+			require.Equal(t, tc.wantLTE, c)
+			require.Equal(t, cc, c)
+
+			// test greater than
+			c = a.GreaterThan(b)
+			cc = aa.GreaterThan(bb)
+			require.Equal(t, tc.wantGT, c)
+			require.Equal(t, cc, c)
+
+			// test greater than or equal
+			c = a.GreaterThanOrEqual(b)
+			cc = aa.GreaterThanOrEqual(bb)
+			require.Equal(t, tc.wantGTE, c)
+			require.Equal(t, cc, c)
+		})
+	}
+}
+
+func TestMaxMin(t *testing.T) {
+	testcases := []struct {
+		list    []string
+		wantMax string
+		wantMin string
+	}{
+		{[]string{"1234567890123456789", "0", "1234567890123456789", "1234567890123456789"}, "1234567890123456789", "0"},
+		{[]string{"123.123", "-123.123", "123.123", "-123.123"}, "123.123", "-123.123"},
+		{[]string{"-1235.123124235235", "0.11", "5345.29809824", "-6465465.45646"}, "5345.29809824", "-6465465.45646"},
+		{[]string{"1.123", "2.235"}, "2.235", "1.123"},
+		{[]string{"-1.123", "-2.235"}, "-1.123", "-2.235"},
+		{[]string{"1.123"}, "1.123", "1.123"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%v", tc.list), func(t *testing.T) {
+			list := make([]Decimal, len(tc.list))
+			for i, s := range tc.list {
+				d, err := Parse(s)
+				require.NoError(t, err)
+				list[i] = d
+			}
+
+			// test max
+			expectedMax := Max(list[0], list[1:]...)
+			require.Equal(t, tc.wantMax, expectedMax.String())
+
+			// test min
+			expectedMin := Min(list[0], list[1:]...)
+			require.Equal(t, tc.wantMin, expectedMin.String())
 		})
 	}
 }
