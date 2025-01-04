@@ -146,6 +146,58 @@ func ExampleDecimal_Cmp() {
 	// 1
 }
 
+func ExampleDecimal_LessThan() {
+	fmt.Println(MustParse("1.23").LessThan(MustParse("4.12475")))
+	fmt.Println(MustParse("1.23").LessThan(MustParse("1.23")))
+	fmt.Println(MustParse("1.23").LessThan(MustParse("0.12475")))
+	// Output:
+	// true
+	// false
+	// false
+}
+
+func ExampleDecimal_LessThanOrEqual() {
+	fmt.Println(MustParse("1.23").LessThanOrEqual(MustParse("4.12475")))
+	fmt.Println(MustParse("1.23").LessThanOrEqual(MustParse("1.23")))
+	fmt.Println(MustParse("1.23").LessThanOrEqual(MustParse("0.12475")))
+	// Output:
+	// true
+	// true
+	// false
+}
+
+func ExampleDecimal_GreaterThan() {
+	fmt.Println(MustParse("1.23").GreaterThan(MustParse("4.12475")))
+	fmt.Println(MustParse("1.23").GreaterThan(MustParse("1.23")))
+	fmt.Println(MustParse("1.23").GreaterThan(MustParse("0.12475")))
+	// Output:
+	// false
+	// false
+	// true
+}
+
+func ExampleDecimal_GreaterThanOrEqual() {
+	fmt.Println(MustParse("1.23").GreaterThanOrEqual(MustParse("4.12475")))
+	fmt.Println(MustParse("1.23").GreaterThanOrEqual(MustParse("1.23")))
+	fmt.Println(MustParse("1.23").GreaterThanOrEqual(MustParse("0.12475")))
+	// Output:
+	// false
+	// true
+	// true
+}
+
+func ExampleMax() {
+	fmt.Println(Max(MustParse("1.23"), MustParse("4.12475")))
+	// Output:
+	// 4.12475
+}
+
+func ExampleMin() {
+	fmt.Println(Min(MustParse("1.23"), MustParse("4.12475")))
+	// Output:
+	// 1.23
+}
+
 func ExampleDecimal_Equal() {
 	fmt.Println(MustParse("1.123").Equal(MustParse("-1.123")))
 	fmt.Println(MustParse("1.123").Equal(MustParse("1.1230000")))
