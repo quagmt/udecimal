@@ -306,6 +306,10 @@ func (d Decimal) MarshalText() ([]byte, error) {
 func (d *Decimal) UnmarshalText(data []byte) error {
 	var err error
 	*d, err = parseBytes(data)
+	if err != nil {
+		return fmt.Errorf("error unmarshaling to Decimal: %w", err)
+	}
+
 	return err
 }
 

@@ -90,25 +90,30 @@ func TestMarshalText(t *testing.T) {
 
 func TestUnmarshalText(t *testing.T) {
 	testcases := []struct {
-		in      string
-		wantErr error
+		in          string
+		wantErr     string
+		wantErrType error
 	}{
-		{"", ErrEmptyString},
-		{" ", ErrInvalidFormat},
-		{"abc", ErrInvalidFormat},
-		{"1234567890123.1234567890123", nil},
-		{"1234567890123.12345678901234567899", ErrPrecOutOfRange},
+		{"", "error unmarshaling to Decimal: can't parse empty string", ErrEmptyString},
+		{" ", "error unmarshaling to Decimal: invalid format: can't parse ' '", ErrInvalidFormat},
+		{"abc", "error unmarshaling to Decimal: invalid format: can't parse 'abc'", ErrInvalidFormat},
+		{"1234567890123.12345678901234567899", "error unmarshaling to Decimal: precision out of range. Only support maximum 19 digits after the decimal point", ErrPrecOutOfRange},
+		{"1234567890123.1234567890123", "", nil},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
 			var d Decimal
 			err := d.UnmarshalText([]byte(tc.in))
-			require.ErrorIs(t, err, tc.wantErr)
 
-			if tc.wantErr == nil {
-				require.Equal(t, MustParse(tc.in), d)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+				require.ErrorIs(t, err, tc.wantErrType)
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, MustParse(tc.in), d)
 		})
 	}
 }
