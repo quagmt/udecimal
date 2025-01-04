@@ -8,6 +8,7 @@ on:
       - go.sum
       - ".github/workflows/test.yaml"
       - ".golangci.yaml"
+      - "!benchmarks/**"
 
 jobs:
   lint:
