@@ -72,7 +72,6 @@ func (u u256) cmp128(v u128) int {
 //
 // NOTE: Caller must ensure that e > 0 before calling this function.
 func (u u256) pow(e int) (u256, error) {
-
 	result := u256{lo: 1}
 	d256 := u
 	var err error
