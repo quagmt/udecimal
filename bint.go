@@ -72,7 +72,7 @@ func (u bint) Cmp(v bint) int {
 }
 
 func errInvalidFormat(s []byte) error {
-	return fmt.Errorf("%w: can't parse '%s' to Decimal", ErrInvalidFormat, s)
+	return fmt.Errorf("%w: can't parse '%s'", ErrInvalidFormat, s)
 }
 
 func parseBint(s []byte) (bool, bint, uint8, error) {

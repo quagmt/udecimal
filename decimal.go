@@ -96,7 +96,7 @@ var (
 	ErrPrecOutOfRange = fmt.Errorf("precision out of range. Only support maximum %d digits after the decimal point", defaultPrec)
 
 	// ErrEmptyString is returned when the input string is empty
-	ErrEmptyString = fmt.Errorf("parse empty string")
+	ErrEmptyString = fmt.Errorf("can't parse empty string")
 
 	// ErrMaxStrLen is returned when the input string exceeds the maximum length
 	// Maximum length is arbitrarily set to 200 so string length value can fit in 1 byte (for MarshalBinary).
