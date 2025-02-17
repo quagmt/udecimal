@@ -7,6 +7,34 @@ import (
 	"strings"
 )
 
+var (
+	defaultParseMode = ParseModeError
+)
+
+func SetDefaultParseMode(mode ParseMode) {
+	switch mode {
+	case ParseModeError, ParseModeTrunc:
+		defaultParseMode = mode
+	default:
+		panic("can't set default parse mode: invalid mode value")
+	}
+}
+
+type ParseMode int
+
+const (
+	// Default parse mode will return error if the string number
+	// has more than [defaultPrec] decimal digits.
+	ParseModeError ParseMode = iota
+
+	// ParseModeTrunc will not return error if the string number
+	// has more than [defaultPrec] decimal digits and truncate the exceeded digits instead.
+	// Use this mode if the data source (e.g. database, external API, etc.) stores data
+	// that has more than [defaultPrec] decimal digits already, allowing for some
+	// precision loss (if acceptable).
+	ParseModeTrunc
+)
+
 const (
 	// maxDigitU64 is the maximum digits of a number
 	// that can be safely stored in a uint64.
@@ -127,26 +155,32 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
-	pIndex := -1
 	vLen := len(value)
-	for i := 0; i < vLen; i++ {
-		if value[i] == '.' {
-			if pIndex > -1 {
-				// input has more than 1 decimal point
-				return false, bint{}, 0, errInvalidFormat(s)
-			}
-			pIndex = i
-		}
-	}
+	pIndex := bytes.IndexByte(value, '.')
 
 	switch {
 	case pIndex == -1:
 		// There is no decimal point, we can just parse the original string as an int
 		intString = string(value)
-	case pIndex >= vLen-1:
+	case pIndex == 0 || pIndex >= vLen-1:
 		// prevent "123." or "-123."
 		return false, bint{}, 0, errInvalidFormat(s)
 	default:
+		prec = vLen - pIndex - 1
+		switch defaultParseMode {
+		case ParseModeError:
+			if prec > int(defaultPrec) {
+				return false, bint{}, 0, ErrPrecOutOfRange
+			}
+		case ParseModeTrunc:
+			if prec > int(defaultPrec) {
+				value = value[:pIndex+1+int(defaultPrec)]
+				prec = int(defaultPrec)
+			}
+		default:
+			return false, bint{}, 0, fmt.Errorf("invalid parse mode: %d. Make sure to use SetParseMode with a valid value", defaultParseMode)
+		}
+
 		b := strings.Builder{}
 		_, err := b.Write(value[:pIndex])
 		if err != nil {
@@ -160,11 +194,6 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 
 		// intString = value[:pIndex] + value[pIndex+1:]
 		intString = b.String()
-		prec = len(value[pIndex+1:])
-	}
-
-	if prec > int(defaultPrec) {
-		return false, bint{}, 0, ErrPrecOutOfRange
 	}
 
 	dValue := new(big.Int)
@@ -295,8 +324,18 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 	// now 0 < pos < l-1
 	//nolint:gosec // l < maxStrLen, so 0 < l-pos-1 < 256, can be safely converted to uint8
 	prec := uint8(l - pos - 1)
-	if prec > defaultPrec {
-		return u128{}, 0, ErrPrecOutOfRange
+	switch defaultParseMode {
+	case ParseModeError:
+		if prec > defaultPrec {
+			return u128{}, 0, ErrPrecOutOfRange
+		}
+	case ParseModeTrunc:
+		if prec > defaultPrec {
+			s = s[:pos+1+int(defaultPrec)]
+			prec = defaultPrec
+		}
+	default:
+		return u128{}, 0, fmt.Errorf("invalid parse mode: %d. Make sure to use SetParseMode with a valid value", defaultParseMode)
 	}
 
 	// number has a decimal point, split into 2 parts: integer and fraction
