@@ -956,7 +956,7 @@ func TestDiv(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(ulp), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
@@ -1053,7 +1053,7 @@ func TestDivWithCustomPrecision(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(ulp), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
@@ -1120,7 +1120,7 @@ func TestDiv64(t *testing.T) {
 			d := MustParse(cc.String())
 			e := c.Sub(d)
 
-			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
+			require.LessOrEqual(t, e.Abs().Cmp(ulp), 0, "expected %s, got %s", cc.String(), c.String())
 		})
 	}
 }
@@ -2902,16 +2902,16 @@ func TestPrecUint(t *testing.T) {
 		{"-123456789123456789123456789.1234567890123456789", 19},
 	}
 
-	oneUnit := MustParse("0.0001")
+	ulp := MustParse("0.0001")
 
 	for _, tc := range testcases {
 		t.Run(fmt.Sprintf("precUint(%s)", tc.a), func(t *testing.T) {
 			a := MustParse(tc.a)
 			require.Equal(t, tc.want, a.PrecUint())
 
-			b := a.Trunc(oneUnit.PrecUint())
-			if a.prec > oneUnit.prec {
-				require.Equal(t, oneUnit.prec, b.PrecUint())
+			b := a.Trunc(ulp.PrecUint())
+			if a.prec > ulp.prec {
+				require.Equal(t, ulp.prec, b.PrecUint())
 			}
 		})
 	}
@@ -2978,5 +2978,70 @@ func TestConversionHiLo(t *testing.T) {
 
 			require.Equal(t, tc.want, b.String())
 		})
+	}
+}
+
+func TestExp(t *testing.T) {
+	for i := 0; i <= 100; i++ {
+		t.Run(fmt.Sprintf("exp(%d)", i), func(t *testing.T) {
+			a := MustFromInt64(int64(i), 0)
+			b, err := a.Exp()
+			require.NoError(t, err)
+
+			aa := decimal.New(int64(i), 0)
+			bb, err := aa.ExpTaylor(19)
+			require.NoError(t, err)
+
+			require.Equal(t, bb.String(), b.String())
+		})
+	}
+}
+
+func TestExpTaylor(t *testing.T) {
+	aa := decimal.New(int64(1), 0)
+	bb, err := aa.ExpTaylor(19)
+	require.NoError(t, err)
+
+	fmt.Println(bb)
+
+	a := MustFromInt64(int64(1), 0)
+	b, err := a.Exp()
+	require.NoError(t, err)
+
+	fmt.Println(b)
+}
+
+func TestLn(t *testing.T) {
+	testcases := []struct {
+		a    string
+		want string
+	}{
+		{"0.000000001", "-20.7232658369464111562"},
+		// {"2271218470587341123.616768", "42.2668481325598637791"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("ln(%s)", tc.a), func(t *testing.T) {
+			a := MustParse(tc.a)
+			b, err := a.Ln()
+			require.NoError(t, err)
+			require.Equal(t, tc.want, b.String())
+		})
+	}
+}
+
+func BenchmarkLn(b *testing.B) {
+	a := MustParse("100000000")
+
+	for range b.N {
+		a.Ln()
+	}
+}
+
+func BenchmarkExp(b *testing.B) {
+	a := MustParse("10")
+
+	for range b.N {
+		a.Exp()
 	}
 }

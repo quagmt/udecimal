@@ -332,7 +332,7 @@ func FuzzDivDec(f *testing.F) {
 		d := MustParse(cc.String())
 		e := c.Sub(d)
 
-		require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "a: %s, b: %s, expected %s, got %s", a, b, cc.String(), c.String())
+		require.LessOrEqual(t, e.Abs().Cmp(ulp), 0, "a: %s, b: %s, expected %s, got %s", a, b, cc.String(), c.String())
 	})
 }
 
@@ -378,7 +378,7 @@ func FuzzDiv64(f *testing.F) {
 		// valid result should have the difference less than or equal to 1e-19, which is our smallest unit
 		d := MustParse(cc.String())
 		e := c.Sub(d)
-		require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0)
+		require.LessOrEqual(t, e.Abs().Cmp(ulp), 0)
 	})
 }
 
@@ -859,5 +859,38 @@ func FuzzMarshalBinary(f *testing.F) {
 		require.NoError(t, e.UnmarshalBinary(data))
 
 		require.Equal(t, c.String(), e.String())
+	})
+}
+
+func FuzzLn(f *testing.F) {
+	for _, c := range corpus {
+		f.Add(c.neg, c.hi, c.lo, c.prec)
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8) {
+		aprec = aprec % maxPrec
+		aneg = false
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		if a.IsZero() {
+			return
+		}
+
+		c, err := a.Ln()
+		require.NoError(t, err)
+		c = c.trimTrailingZeros()
+
+		// compare with shopspring/decimal
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		cc, err := aa.Ln(int32(c.prec))
+		require.NoError(t, err)
+
+		d := MustParse(cc.String())
+		e := c.Sub(d)
+
+		require.LessOrEqual(t, e.Abs().Cmp(ulp), 0, "ln %s, expected %s, got %s", a, cc.String(), c.String())
+
 	})
 }

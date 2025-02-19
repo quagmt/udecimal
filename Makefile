@@ -13,14 +13,14 @@ test:
 
 fuzz:
 	$(eval fuzzName := $(filter-out $@,$(MAKECMDGOALS)))
-	@go test -tags='fuzz' -run=Fuzz -fuzz=$(fuzzName) -fuzztime=30s -timeout=10m
+	@go test -v -tags='fuzz' -run=Fuzz -fuzz=$(fuzzName) -fuzztime=30s -timeout=10m
 
 fuzz-all:
 	$(eval fuzzTime := $(filter-out $@,$(MAKECMDGOALS)))
 	@sh scripts/fuzz-all.sh $(fuzzTime)
 
 bench:
-	@go test -bench=BenchmarkGVString -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
+	@go test -bench=BenchmarkLn -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
 
 # https://stackoverflow.com/questions/6273608/how-to-pass-argument-to-makefile-from-command-line
 %:

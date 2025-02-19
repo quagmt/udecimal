@@ -89,49 +89,10 @@ var pow10Big = [20]*big.Int{
 }
 
 var (
-	errOverflow = fmt.Errorf("overflow")
-
-	// ErrPrecOutOfRange is returned when the decimal precision is greater than the default precision
-	// default precision can be configured using SetDefaultPrecision, and its value is up to 19
-	ErrPrecOutOfRange = fmt.Errorf("precision out of range. Only support maximum %d digits after the decimal point", defaultPrec)
-
-	// ErrEmptyString is returned when the input string is empty
-	ErrEmptyString = fmt.Errorf("can't parse empty string")
-
-	// ErrMaxStrLen is returned when the input string exceeds the maximum length
-	// Maximum length is arbitrarily set to 200 so string length value can fit in 1 byte (for MarshalBinary).
-	// Also such that big number (more than 200 digits) is unrealistic in financial system
-	// which this library is mainly designed for.
-	ErrMaxStrLen = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
-
-	// ErrInvalidFormat is returned when the input string is not in the correct format
-	// It doesn't support scientific notation, such as 1e-2, 1.23e4, etc.
-	ErrInvalidFormat = fmt.Errorf("invalid format")
-
-	// ErrDivideByZero is returned when dividing by zero
-	ErrDivideByZero = fmt.Errorf("can't divide by zero")
-
-	// ErrSqrtNegative is returned when calculating square root of negative number
-	ErrSqrtNegative = fmt.Errorf("can't calculate square root of negative number")
-
-	// ErrInvalidBinaryData is returned when unmarshalling invalid binary data
-	// The binary data should follow the format as described in MarshalBinary
-	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
-
-	// ErrZeroPowNegative is returned when raising zero to a negative power
-	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")
-
-	// ErrExponentTooLarge is returned when the exponent is too large and becomes impractical.
-	ErrExponentTooLarge = fmt.Errorf("exponent is too large. Must be less than or equal math.MaxInt32")
-
-	// ErrIntPartOverflow is returned when the integer part of the decimal is too large to fit in int64
-	ErrIntPartOverflow = fmt.Errorf("integer part is too large to fit in int64")
-)
-
-var (
-	Zero    = Decimal{}
-	One     = MustFromInt64(1, 0)
-	oneUnit = MustFromUint64(1, 19)
+	Zero = Decimal{}
+	One  = MustFromInt64(1, 0)
+	Ten  = MustFromInt64(10, 0)
+	ulp  = MustFromUint64(1, 19)
 )
 
 // Decimal represents a fixed-point decimal number.
@@ -479,6 +440,9 @@ func (d Decimal) Mul(e Decimal) Decimal {
 	if err == nil {
 		return v
 	}
+
+	// fmt.Println(d)
+	// fmt.Println(e)
 
 	// overflow, try with *big.Int
 	dBig := d.coef.GetBig()
@@ -1679,4 +1643,167 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 	}
 
 	return newDecimal(false, bintFromU128(x), defaultPrec), nil
+}
+
+func (d Decimal) Ln() (Decimal, error) {
+	if !d.IsPos() {
+		return Decimal{}, ErrLnNonPositive
+	}
+
+	if d.Cmp(One) == 0 {
+		return Zero, nil
+	}
+
+	// Halley's method
+	// x0 = d
+	// x1 = x0 + 2 * (d - e^x0) / (d + e^x0)
+	// stop when |x1 - x0| < epsilon (1e-19)
+	x0Norm := ubigOne
+	dNorm, err := convertTo38Digits(d)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	for {
+		// e^x0 = expX0 * 10^-38
+		expX0, err := exp(x0Norm)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		abs, err := dNorm.Sub(expX0)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		sum, err := dNorm.Add(expX0)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		abs, err = abs.MulU128(pow10[38])
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		diff, err := abs.Mul64(2)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		// diff = 2 * (d - e^x0) / (d + e^x0)
+		diff, err = diff.Div(sum)
+		if err != nil {
+			return Decimal{}, err
+		}
+
+		if diff.IsZero() {
+			break
+		}
+
+		x0Norm, err = x0Norm.Add(diff)
+		if err != nil {
+			return Decimal{}, err
+		}
+	}
+
+	// ln(d) = x0Norm * 10^-38 = (x0Norm * 10^[defaultPrec-38]) * 10^-defaultPrec
+	// need to divide by [defaultPrec] to get the correct result
+	x0, err := x0Norm.DivU128(pow10[38-defaultPrec])
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newDecimal(false, x0.ToBint(), defaultPrec).trimTrailingZeros(), nil
+}
+
+// Exp returns e^d, where e is the base of the natural logarithm.
+func (d Decimal) Exp() (Decimal, error) {
+	if d.coef.IsZero() {
+		return One, nil
+	}
+
+	// normalized d to 38 digits after the decimal point
+	// and store the coefficient into u1024 instead
+	// to avoid precision loss when calculating e^d
+	dNorm, err := convertTo38Digits(d)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	k, err := exp(dNorm)
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	// e^d = k * 10^-38 = (k * 10^[defaultPrec-38]) * 10^-defaultPrec
+	// need to divide by [defaultPrec] to get the correct result
+	kDenorm, err := k.DivU128(pow10[defaultPrec-38])
+	if err != nil {
+		return Decimal{}, err
+	}
+
+	return newDecimal(false, kDenorm.ToBint(), defaultPrec).trimTrailingZeros(), nil
+}
+
+func convertTo38Digits(d Decimal) (ubig, error) {
+	dNorm, err := ubigFromBint(d.coef)
+	if err != nil {
+		return ubig{}, err
+	}
+
+	dNorm, err = dNorm.MulU128(pow10[38-d.prec])
+	if err != nil {
+		return ubig{}, err
+	}
+
+	return dNorm, nil
+}
+
+// exp returns k, where e^d = k * 10^-38
+// this function produces the result with 38 digits after the decimal point
+// to avoid precision loss when using e^d later in calculating natural logarithm.
+// Input dNorm is also normalized before passing to this function: dNorm = d * 10^38
+func exp(dNorm ubig) (ubig, error) {
+	a, n, factorial := dNorm, ubigOne, ubigOne
+	result, err := ubigOne.Add(a)
+	if err != nil {
+		return ubig{}, err
+	}
+
+	p38 := pow10[38]
+
+	// using Taylor series to calculate e^d
+	// e^d = 1 + d + d^2/2! + d^3/3! + ...
+	for {
+		a, err = a.Mul(dNorm)
+		if err != nil {
+			return ubig{}, err
+		}
+
+		a, err = a.DivU128(p38)
+		if err != nil {
+			return ubig{}, err
+		}
+
+		// TODO: pre-calculated factorial from 1 --> 100
+		n, _ = n.Add(ubigOne)
+
+		factorial, err = factorial.Mul(n)
+		if err != nil {
+			return ubig{}, err
+		}
+
+		term, _ := a.Div(factorial)
+		if term.IsZero() {
+			break
+		}
+
+		result, err = result.Add(term)
+		if err != nil {
+			return ubig{}, err
+		}
+	}
+
+	return result, nil
 }
