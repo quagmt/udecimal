@@ -13,6 +13,17 @@ import (
 	"unsafe"
 )
 
+const (
+	// maxDigitU64 is the maximum digits of a number
+	// that can be safely stored in a uint64.
+	maxDigitU64 = 19
+
+	// maxDecimalStringU128 is the maximum length of a decimal string
+	// that can be safely stored in a u128. (including decimal point, sign and quotes)
+	// 43 bytes = max(u128) + 2 (for quotes) + 1 (for sign) + 1 (for dot)
+	maxDecimalStringU128 = 43
+)
+
 var (
 	_ fmt.Stringer               = (*Decimal)(nil)
 	_ sql.Scanner                = (*Decimal)(nil)
@@ -119,18 +130,9 @@ func (d Decimal) stringU128(trimTrailingZeros bool, withQuote bool) string {
 	// So, trying to optimize the total bytes allocated by pre-defining the capacity is not worth it
 	// cuz the compiler optimizes it differently. My assumption is 16-byte alignment optimization in the compiler.
 	// However, I haven't found where this behavior is documented, just discovered it by testing.
-
-	buf := make([]byte, 43) // 43 bytes = max(u128) + 2 (for quotes) + 1 (for sign) + 1 (for dot)
-	if withQuote {
-		// if withQuote is true, we need to add quotes at the beginning and the end
-		n := d.fillBuffer(buf[:len(buf)-1], trimTrailingZeros)
-		buf[len(buf)-1] = '"'
-		buf[n] = '"'
-		return string(buf[n:])
-	}
-
-	n := d.fillBuffer(buf, trimTrailingZeros)
-	return string(buf[n+1:])
+	buf := make([]byte, 0, maxDecimalStringU128)
+	buf = d.appendBuffer(buf, trimTrailingZeros, withQuote)
+	return string(buf)
 }
 
 var (
@@ -156,8 +158,9 @@ var (
 	}
 )
 
-func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
+func (d Decimal) appendBuffer(inBuf []byte, trimTrailingZeros bool, withQuote bool) []byte {
 	var (
+		buf [maxDecimalStringU128]byte
 		quo u128
 		rem uint64
 	)
@@ -170,6 +173,12 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 
 	prec := d.prec
 	n := len(buf) - 1
+
+	if withQuote {
+		// add quotes at the end
+		buf[n] = '"'
+		n--
+	}
 
 	if rem == 0 {
 		// rem == 0, however, we still need to fill the fractional part with zeros
@@ -250,7 +259,13 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 		n--
 	}
 
-	return n
+	if withQuote {
+		// add quotes at the beginning
+		buf[n] = '"'
+		n--
+	}
+
+	return append(inBuf, buf[n+1:]...)
 }
 
 func quoRem64(u u128, v uint64) (q u128, r uint64) {
@@ -300,6 +315,17 @@ func (d Decimal) MarshalText() ([]byte, error) {
 	}
 
 	return []byte(d.stringBigInt(true)), nil
+}
+
+// AppendText implements the [encoding.TextAppender] interface.
+// The result will not be quoted like MarshalJSON.
+func (d Decimal) AppendText(b []byte) ([]byte, error) {
+	if !d.coef.overflow() {
+		return d.appendBuffer(b, true, false), nil
+	}
+
+	// this is not worth optimizing since stringBigInt is a very rare case
+	return append(b, d.stringBigInt(true)...), nil
 }
 
 // UnmarshalText implements the [encoding.TextUnmarshaler] interface.
@@ -369,6 +395,15 @@ func (d Decimal) marshalBinaryU128() ([]byte, error) {
 func copyUint64ToBytes(b []byte, n uint64) {
 	// use big endian to make it consistent with big.Int.FillBytes, which also uses big endian
 	binary.BigEndian.PutUint64(b, n)
+}
+
+func (d Decimal) AppendBinary(b []byte) ([]byte, error) {
+	data, err := d.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return append(b, data...), nil
 }
 
 func (d *Decimal) UnmarshalBinary(data []byte) error {

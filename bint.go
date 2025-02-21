@@ -35,12 +35,6 @@ const (
 	ParseModeTrunc
 )
 
-const (
-	// maxDigitU64 is the maximum digits of a number
-	// that can be safely stored in a uint64.
-	maxDigitU64 = 19
-)
-
 var (
 	bigZero = big.NewInt(0)
 	bigOne  = big.NewInt(1)

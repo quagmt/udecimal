@@ -350,20 +350,18 @@ func TestNullScan(t *testing.T) {
 }
 
 func BenchmarkMarshalBinary(b *testing.B) {
-	b.StopTimer()
 	a := MustParse("123456789.123456789")
 
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = a.MarshalBinary()
 	}
 }
 
 func BenchmarkUnmarshalBinary(b *testing.B) {
-	b.StopTimer()
 	data, _ := MustParse("123456789.123456789").MarshalBinary()
 
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var d Decimal
 		_ = d.UnmarshalBinary(data)
@@ -371,20 +369,18 @@ func BenchmarkUnmarshalBinary(b *testing.B) {
 }
 
 func BenchmarkMarshalBinaryBigInt(b *testing.B) {
-	b.StopTimer()
 	a := MustParse("12345678901234567890123456789.1234567890123456789")
 
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = a.MarshalBinary()
 	}
 }
 
 func BenchmarkUnmarshalJSON(b *testing.B) {
-	b.StopTimer()
 	data := []byte("123456789.123456789")
 
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var d Decimal
 		_ = d.UnmarshalJSON(data)
@@ -392,10 +388,30 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 }
 
 func BenchmarkString(b *testing.B) {
-	b.StopTimer()
 	a := MustParse("123456.123456")
-	b.StartTimer()
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = a.String()
 	}
+}
+
+func BenchmarkAppendText(b *testing.B) {
+	a := make([]byte, 0)
+	d := MustParse("123456.123456")
+
+	b.ResetTimer()
+	for range b.N {
+		a, _ = d.AppendText(a)
+	}
+}
+
+func TestAppendText(t *testing.T) {
+	a := make([]byte, 0, 20)
+
+	d := MustParse("123456.123456")
+	a, err := d.AppendText(a)
+	require.NoError(t, err)
+
+	require.Equal(t, "123456.123456", string(a))
 }
