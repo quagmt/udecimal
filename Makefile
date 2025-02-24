@@ -20,7 +20,7 @@ fuzz-all:
 	@sh scripts/fuzz-all.sh $(fuzzTime)
 
 bench:
-	@go test -bench=BenchmarkGVString -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
+	@go test -bench=BenchmarkAppendBinary -benchmem -benchmem -memprofile=mem.out -cpuprofile=cpu.out -run NONE
 
 # https://stackoverflow.com/questions/6273608/how-to-pass-argument-to-makefile-from-command-line
 %:

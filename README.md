@@ -17,12 +17,13 @@ go get github.com/quagmt/udecimal
 ## Features
 
 - **High Precision**: Supports up to 19 decimal places with no precision loss during arithmetic operations.
-- **Optimized for Speed**: Designed for high performance with zero memory allocation in most cases (see [Benchmarks](benchmarks/README.md) and [How it works](#how-it-works)).
+- **Zero Memory Allocation**: Designed for almost 99% zero memory allocation (see [How it works](#how-it-works)).
+- **Optimized for Speed**: 5x~20x faster than [shopspring/decimal](https://github.com/shopspring/decimal) and [ericlagergren/decimal](https://github.com/ericlagergren/decimal) (see [Benchmark](benchmark/README.md)).
 - **Panic-Free**: All errors are returned as values, ensuring no unexpected panics.
-- **Immutable**: All arithmetic operations return a new `Decimal` value, preserving the original value and safe for concurrent use.
-- **Versatile Rounding Methods**: Includes HALF AWAY FROM ZERO, HALF TOWARD ZERO, and Banker's rounding.
-  <br/>
+- **Concurrent-Safe**: All arithmetic operations return a new `Decimal` value while keeping the original value unchanged, , making it safe to be shared across goroutines.
 - **Correctness**: All arithmetic operations are fuzz tested and cross-checked with `shopspring/decimal` library to ensure correctness.
+- **Versatile Rounding Methods**: Includes HALF AWAY FROM ZERO, HALF TOWARD ZERO, AWAY FROM ZERO, and Banker's rounding.
+  <br/>
 
 **NOTE**: This library does not perform implicit rounding. If the result of an operation exceeds the maximum precision, extra digits are truncated. All rounding methods must be explicitly invoked. (see [Rounding Methods](#rounding-methods) for more details)
 
