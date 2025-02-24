@@ -13,6 +13,17 @@ import (
 	"unsafe"
 )
 
+const (
+	// maxDigitU64 is the maximum digits of a number
+	// that can be safely stored in a uint64.
+	maxDigitU64 = 19
+
+	// maxDecimalStringU128 is the maximum length of a decimal string
+	// that can be safely stored in a u128. (including decimal point, sign and quotes)
+	// 43 bytes = max(u128) + 2 (for quotes) + 1 (for sign) + 1 (for dot)
+	maxDecimalStringU128 = 43
+)
+
 var (
 	_ fmt.Stringer               = (*Decimal)(nil)
 	_ sql.Scanner                = (*Decimal)(nil)
@@ -120,17 +131,9 @@ func (d Decimal) stringU128(trimTrailingZeros bool, withQuote bool) string {
 	// cuz the compiler optimizes it differently. My assumption is 16-byte alignment optimization in the compiler.
 	// However, I haven't found where this behavior is documented, just discovered it by testing.
 
-	buf := make([]byte, 43) // 43 bytes = max(u128) + 2 (for quotes) + 1 (for sign) + 1 (for dot)
-	if withQuote {
-		// if withQuote is true, we need to add quotes at the beginning and the end
-		n := d.fillBuffer(buf[:len(buf)-1], trimTrailingZeros)
-		buf[len(buf)-1] = '"'
-		buf[n] = '"'
-		return string(buf[n:])
-	}
-
-	n := d.fillBuffer(buf, trimTrailingZeros)
-	return string(buf[n+1:])
+	buf := make([]byte, 0, maxDecimalStringU128)
+	buf = d.appendBuffer(buf, trimTrailingZeros, withQuote)
+	return string(buf)
 }
 
 var (
@@ -156,8 +159,9 @@ var (
 	}
 )
 
-func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
+func (d Decimal) appendBuffer(inBuf []byte, trimTrailingZeros bool, withQuote bool) []byte {
 	var (
+		buf [maxDecimalStringU128]byte
 		quo u128
 		rem uint64
 	)
@@ -169,18 +173,26 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 	}
 
 	prec := d.prec
+	strLen := len(buf)
 	n := len(buf) - 1
+
+	if withQuote {
+		// add quotes at the end
+		buf[n] = '"'
+		n--
+		strLen--
+	}
 
 	if rem == 0 {
 		// rem == 0, however, we still need to fill the fractional part with zeros
 		// this applied to StringFixed() where trimTrailingZeros is false
 		if !trimTrailingZeros && prec > 0 {
-			for i := n; i > len(buf)-1-int(prec); i-- {
+			for i := n; i > strLen-1-int(prec); i-- {
 				buf[i] = '0'
 			}
 
-			buf[len(buf)-int(prec)-1] = '.'
-			n = len(buf) - int(prec) - 2
+			buf[strLen-int(prec)-1] = '.'
+			n = strLen - int(prec) - 2
 		}
 	} else {
 		// rem != 0, fill the fractional part
@@ -212,12 +224,12 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 		}
 
 		// fill remaining zeros
-		for i := n; i > len(buf)-1-int(prec); i-- {
+		for i := n; i > strLen-1-int(prec); i-- {
 			buf[i] = '0'
 		}
 
-		buf[len(buf)-int(prec)-1] = '.'
-		n = len(buf) - int(prec) - 2
+		buf[strLen-int(prec)-1] = '.'
+		n = strLen - int(prec) - 2
 	}
 
 	if quo.IsZero() {
@@ -250,7 +262,15 @@ func (d Decimal) fillBuffer(buf []byte, trimTrailingZeros bool) int {
 		n--
 	}
 
-	return n
+	if withQuote {
+		// add quotes at the beginning
+		buf[n] = '"'
+		n--
+	}
+
+	result := buf[n+1:]
+
+	return append(inBuf, result...)
 }
 
 func quoRem64(u u128, v uint64) (q u128, r uint64) {
@@ -294,12 +314,18 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 
 // MarshalText implements the [encoding.TextMarshaler] interface.
 func (d Decimal) MarshalText() ([]byte, error) {
+	return d.AppendText(nil)
+}
+
+// AppendText implements the [encoding.TextAppender] interface.
+// The result will not be quoted like MarshalJSON.
+func (d Decimal) AppendText(b []byte) ([]byte, error) {
 	if !d.coef.overflow() {
-		// Return without quotes.
-		return unsafeStringToBytes(d.stringU128(true, false)), nil
+		return d.appendBuffer(b, true, false), nil
 	}
 
-	return []byte(d.stringBigInt(true)), nil
+	// this is not worth optimizing since stringBigInt is a very rare case
+	return append(b, d.stringBigInt(true)...), nil
 }
 
 // UnmarshalText implements the [encoding.TextUnmarshaler] interface.
@@ -330,14 +356,10 @@ func (d *Decimal) UnmarshalText(data []byte) error {
 //	 4th-11th bytes: 0x0949_b0f6_f002_3313 (coef.hi)
 //	 12th-19th bytes: 0xd3b5_05f9_b5f1_8115 (coef.lo)
 func (d Decimal) MarshalBinary() ([]byte, error) {
-	if !d.coef.overflow() {
-		return d.marshalBinaryU128()
-	}
-
-	return d.marshalBinaryBigInt()
+	return d.AppendBinary(nil)
 }
 
-func (d Decimal) marshalBinaryU128() ([]byte, error) {
+func (d Decimal) appendBinaryU128(input []byte) ([]byte, error) {
 	coef := d.coef.u128
 
 	var (
@@ -363,12 +385,44 @@ func (d Decimal) marshalBinaryU128() ([]byte, error) {
 	buf[0] = neg
 	buf[1] = d.prec
 
-	return buf, nil
+	return append(input, buf...), nil
+}
+
+func (d Decimal) appendBinaryBigInt(input []byte) ([]byte, error) {
+	var neg int
+	if d.neg {
+		neg = 1
+	}
+
+	if d.coef.bigInt == nil {
+		return nil, ErrInvalidBinaryData
+	}
+
+	words := d.coef.bigInt.Bits()
+	totalBytes := 3 + len(words)*(bits.UintSize/8)
+	buf := make([]byte, totalBytes)
+
+	// overflow + neg with overflow = true (always 1)
+	buf[0] = byte(1<<4 | neg)
+	buf[1] = byte(d.prec)
+	buf[2] = byte(totalBytes)
+	d.coef.bigInt.FillBytes(buf[3:])
+
+	return append(input, buf...), nil
 }
 
 func copyUint64ToBytes(b []byte, n uint64) {
 	// use big endian to make it consistent with big.Int.FillBytes, which also uses big endian
 	binary.BigEndian.PutUint64(b, n)
+}
+
+// AppendBinary implements [encoding.BinaryAppender] interface.
+func (d Decimal) AppendBinary(b []byte) ([]byte, error) {
+	if !d.coef.overflow() {
+		return d.appendBinaryU128(b)
+	}
+
+	return d.appendBinaryBigInt(b)
 }
 
 func (d *Decimal) UnmarshalBinary(data []byte) error {
@@ -419,29 +473,6 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 
 	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
 	return nil
-}
-
-func (d Decimal) marshalBinaryBigInt() ([]byte, error) {
-	var neg int
-	if d.neg {
-		neg = 1
-	}
-
-	if d.coef.bigInt == nil {
-		return nil, ErrInvalidBinaryData
-	}
-
-	words := d.coef.bigInt.Bits()
-	totalBytes := 3 + len(words)*(bits.UintSize/8)
-	buf := make([]byte, totalBytes)
-
-	// overflow + neg with overflow = true (always 1)
-	buf[0] = byte(1<<4 | neg)
-	buf[1] = byte(d.prec)
-	buf[2] = byte(totalBytes)
-	d.coef.bigInt.FillBytes(buf[3:])
-
-	return buf, nil
 }
 
 // Scan implements [sql.Scanner] interface.

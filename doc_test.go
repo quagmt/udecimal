@@ -370,6 +370,19 @@ func ExampleDecimal_MarshalBinary() {
 	// [0 19 19 9 73 176 246 240 2 51 19 211 181 5 249 181 241 129 21] <nil>
 }
 
+func ExampleDecimal_AppendBinary() {
+	a, _ := MustParse("1.23").AppendBinary(nil)
+	b, _ := MustParse("-1.2345").AppendBinary(nil)
+	c, _ := MustParse("1234567890123456789.1234567890123456789").AppendBinary(nil)
+	fmt.Println(a)
+	fmt.Println(b)
+	fmt.Println(c)
+	// Output:
+	// [0 2 11 0 0 0 0 0 0 0 123]
+	// [1 4 11 0 0 0 0 0 0 48 57]
+	// [0 19 19 9 73 176 246 240 2 51 19 211 181 5 249 181 241 129 21]
+}
+
 func ExampleDecimal_MarshalJSON() {
 	a, _ := MustParse("1.23").MarshalJSON()
 	b, _ := MustParse("-1.2345").MarshalJSON()
@@ -387,6 +400,19 @@ func ExampleDecimal_MarshalText() {
 	a, _ := MustParse("1.23").MarshalText()
 	b, _ := MustParse("-1.2345").MarshalText()
 	c, _ := MustParse("1234567890123456789.1234567890123456789").MarshalText()
+	fmt.Println(string(a))
+	fmt.Println(string(b))
+	fmt.Println(string(c))
+	// Output:
+	// 1.23
+	// -1.2345
+	// 1234567890123456789.1234567890123456789
+}
+
+func ExampleDecimal_AppendText() {
+	a, _ := MustParse("1.23").AppendText(nil)
+	b, _ := MustParse("-1.2345").AppendText(nil)
+	c, _ := MustParse("1234567890123456789.1234567890123456789").AppendText(nil)
 	fmt.Println(string(a))
 	fmt.Println(string(b))
 	fmt.Println(string(c))

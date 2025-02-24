@@ -256,6 +256,118 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 	}
 }
 
+func TestAppendText(t *testing.T) {
+	testcases := []struct {
+		in      string
+		initCap int
+		wantLen int
+		wantCap int
+	}{
+		{"0", 0, 1, 8},
+		{"1", 0, 1, 8},
+		{"-1", 0, 2, 8},
+		{"123456789.123456789", 0, 19, 24},
+		{"-123456789.123456789", 0, 20, 24},
+		{"0.000000001", 0, 11, 16},
+		{"-0.000000001", 0, 12, 16},
+		{"123.123", 0, 7, 8},
+		{"-123.123", 0, 8, 8},
+		{"1234567890123456789.1234567890123456789", 0, 39, 48},
+		{"-1234567890123456789.1234567890123456789", 0, 40, 48},
+		{"12345678901234567890123456789.1234567890123456789", 0, 49, 64},
+		{"-12345678901234567890123456789.1234567890123456789", 0, 50, 64},
+		{"0.0000000000000000001", 0, 21, 24},
+		{"-0.0000000000000000001", 0, 22, 24},
+		{"0", 10, 1, 10},
+		{"1", 10, 1, 10},
+		{"-1", 3, 2, 3},
+		{"123456789.123456789", 20, 19, 20},
+		{"-123456789.123456789", 21, 20, 21},
+		{"0.000000001", 10, 11, 24}, // should be 16 but somehow it's 24?
+		{"-0.000000001", 6, 12, 16},
+		{"123.123", 8, 7, 8},
+		{"-123.123", 10, 8, 10},
+		{"1234567890123456789.1234567890123456789", 50, 39, 50},
+		{"-1234567890123456789.1234567890123456789", 41, 40, 41},
+		{"12345678901234567890123456789.1234567890123456789", 50, 49, 50},
+		{"-12345678901234567890123456789.1234567890123456789", 25, 50, 64},
+		{"0.0000000000000000001", 22, 21, 22},
+		{"-0.0000000000000000001", 30, 22, 30},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			d := MustParse(tc.in)
+
+			b := make([]byte, 0, tc.initCap)
+			b, err := d.AppendText(b)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.in, string(b))
+			require.Len(t, b, tc.wantLen)
+			require.Equal(t, tc.wantCap, cap(b))
+		})
+	}
+}
+
+func TestAppendBinary(t *testing.T) {
+	testcases := []struct {
+		in      string
+		initCap int
+		wantLen int
+		wantCap int
+	}{
+		{"0", 0, 11, 16},
+		{"1", 0, 11, 16},
+		{"-1", 0, 11, 16},
+		{"123456789.123456789", 0, 11, 16},
+		{"-123456789.123456789", 0, 11, 16},
+		{"0.000000001", 0, 11, 16},
+		{"-0.000000001", 0, 11, 16},
+		{"123.123", 0, 11, 16},
+		{"-123.123", 0, 11, 16},
+		{"1234567890123456789.1234567890123456789", 0, 19, 24},
+		{"-1234567890123456789.1234567890123456789", 0, 19, 24},
+		{"12345678901234567890123456789.1234567890123456789", 0, 27, 32},
+		{"-12345678901234567890123456789.1234567890123456789", 0, 27, 32},
+		{"0.0000000000000000001", 0, 11, 16},
+		{"-0.0000000000000000001", 0, 11, 16},
+		{"0", 13, 11, 13},
+		{"1", 13, 11, 13},
+		{"1", 20, 11, 20},
+		{"-1", 11, 11, 11},
+		{"123456789.123456789", 20, 11, 20},
+		{"-123456789.123456789", 12, 11, 12},
+		{"0.000000001", 16, 11, 16},
+		{"-0.000000001", 18, 11, 18},
+		{"123.123", 8, 11, 16},
+		{"-123.123", 10, 11, 24}, // should be 16 but somehow it's 24?
+		{"1234567890123456789.1234567890123456789", 20, 19, 20},
+		{"-1234567890123456789.1234567890123456789", 19, 19, 19},
+		{"12345678901234567890123456789.1234567890123456789", 31, 27, 31},
+		{"-12345678901234567890123456789.1234567890123456789", 30, 27, 30},
+		{"0.0000000000000000001", 22, 11, 22},
+		{"-0.0000000000000000001", 30, 11, 30},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			d := MustParse(tc.in)
+
+			b := make([]byte, 0, tc.initCap)
+			b, err := d.AppendBinary(b)
+			require.NoError(t, err)
+
+			require.Len(t, b, tc.wantLen)
+			require.Equal(t, tc.wantCap, cap(b))
+
+			var c Decimal
+			require.NoError(t, c.UnmarshalBinary(b))
+			require.Equal(t, d.String(), c.String())
+		})
+	}
+}
+
 func TestScan(t *testing.T) {
 	testcases := []struct {
 		in      any
@@ -349,53 +461,22 @@ func TestNullScan(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalBinary(b *testing.B) {
-	b.StopTimer()
-	a := MustParse("123456789.123456789")
+func BenchmarkAppendText(b *testing.B) {
+	a := make([]byte, 0, 16)
+	d := MustParse("123456.123456")
 
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = a.MarshalBinary()
+	b.ResetTimer()
+	for range b.N {
+		a, _ = d.AppendText(a)
 	}
 }
 
-func BenchmarkUnmarshalBinary(b *testing.B) {
-	b.StopTimer()
-	data, _ := MustParse("123456789.123456789").MarshalBinary()
+func BenchmarkAppendBinary(b *testing.B) {
+	a := make([]byte, 0, 19)
+	d := MustParse("123456.123456")
 
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var d Decimal
-		_ = d.UnmarshalBinary(data)
-	}
-}
-
-func BenchmarkMarshalBinaryBigInt(b *testing.B) {
-	b.StopTimer()
-	a := MustParse("12345678901234567890123456789.1234567890123456789")
-
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = a.MarshalBinary()
-	}
-}
-
-func BenchmarkUnmarshalJSON(b *testing.B) {
-	b.StopTimer()
-	data := []byte("123456789.123456789")
-
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var d Decimal
-		_ = d.UnmarshalJSON(data)
-	}
-}
-
-func BenchmarkString(b *testing.B) {
-	b.StopTimer()
-	a := MustParse("123456.123456")
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		_ = a.String()
+	b.ResetTimer()
+	for range b.N {
+		a, _ = d.AppendBinary(a)
 	}
 }
