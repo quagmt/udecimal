@@ -359,6 +359,15 @@ func (d Decimal) MarshalBinary() ([]byte, error) {
 	return d.AppendBinary(nil)
 }
 
+// AppendBinary implements [encoding.BinaryAppender] interface.
+func (d Decimal) AppendBinary(b []byte) ([]byte, error) {
+	if !d.coef.overflow() {
+		return d.appendBinaryU128(b)
+	}
+
+	return d.appendBinaryBigInt(b)
+}
+
 func (d Decimal) appendBinaryU128(input []byte) ([]byte, error) {
 	coef := d.coef.u128
 
@@ -414,15 +423,6 @@ func (d Decimal) appendBinaryBigInt(input []byte) ([]byte, error) {
 func copyUint64ToBytes(b []byte, n uint64) {
 	// use big endian to make it consistent with big.Int.FillBytes, which also uses big endian
 	binary.BigEndian.PutUint64(b, n)
-}
-
-// AppendBinary implements [encoding.BinaryAppender] interface.
-func (d Decimal) AppendBinary(b []byte) ([]byte, error) {
-	if !d.coef.overflow() {
-		return d.appendBinaryU128(b)
-	}
-
-	return d.appendBinaryBigInt(b)
 }
 
 func (d *Decimal) UnmarshalBinary(data []byte) error {

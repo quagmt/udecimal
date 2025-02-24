@@ -461,6 +461,13 @@ func TestNullScan(t *testing.T) {
 	}
 }
 
+func TestAppendBinaryBigInt(t *testing.T) {
+	d := MustParse("123456.123456")
+
+	_, err := d.appendBinaryBigInt(nil)
+	require.Equal(t, ErrInvalidBinaryData, err)
+}
+
 func BenchmarkAppendText(b *testing.B) {
 	a := make([]byte, 0, 16)
 	d := MustParse("123456.123456")

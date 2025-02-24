@@ -102,27 +102,27 @@ func BenchmarkString(b *testing.B) {
 
 	for _, tc := range testcases {
 		// shopspring benchmark
-		// b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
-		// 	bb := ss.RequireFromString(tc)
+		b.Run(fmt.Sprintf("ss/%s", tc), func(b *testing.B) {
+			bb := ss.RequireFromString(tc)
 
-		// 	b.ResetTimer()
-		// 	for range b.N {
-		// 		_ = bb.String()
-		// 	}
-		// })
+			b.ResetTimer()
+			for range b.N {
+				_ = bb.String()
+			}
+		})
 
-		// // ericlagergren benchmark
-		// b.Run(fmt.Sprintf("eric/%s", tc), func(b *testing.B) {
-		// 	var a ed.Big
-		// 	a.Context.Precision = 19
-		// 	a.Context.RoundingMode = ed.ToNearestEven
-		// 	a.SetString(tc)
+		// ericlagergren benchmark
+		b.Run(fmt.Sprintf("eric/%s", tc), func(b *testing.B) {
+			var a ed.Big
+			a.Context.Precision = 19
+			a.Context.RoundingMode = ed.ToNearestEven
+			a.SetString(tc)
 
-		// 	b.ResetTimer()
-		// 	for range b.N {
-		// 		_ = a.String()
-		// 	}
-		// })
+			b.ResetTimer()
+			for range b.N {
+				_ = a.String()
+			}
+		})
 
 		b.Run(fmt.Sprintf("udec/%s", tc), func(b *testing.B) {
 			bb := udecimal.MustParse(tc)
