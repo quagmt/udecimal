@@ -170,7 +170,7 @@ func (d Decimal) appendBuffer(inBuf []byte, trimTrailingZeros bool, withQuote bo
 	if d.prec == 0 {
 		quo = d.coef.u128
 	} else {
-		quo, rem = d.coef.u128.QuoRem64(pow10[d.prec].lo) // max prec is 19, so we can safely use QuoRem64
+		quo, rem = d.coef.u128.quoRem64Pow10(d.prec)
 	}
 
 	prec := d.prec

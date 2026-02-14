@@ -931,7 +931,7 @@ func (d Decimal) RoundBank(prec uint8) Decimal {
 
 	if !d.coef.overflow() {
 		var err error
-		q, r := d.coef.u128.QuoRem64(factor.lo)
+		q, r := d.coef.u128.quoRem64Pow10(d.prec - prec)
 		if lo < r || (lo == r && q.lo%2 == 1) {
 			q, err = q.Add64(1)
 		}
@@ -973,7 +973,7 @@ func (d Decimal) RoundAwayFromZero(prec uint8) Decimal {
 
 	if !d.coef.overflow() {
 		var err error
-		q, r := d.coef.u128.QuoRem64(factor.lo)
+		q, r := d.coef.u128.quoRem64Pow10(d.prec - prec)
 
 		if r != 0 {
 			q, err = q.Add64(1)
@@ -1013,7 +1013,7 @@ func (d Decimal) RoundHAZ(prec uint8) Decimal {
 
 	if !d.coef.overflow() {
 		var err error
-		q, r := d.coef.u128.QuoRem64(factor.lo)
+		q, r := d.coef.u128.quoRem64Pow10(d.prec - prec)
 		if half.Cmp64(r) <= 0 {
 			q, err = q.Add64(1)
 		}
@@ -1053,7 +1053,7 @@ func (d Decimal) RoundHTZ(prec uint8) Decimal {
 
 	if !d.coef.overflow() {
 		var err error
-		q, r := d.coef.u128.QuoRem64(factor.lo)
+		q, r := d.coef.u128.quoRem64Pow10(d.prec - prec)
 		if half.Cmp64(r) < 0 {
 			q, err = q.Add64(1)
 		}
@@ -1083,7 +1083,7 @@ func (d Decimal) Floor() Decimal {
 
 	if !d.coef.overflow() {
 		var err error
-		q, r := d.coef.u128.QuoRem64(pow10[d.prec].lo)
+		q, r := d.coef.u128.quoRem64Pow10(d.prec)
 
 		// add 1 if it's negative and there's a remainder, e.g. -1.5 -> -2
 		if d.neg && r != 0 {
@@ -1115,7 +1115,7 @@ func (d Decimal) Ceil() Decimal {
 
 	if !d.coef.overflow() {
 		var err error
-		q, r := d.coef.u128.QuoRem64(pow10[d.prec].lo)
+		q, r := d.coef.u128.quoRem64Pow10(d.prec)
 
 		// add 1 if it's positive and there's a remainder, e.g. 1.5 -> 2
 		if !d.neg && r != 0 {
@@ -1153,7 +1153,7 @@ func (d Decimal) Trunc(prec uint8) Decimal {
 	factor := pow10[d.prec-prec]
 
 	if !d.coef.overflow() {
-		q, _ := d.coef.u128.QuoRem64(factor.lo)
+		q := d.coef.u128.quo64Pow10(d.prec - prec)
 		return newDecimal(d.neg, bintFromU128(q), prec)
 	}
 
@@ -1198,11 +1198,11 @@ func (d Decimal) trimTrailingZeros() Decimal {
 	)
 
 	if zeros >= d.prec {
-		coef, _, _ = d.coef.u128.QuoRem(pow10[d.prec])
+		coef = d.coef.u128.quo64Pow10(d.prec)
 		prec = 0
 	} else {
 		prec = d.prec - zeros
-		coef, _, _ = d.coef.u128.QuoRem(pow10[zeros])
+		coef = d.coef.u128.quo64Pow10(zeros)
 	}
 
 	d.coef = bintFromU128(coef)
@@ -1260,16 +1260,16 @@ func trailingZerosBigInt(n *big.Int) uint8 {
 func trailingZerosU128(n u128) uint8 {
 	var zeros uint8
 
-	_, rem := n.QuoRem64(1e16)
+	rem := n.rem64Pow10(16)
 	if rem == 0 {
 		zeros += 16
 
-		_, rem = n.QuoRem64(pow10[zeros+2].lo)
+		rem = n.rem64Pow10(zeros + 2)
 		if rem == 0 {
 			zeros += 2
 		}
 
-		_, rem = n.QuoRem64(pow10[zeros+1].lo)
+		rem = n.rem64Pow10(zeros + 1)
 		if rem == 0 {
 			zeros++
 		}
@@ -1277,22 +1277,22 @@ func trailingZerosU128(n u128) uint8 {
 		return zeros
 	}
 
-	_, rem = n.QuoRem64(1e8)
+	rem = n.rem64Pow10(8)
 	if rem == 0 {
 		zeros += 8
 	}
 
-	_, rem = n.QuoRem64(pow10[zeros+4].lo)
+	rem = n.rem64Pow10(zeros + 4)
 	if rem == 0 {
 		zeros += 4
 	}
 
-	_, rem = n.QuoRem64(pow10[zeros+2].lo)
+	rem = n.rem64Pow10(zeros + 2)
 	if rem == 0 {
 		zeros += 2
 	}
 
-	_, rem = n.QuoRem64(pow10[zeros+1].lo)
+	rem = n.rem64Pow10(zeros + 1)
 	if rem == 0 {
 		zeros++
 	}
