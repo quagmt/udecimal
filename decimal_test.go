@@ -961,6 +961,99 @@ func TestDiv(t *testing.T) {
 	}
 }
 
+func TestMustDiv(t *testing.T) {
+	testcases := []struct {
+		a, b     string
+		overflow bool
+		wantErr  error
+	}{
+		{"22773757910726981402256170801141121114", "811656739243220271.159", false, nil},
+		{"22773757910726981402256170801141121024", "2277375793122336353220649475.264577813", false, nil},
+		{"2345678901234567899", "1234567890123456789.1234567890123456789", false, nil},
+		{"123456.123", "8796093022208", false, nil},
+		{"1844674407370955161.5999999999", "18446744073709551616", false, nil},
+		{"1000000000000", "0.0000001", false, nil},
+		{"479615345916448342049", "1494.186269970473681015", false, nil},
+		{"123456.1234567890123456789", "234567.1234567890123456789", false, nil},
+		{"123456.1234567890123456789", "1", false, nil},
+		{"-123456.1234567890123456789", "234567.1234567890123456789", false, nil},
+		{"123456.1234567890123456789", "-234567.1234567890123456789", false, nil},
+		{"-123456.1234567890123456789", "-234567.1234567890123456789", false, nil},
+		{"9999999999999999999", "1.0001", false, nil},
+		{"-9999999999999999999.9999999999999999999", "9999999999999999999", false, nil},
+		{"1234567890123456789", "1", false, nil},
+		{"1234567890123456789", "2", false, nil},
+		{"123456789012345678.9", "0.1", false, nil},
+		{"1111111111111", "1111.123456789123456789", false, nil},
+		{"123456789", "1.1234567890123456789", false, nil},
+		{"0.1234567890123456789", "0.04586201546101", false, nil},
+		{"1", "1111.123456789123456789", false, nil},
+		{"1", "1.123456789123456789", false, nil},
+		{"1", "2", false, nil},
+		{"1", "3", false, nil},
+		{"1", "4", false, nil},
+		{"1", "5", false, nil},
+		{"1234567890123456789.1234567890123456879", "1111.1789", false, nil},
+		{"123456789123456789.123456789", "3.123456789", false, nil},
+		{"123456789123456789.123456789", "3", false, nil},
+		{"9999999999999999999", "1234567890123456789.1234567890123456879", false, nil},
+		{"9999999999999999999.999999999999999999", "1000000000000000000.1234567890123456789", false, nil},
+		{"999999999999999999", "0.100000000000001", false, nil},
+		{"123456789123456789.123456789", "0", false, ErrDivideByZero},
+		{"1234567890123456789.1234567890123456789", "0.0000000000000000002", true, nil},
+		{"1234567890123456789.1234567890123456789", "0.000000001", true, nil},
+		{"1000000000000000000000000.1234567890123456789", "-100000000000000000000", true, nil},
+		{"1234567890123456789012345678901234567890.1234567890123456789", "1234567890123456789012345678901234567890.1234567890123456789", true, nil},
+		{"1234567890123456789012345678901234567890.1234567890123456789", "-1234567890123456789012345678901234567890.1234567890123456789", true, nil},
+		{"-1234567890123456789012345678901234567890.1234567890123456789", "1234567890123456789012345678901234567890.1234567890123456789", true, nil},
+		{"-1234567890123456789012345678901234567890.1234567890123456789", "-1234567890123456789012345678901234567890.1234567890123456789", true, nil},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a+"/"+tc.b, func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			b, err := Parse(tc.b)
+			require.NoError(t, err)
+
+			aStr := a.String()
+			bStr := b.String()
+
+			if tc.wantErr != nil {
+				require.PanicsWithError(t, tc.wantErr.Error(), func() {
+					_ = a.MustDiv(b)
+				})
+				return
+			}
+
+			c := a.MustDiv(b)
+			assertOverflow(t, c, tc.overflow)
+
+			// make sure a and b are immutable
+			require.Equal(t, aStr, a.String())
+			require.Equal(t, bStr, b.String())
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			prec := int32(c.Prec())
+			cc := aa.DivRound(bb, 28).Truncate(prec)
+
+			// sometimes shopspring/decimal does rounding differently
+			// e.g. 0.099999999999999 -> 0.1
+			// so to check the result, we can check the difference
+			// between our result and shopspring/decimal result
+			// valid result should be less than or equal to 1e-19, which is our smallest unit
+			d := MustParse(cc.String())
+			e := c.Sub(d)
+
+			require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "expected %s, got %s", cc.String(), c.String())
+		})
+	}
+}
+
 func TestDivWithCustomPrecision(t *testing.T) {
 	SetDefaultPrecision(14)
 	defer SetDefaultPrecision(maxPrec)
@@ -1175,6 +1268,58 @@ func TestQuoRem(t *testing.T) {
 	}
 }
 
+func TestMustQuoRem(t *testing.T) {
+	testcases := []struct {
+		a, b    string
+		q, r    Decimal
+		wantErr error
+	}{
+		{"22773757910726981402256170801141121024", "-20715693594775826464.768", MustParse("-1099348076690522519"), MustParse("3006819284014656913.408"), nil},
+		{"12345678901234567890123456.1234567890123456789", "123456789012345678900", MustParse("100000"), MustParse("123456.1234567890123456789"), nil},
+		{"12345678901234567890123", "1.1234567890123456789", MustParse("10989010900978142640527"), MustParse("0.4794672386555312197"), nil},
+		{"1.1234567890123456789", "123456789012345678900", MustParse("0"), MustParse("1.1234567890123456789"), nil},
+		{"12345678901234567890.123456789", "1.1234567890123456789", MustParse("10989010900978142640"), MustParse("0.592997984048161704"), nil},
+		{"123456789.1234567890123456789", "123.123456789", MustParse("1002707"), MustParse("37.1369289660123456789"), nil},
+		{"1234567890123456789", "1", MustParse("1234567890123456789"), Zero, nil},
+		{"11.234", "1.12", MustParse("10"), MustParse("0.034"), nil},
+		{"-11.234", "1.12", MustParse("-10"), MustParse("-0.034"), nil},
+		{"11.234", "-1.12", MustParse("-10"), MustParse("0.034"), nil},
+		{"-11.234", "-1.12", MustParse("10"), MustParse("-0.034"), nil},
+		{"123.456", "1.123", MustParse("109"), MustParse("1.049"), nil},
+		{"-11.234", "0", MustParse("10"), MustParse("-0.034"), ErrDivideByZero},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s.QuoRem(%s)", tc.a, tc.b), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			b, err := Parse(tc.b)
+			require.NoError(t, err)
+
+			if tc.wantErr != nil {
+				require.PanicsWithError(t, tc.wantErr.Error(), func() {
+					_, _ = a.MustQuoRem(b)
+				})
+				return
+			}
+
+			q, r := a.MustQuoRem(b)
+
+			require.Equal(t, tc.q.String(), q.String())
+			require.Equal(t, tc.r.String(), r.String())
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			qq, rr := aa.QuoRem(bb, 0)
+			require.Equal(t, qq.String(), q.String())
+			require.Equal(t, rr.String(), r.String())
+		})
+	}
+}
+
 func TestMod(t *testing.T) {
 	testcases := []struct {
 		a, b    string
@@ -1210,6 +1355,55 @@ func TestMod(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			require.Equal(t, tc.r.String(), r.String())
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			rr := aa.Mod(bb)
+			require.Equal(t, rr.String(), r.String())
+		})
+	}
+}
+
+func TestMustMod(t *testing.T) {
+	testcases := []struct {
+		a, b    string
+		r       Decimal
+		wantErr error
+	}{
+		{"12345678901234567890123456.1234567890123456789", "123456789012345678900", MustParse("123456.1234567890123456789"), nil},
+		{"12345678901234567890123", "1.1234567890123456789", MustParse("0.4794672386555312197"), nil},
+		{"1.1234567890123456789", "123456789012345678900", MustParse("1.1234567890123456789"), nil},
+		{"12345678901234567890.123456789", "1.1234567890123456789", MustParse("0.592997984048161704"), nil},
+		{"123456789.1234567890123456789", "123.123456789", MustParse("37.1369289660123456789"), nil},
+		{"1234567890123456789", "1", Zero, nil},
+		{"11.234", "1.12", MustParse("0.034"), nil},
+		{"-11.234", "1.12", MustParse("-0.034"), nil},
+		{"11.234", "-1.12", MustParse("0.034"), nil},
+		{"-11.234", "-1.12", MustParse("-0.034"), nil},
+		{"123.456", "1.123", MustParse("1.049"), nil},
+		{"-11.234", "0", MustParse("-0.034"), ErrDivideByZero},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s.QuoRem(%s)", tc.a, tc.b), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			b, err := Parse(tc.b)
+			require.NoError(t, err)
+
+			if tc.wantErr != nil {
+				require.PanicsWithError(t, tc.wantErr.Error(), func() {
+					_ = a.MustMod(b)
+				})
+				return
+			}
+
+			r := a.MustMod(b)
+
 			require.Equal(t, tc.r.String(), r.String())
 
 			// compare with shopspring/decimal

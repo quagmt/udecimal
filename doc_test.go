@@ -214,6 +214,12 @@ func ExampleDecimal_Div() {
 	// 0 can't divide by zero
 }
 
+func ExampleDecimal_MustDiv() {
+	fmt.Println(MustParse("1.23").MustDiv(MustParse("4.12475")))
+	// Output:
+	// 0.2981998909024789381
+}
+
 func ExampleDecimal_Div64() {
 	fmt.Println(MustParse("1.23").Div64(4))
 	fmt.Println(MustParse("1.23").Div64(0))
@@ -230,12 +236,24 @@ func ExampleDecimal_QuoRem() {
 	// 0 0 can't divide by zero
 }
 
+func ExampleDecimal_MustQuoRem() {
+	fmt.Println(MustParse("1.23").MustQuoRem(MustParse("0.5")))
+	// Output:
+	// 2 0.23
+}
+
 func ExampleDecimal_Mod() {
 	fmt.Println(MustParse("1.23").Mod(MustParse("0.5")))
 	fmt.Println(MustParse("1.23").Mod(MustParse("0")))
 	// Output:
 	// 0.23 <nil>
 	// 0 can't divide by zero
+}
+
+func ExampleDecimal_MustMod() {
+	fmt.Println(MustParse("1.23").MustMod(MustParse("0.5")))
+	// Output:
+	// 0.23
 }
 
 func ExampleDecimal_Sub() {

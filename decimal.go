@@ -570,6 +570,16 @@ func (d Decimal) Div(e Decimal) (Decimal, error) {
 	return newDecimal(neg, bintFromBigInt(dBig), defaultPrec), nil
 }
 
+// MustDiv similar to Div, but panics instead of returning error
+func (d Decimal) MustDiv(e Decimal) Decimal {
+	v, err := d.Div(e)
+	if err != nil {
+		panic(err)
+	}
+
+	return v
+}
+
 func tryDivU128(d, e Decimal, neg bool) (Decimal, error) {
 	if d.coef.overflow() || e.coef.overflow() {
 		return Decimal{}, errOverflow
@@ -652,6 +662,16 @@ func (d Decimal) QuoRem(e Decimal) (Decimal, Decimal, error) {
 	return q, r, nil
 }
 
+// MustQuoRem similar to QuoRem, but panics instead of returning error
+func (d Decimal) MustQuoRem(e Decimal) (Decimal, Decimal) {
+	q, r, err := d.QuoRem(e)
+	if err != nil {
+		panic(err)
+	}
+
+	return q, r
+}
+
 func tryQuoRemU128(d, e Decimal) (Decimal, Decimal, error) {
 	if d.coef.overflow() || e.coef.overflow() {
 		return Decimal{}, Decimal{}, errOverflow
@@ -694,6 +714,16 @@ func tryQuoRemU128(d, e Decimal) (Decimal, Decimal, error) {
 func (d Decimal) Mod(e Decimal) (Decimal, error) {
 	_, r, err := d.QuoRem(e)
 	return r, err
+}
+
+// MustMod similar to Mod, but panics instead of returning error
+func (d Decimal) MustMod(e Decimal) Decimal {
+	_, r, err := d.QuoRem(e)
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Prec returns decimal precision as an integer
