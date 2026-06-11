@@ -1038,8 +1038,10 @@ func (d Decimal) RoundHAZ(prec uint8) Decimal {
 		return d
 	}
 
+	// factor is a power of 10 with hi == 0 (max is 10^19),
+	// so half can be computed with a single shift instead of a 128-bit division
 	factor := pow10[d.prec-prec]
-	half, _ := factor.QuoRem64(2)
+	half := u128{lo: factor.lo >> 1}
 
 	if !d.coef.overflow() {
 		var err error
@@ -1078,8 +1080,10 @@ func (d Decimal) RoundHTZ(prec uint8) Decimal {
 		return d
 	}
 
+	// factor is a power of 10 with hi == 0 (max is 10^19),
+	// so half can be computed with a single shift instead of a 128-bit division
 	factor := pow10[d.prec-prec]
-	half, _ := factor.QuoRem64(2)
+	half := u128{lo: factor.lo >> 1}
 
 	if !d.coef.overflow() {
 		var err error

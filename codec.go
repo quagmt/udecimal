@@ -238,24 +238,7 @@ func (d Decimal) appendBuffer(inBuf []byte, trimTrailingZeros bool, withQuote bo
 		buf[n] = '0'
 		n--
 	} else {
-		for quo.Cmp64(100) >= 0 {
-			q, r := quoRem64(quo, 100)
-			r = r * 2
-			quo = q
-
-			buf[n] = table[r+1]
-			buf[n-1] = table[r]
-			n -= 2
-		}
-
-		if quo.Cmp64(10) >= 0 {
-			buf[n] = table[quo.lo*2+1]
-			buf[n-1] = table[quo.lo*2]
-			n -= 2
-		} else {
-			buf[n] = byte(quo.lo) + '0'
-			n--
-		}
+		n = appendU128(buf[:], n, quo)
 	}
 
 	if d.neg {
@@ -274,12 +257,59 @@ func (d Decimal) appendBuffer(inBuf []byte, trimTrailingZeros bool, withQuote bo
 	return append(inBuf, result...)
 }
 
-func quoRem64(u u128, v uint64) (q u128, r uint64) {
-	if u.hi == 0 {
-		return u128{lo: u.lo / v}, u.lo % v
+// appendU128 writes the decimal digits of quo into buf from right to left,
+// starting at index n, and returns the index right before the leftmost digit.
+// It first reduces the u128 to uint64 chunks of 19 digits (at most 2 u128 divisions),
+// then formats each chunk using only 64-bit arithmetic.
+func appendU128(buf []byte, n int, quo u128) int {
+	// reduce quo to uint64 chunks of 19 digits each,
+	// the loop runs at most twice as quo has at most 39 digits
+	var chunks [2]uint64
+	nc := 0
+	for quo.hi != 0 {
+		var r uint64
+		quo, r = quo.QuoRem64(1e19)
+		chunks[nc] = r
+		nc++
+	}
+	last := quo.lo
+
+	// low chunks: always print all 19 digits, zero-padded
+	for c := 0; c < nc; c++ {
+		rem := chunks[c]
+		for j := 0; j < 9; j++ {
+			r := rem % 100 * 2
+			rem /= 100
+			buf[n] = table[r+1]
+			buf[n-1] = table[r]
+			n -= 2
+		}
+
+		// 19th (leftmost) digit of the chunk
+		//nolint:gosec // rem < 10 after dividing out 18 digits, can be safely converted to byte
+		buf[n] = byte(rem) + '0'
+		n--
 	}
 
-	return u.QuoRem64(v)
+	// highest chunk: no zero padding
+	for last >= 100 {
+		r := last % 100 * 2
+		last /= 100
+		buf[n] = table[r+1]
+		buf[n-1] = table[r]
+		n -= 2
+	}
+
+	if last >= 10 {
+		buf[n] = table[last*2+1]
+		buf[n-1] = table[last*2]
+		n -= 2
+	} else {
+		buf[n] = byte(last) + '0'
+		n--
+	}
+
+	return n
 }
 
 func unsafeStringToBytes(s string) []byte {
