@@ -273,6 +273,12 @@ func (u u128) Rsh(n uint) (s u128) {
 }
 
 func (u u128) ToBigInt() *big.Int {
+	if bits.UintSize == 64 {
+		// fast path for 64-bit platforms: set the words directly,
+		// avoiding the intermediate byte buffer and its decoding
+		return new(big.Int).SetBits([]big.Word{big.Word(u.lo), big.Word(u.hi)})
+	}
+
 	bytes := make([]byte, 16)
 	binary.BigEndian.PutUint64(bytes, u.hi)
 	binary.BigEndian.PutUint64(bytes[8:], u.lo)

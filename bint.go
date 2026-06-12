@@ -373,26 +373,40 @@ func digitToU128(s []byte) (u128, error) {
 		return u128{lo: u}, nil
 	}
 
-	// number is too large
+	// number is too large to fit into uint64, parse it in chunks of up to 19 digits.
+	// Each chunk is accumulated with cheap uint64 arithmetic, so only 1 u128 mul/add
+	// is required per chunk instead of per digit.
 	var (
 		u   u128
 		err error
 	)
 
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return u128{}, ErrInvalidFormat
+	for len(s) > 0 {
+		n := len(s)
+		if n > maxDigitU64 {
+			n = maxDigitU64
 		}
 
-		u, err = u.Mul64(10)
+		var chunk uint64
+		for i := 0; i < n; i++ {
+			if s[i] < '0' || s[i] > '9' {
+				return u128{}, ErrInvalidFormat
+			}
+
+			chunk = chunk*10 + uint64(s[i]-'0')
+		}
+
+		u, err = u.Mul64(pow10[n].lo)
 		if err != nil {
 			return u128{}, err
 		}
 
-		u, err = u.Add64(uint64(s[i] - '0'))
+		u, err = u.Add64(chunk)
 		if err != nil {
 			return u128{}, err
 		}
+
+		s = s[n:]
 	}
 
 	return u, nil
