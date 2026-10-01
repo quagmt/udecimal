@@ -137,8 +137,7 @@ func (u u256) fastQuo(v u128) (u128, u128, error) {
 		return u128{}, u128{}, errOverflow
 	}
 
-	q, r := u.div256by128(v)
-	return q, r, nil
+	return u.div256by128(v)
 }
 
 // div192by64 return q,r which:
@@ -160,9 +159,10 @@ func (u u256) div192by64(v uint64) (u128, uint64, error) {
 
 // div256by128 performs u256 / u128, which u256.carry < u128
 // Returns both quotient and remainder
+// Returns errOverflow if a trial quotient cannot fit into uint64.
 // This implementation is based on divllu from https://github.com/ridiculousfish/libdivide
 // The algorithm is explained in this blog post: https://ridiculousfish.com/blog/posts/labor-of-division-episode-iv.html
-func (u u256) div256by128(v u128) (u128, u128) {
+func (u u256) div256by128(v u128) (u128, u128, error) {
 	// normalize v
 	n := bits.LeadingZeros64(v.hi)
 
@@ -178,7 +178,7 @@ func (u u256) div256by128(v u128) (u128, u128) {
 
 	// q = a / v
 	aLen := 3
-	if a[3] != 0 || (a[3] == 0 && a[2] > v.hi) {
+	if a[3] != 0 || (a[3] == 0 && a[2] >= v.hi) {
 		aLen = 4
 	}
 
@@ -186,6 +186,10 @@ func (u u256) div256by128(v u128) (u128, u128) {
 
 	for i := aLen - 3; i >= 0; i-- {
 		u2, u1, u0 := a[i+2], a[i+1], a[i]
+		if u2 >= v.hi {
+			// The trial quotient can overflow even when the final quotient fits.
+			return u128{}, u128{}, errOverflow
+		}
 
 		// trial quotient tq = [u2,u1,u0] / v ~= [u2,u1] / v.hi
 		// tq <= q + 2
@@ -237,7 +241,7 @@ func (u u256) div256by128(v u128) (u128, u128) {
 	//nolint:gosec // 0 <= n <= 63, so it's safe to convert to uint
 	r := u128{hi: a[1], lo: a[0]}.Rsh(uint(n))
 
-	return u128{hi: q[1], lo: q[0]}, r
+	return u128{hi: q[1], lo: q[0]}, r, nil
 }
 
 // subUnsafe returns u - v with u >= v
