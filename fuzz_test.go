@@ -291,10 +291,27 @@ func FuzzDivDec(f *testing.F) {
 			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
 		}
 	}
+	for _, seed := range []struct {
+		ahi, alo uint64
+		aprec    uint8
+		bhi, blo uint64
+		bprec    uint8
+	}{
+		{math.MaxUint64, math.MaxUint64, 0, 9999999999999999999, 0, 0},
+		{1, 15581492618384294731, 19, 1, 0, 19},
+		{1, 15581492618384294730, 19, 1, 0, 19},
+		{5, 7766279631452241920, 0, 14693679385278593849, 11237880364719817873, 19},
+	} {
+		for _, aneg := range []bool{false, true} {
+			for _, bneg := range []bool{false, true} {
+				f.Add(aneg, seed.ahi, seed.alo, seed.aprec, bneg, seed.bhi, seed.blo, seed.bprec)
+			}
+		}
+	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -317,22 +334,70 @@ func FuzzDivDec(f *testing.F) {
 
 		require.NoError(t, err)
 
-		// compare with shopspring/decimal
-		aa := ssDecimal(aneg, ahi, alo, aprec)
-		bb := ssDecimal(bneg, bhi, blo, bprec)
+		// Scale positive coefficients and truncate with independent integer arithmetic.
+		exponent := int(defaultPrec) + int(b.prec) - int(a.prec)
+		factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(exponent)), nil)
+		want := new(big.Int).Mul(a.coef.GetBig(), factor)
+		want.Quo(want, b.coef.GetBig())
+		require.Zero(t, want.Cmp(c.coef.GetBig()))
+		if want.Sign() == 0 {
+			require.Equal(t, Zero, c)
+		} else {
+			require.Equal(t, defaultPrec, c.prec)
+			require.Equal(t, a.neg != b.neg, c.neg)
+		}
+	})
+}
 
-		prec := int32(c.Prec())
-		cc := aa.DivRound(bb, 28).Truncate(prec)
-
-		// sometimes shopspring/decimal does rounding differently
-		// e.g. 0.099999999999999 -> 0.1
-		// so to check the result, we can check the difference
-		// between our result and shopspring/decimal result
-		// valid result should be less than or equal to 1e-19, which is our smallest unit
-		d := MustParse(cc.String())
-		e := c.Sub(d)
-
-		require.LessOrEqual(t, e.Abs().Cmp(oneUnit), 0, "a: %s, b: %s, expected %s, got %s", a, b, cc.String(), c.String())
+func FuzzFastQuo(f *testing.F) {
+	const highBit = uint64(1) << 63
+	for _, seed := range []struct {
+		carryHi, carryLo, hi, lo, divisorHi, divisorLo uint64
+	}{
+		{0, 0, 0, 15, 0, 4},
+		{0, 1, 0, 0, 0, 2},
+		{0, 1, 0, 0, 2, 0},
+		{0, 1, 0, 0, 1, 0},
+		{1, 0, 1, 0, highBit, 0},
+		{highBit, 0, 0, 0, highBit, 1},
+		{1, 0, 1, 0, highBit, 1},
+		{1, 1, 1, 0, highBit, highBit + 1},
+		{1, 0, 0, 0, 1, 0},
+	} {
+		f.Add(seed.carryHi, seed.carryLo, seed.hi, seed.lo, seed.divisorHi, seed.divisorLo)
+	}
+	f.Fuzz(func(t *testing.T, carryHi, carryLo, hi, lo, divisorHi, divisorLo uint64) {
+		u := u256{carry: u128{hi: carryHi, lo: carryLo}, hi: hi, lo: lo}
+		v := u128{hi: divisorHi, lo: divisorLo}
+		if v.IsZero() {
+			t.Skip()
+		}
+		numerator, divisor := u256BigInt(u), v.ToBigInt()
+		wantQ, wantR := new(big.Int), new(big.Int)
+		wantQ.QuoRem(numerator, divisor, wantR)
+		wantErr := wantQ.BitLen() > 128
+		if !wantErr && !u.carry.IsZero() && v.hi != 0 {
+			// The two trial estimates can exceed a word even when the final quotient fits.
+			shift := uint(128 - divisor.BitLen())
+			n := new(big.Int).Lsh(numerator, shift)
+			d := new(big.Int).Lsh(divisor, shift)
+			dHi := new(big.Int).Rsh(new(big.Int).Set(d), 64)
+			first := new(big.Int).Quo(new(big.Int).Rsh(new(big.Int).Set(n), 128), dHi)
+			prefixR := new(big.Int)
+			new(big.Int).QuoRem(new(big.Int).Rsh(new(big.Int).Set(n), 64), d, prefixR)
+			second := new(big.Int).Quo(prefixR, dHi)
+			wantErr = first.BitLen() > 64 || second.BitLen() > 64
+		}
+		q, r, err := u.fastQuo(v)
+		if wantErr {
+			require.ErrorIs(t, err, errOverflow)
+			require.Equal(t, u128{}, q)
+			require.Equal(t, u128{}, r)
+			return
+		}
+		require.NoError(t, err)
+		require.Zero(t, wantQ.Cmp(q.ToBigInt()))
+		require.Zero(t, wantR.Cmp(r.ToBigInt()))
 	})
 }
 
