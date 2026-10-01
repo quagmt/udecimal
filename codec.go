@@ -489,7 +489,7 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 		return ErrInvalidBinaryData
 	}
 
-	d.coef.u128 = coef
+	d.coef = bintFromU128(coef)
 	return nil
 }
 
@@ -502,7 +502,7 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 		return ErrInvalidBinaryData
 	}
 
-	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
+	d.coef = bintFromBigInt(new(big.Int).SetBytes(data[3:totalBytes]))
 	return nil
 }
 
