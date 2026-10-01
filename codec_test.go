@@ -257,6 +257,81 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 	}
 }
 
+func TestUnmarshalBinaryReuse(t *testing.T) {
+	previousValues := []struct{ name, value string }{
+		{"u64", "18446744073709551615"},
+		{"u128", "340282366920938463463374607431768211455"},
+		{"big", "1000000000000000000000000000000000000000"},
+		{"padded small", strings.Repeat("0", 40) + "1.23"},
+	}
+	values := []string{
+		"0", "1.23", "-1.23", "1.2300", "0.0000000000000000001",
+		"18446744073709551615", "18446744073709551616",
+		"340282366920938463463374607431768211455",
+		"340282366920938463463374607431768211456",
+		"-12345678901234567890123456789.1234567890123456789",
+	}
+	for _, previous := range previousValues {
+		for _, value := range values {
+			t.Run(previous.name+" to "+value, func(t *testing.T) {
+				want := MustParse(value)
+				data, err := want.MarshalBinary()
+				require.NoError(t, err)
+				var fresh Decimal
+				require.NoError(t, fresh.UnmarshalBinary(data))
+				require.Equal(t, want, fresh)
+
+				got := MustParse(previous.value)
+				previousString := got.String()
+				saved := got
+				before, err := saved.MarshalBinary()
+				require.NoError(t, err)
+				require.NoError(t, got.UnmarshalBinary(data))
+				require.Equal(t, want.String(), got.String())
+				require.Equal(t, fresh, got)
+				reencoded, err := got.MarshalBinary()
+				require.NoError(t, err)
+				require.Equal(t, data, reencoded)
+				require.Equal(t, previousString, saved.String())
+				after, err := saved.MarshalBinary()
+				require.NoError(t, err)
+				require.Equal(t, before, after)
+			})
+		}
+	}
+}
+
+func TestGobDecodeReuse(t *testing.T) {
+	values := []string{
+		"1000000000000000000000000000000000000000", "-1.23",
+		"340282366920938463463374607431768211455",
+		"340282366920938463463374607431768211456", "0",
+		"0.0000000000000000001", "-1.2300",
+		"-12345678901234567890123456789.1234567890123456789",
+		"18446744073709551616", "18446744073709551615",
+	}
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	for _, value := range values {
+		require.NoError(t, encoder.Encode(MustParse(value)))
+	}
+	decoder := gob.NewDecoder(&buffer)
+	var got Decimal
+	for i, value := range values {
+		require.NoError(t, decoder.Decode(&got))
+		t.Run(fmt.Sprintf("%d/%s", i, value), func(t *testing.T) {
+			want := MustParse(value)
+			require.Equal(t, want.String(), got.String())
+			require.Equal(t, want, got)
+			data, err := want.MarshalBinary()
+			require.NoError(t, err)
+			reencoded, err := got.MarshalBinary()
+			require.NoError(t, err)
+			require.Equal(t, data, reencoded)
+		})
+	}
+}
+
 func TestAppendText(t *testing.T) {
 	testcases := []struct {
 		in      string

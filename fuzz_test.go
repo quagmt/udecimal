@@ -859,5 +859,23 @@ func FuzzMarshalBinary(f *testing.F) {
 		require.NoError(t, e.UnmarshalBinary(data))
 
 		require.Equal(t, c.String(), e.String())
+
+		aData, err := a.MarshalBinary()
+		require.NoError(t, err)
+		saved := e
+		require.NoError(t, e.UnmarshalBinary(aData))
+		require.Equal(t, a, e)
+		reencoded, err := e.MarshalBinary()
+		require.NoError(t, err)
+		require.Equal(t, aData, reencoded)
+		savedData, err := saved.MarshalBinary()
+		require.NoError(t, err)
+		require.Equal(t, data, savedData)
+
+		require.NoError(t, e.UnmarshalBinary(data))
+		require.Equal(t, c, e)
+		reencoded, err = e.MarshalBinary()
+		require.NoError(t, err)
+		require.Equal(t, data, reencoded)
 	})
 }
