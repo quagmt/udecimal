@@ -1671,6 +1671,33 @@ func TestSign(t *testing.T) {
 	}
 }
 
+func TestCopySign(t *testing.T) {
+	testcases := []struct {
+		a    string
+		sign string
+		want string
+	}{
+		{"+0", "1", "0"},
+		{"0", "1", "0"},
+		{"0", "-1", "0"},
+		{"-0", "-1", "0"},
+		{"10", "2", "10"},
+		{"10", "-3", "-10"},
+		{"-10", "2", "10"},
+		{"-10", "-3", "-10"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a+"/"+tc.sign, func(t *testing.T) {
+			a := MustParse(tc.a)
+			sign := MustParse(tc.sign)
+			want := MustParse(tc.want)
+
+			require.Equal(t, want, a.CopySign(sign))
+		})
+	}
+}
+
 func TestRoundBank(t *testing.T) {
 	testcases := []struct {
 		a        string
