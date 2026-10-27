@@ -1583,6 +1583,70 @@ func TestMaxMin(t *testing.T) {
 	}
 }
 
+func TestAvg(t *testing.T) {
+	testcases := []struct {
+		list []string
+		want string
+	}{
+		{[]string{"1.123", "2.235"}, "1.679"},
+		{[]string{"1", "2", "3", "4"}, "2.5"},
+		{[]string{"-1.123", "-2.235"}, "-1.679"},
+		{[]string{"-1.123", "2.235"}, "0.556"},
+		{[]string{"1.123"}, "1.123"},
+		{[]string{"0", "0", "0"}, "0"},
+		{[]string{"1234567890123456789", "1234567890123456789"}, "1234567890123456789"},
+		{[]string{"123.456", "654.321", "987.654"}, "588.477"},
+		{[]string{"1.0000000000000000001", "2.0000000000000000002"}, "1.5000000000000000001"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%v", tc.list), func(t *testing.T) {
+			list := make([]Decimal, len(tc.list))
+			for i, s := range tc.list {
+				d, err := Parse(s)
+				require.NoError(t, err)
+				list[i] = d
+			}
+
+			got := Avg(list[0], list[1:]...)
+			require.Equal(t, tc.want, got.String())
+		})
+	}
+}
+
+func TestParts(t *testing.T) {
+	testcases := []struct {
+		a         string
+		wantWhole string
+		wantFrac  string
+	}{
+		{"123.456", "123", "0.456"},
+		{"123", "123", "0"},
+		{"0.456", "0", "0.456"},
+		{"0", "0", "0"},
+		{"-123.456", "-123", "-0.456"},
+		{"-0.456", "0", "-0.456"},
+		{"-123", "-123", "0"},
+		{"123.456000", "123", "0.456"},
+		{"9999999999999999999.9999999999999999999", "9999999999999999999", "0.9999999999999999999"},
+		{"-9999999999999999999.9999999999999999999", "-9999999999999999999", "-0.9999999999999999999"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a, func(t *testing.T) {
+			d, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			whole, frac := Parts(d)
+			require.Equal(t, tc.wantWhole, whole.String())
+			require.Equal(t, tc.wantFrac, frac.String())
+
+			// whole + frac must always reconstruct the original number
+			require.Equal(t, d.String(), whole.Add(frac).String())
+		})
+	}
+}
+
 func TestCmpWithDifferentPrecision(t *testing.T) {
 	testcases := []struct {
 		a1, a2, b string

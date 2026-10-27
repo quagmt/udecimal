@@ -815,6 +815,34 @@ func Min(a Decimal, b ...Decimal) Decimal {
 	return result
 }
 
+// Avg returns the average of the decimals, i.e. their sum divided by the count.
+// If the result has more than defaultPrec fraction digits, it will be truncated to defaultPrec digits,
+// similar to Div.
+func Avg(a Decimal, b ...Decimal) Decimal {
+	sum := a
+	for _, v := range b {
+		sum = sum.Add(v)
+	}
+
+	// the count is at least 1, so Div64 always succeeds
+	d, _ := sum.Div64(uint64(len(b) + 1))
+	return d
+}
+
+// Parts returns the integer part and the fraction part of d,
+// where whole = Trunc(0) and frac = d - whole.
+// frac keeps the sign of d, so whole + frac == d.
+//
+// Examples:
+//
+//	Parts(123.456) = (123, 0.456)
+//	Parts(-123.456) = (-123, -0.456)
+func Parts(num Decimal) (whole, frac Decimal) {
+	whole = num.Trunc(0)
+	frac = num.Sub(whole)
+	return whole, frac
+}
+
 func (d Decimal) cmpDecSameSign(e Decimal) int {
 	result, err := tryCmpU128(d, e)
 	if err == nil {
