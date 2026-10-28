@@ -900,6 +900,21 @@ func (d Decimal) Abs() Decimal {
 	return newDecimal(false, d.coef, d.prec)
 }
 
+// CopySign returns a value with the magnitude of d and the sign of sign.
+//
+// Examples:
+//
+//	CopySign(10, 2) = 10
+//	CopySign(10, -3) = -10
+//	CopySign(-10, 2) = 10
+//	CopySign(-10, -3) = -10
+func (d Decimal) CopySign(sign Decimal) Decimal {
+	if d.neg == sign.neg {
+		return d
+	}
+	return d.Neg()
+}
+
 // Sign returns:
 //
 //	-1 if d < 0
