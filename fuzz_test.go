@@ -861,3 +861,78 @@ func FuzzMarshalBinary(f *testing.F) {
 		require.Equal(t, c.String(), e.String())
 	})
 }
+
+func FuzzAvg(f *testing.F) {
+	for _, c := range corpus {
+		for _, d := range corpus {
+			f.Add(c.neg, c.hi, c.lo, c.prec, d.neg, d.hi, d.lo, d.prec)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
+		aprec = aprec % maxPrec
+		bprec = bprec % maxPrec
+
+		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
+		require.NoError(t, err)
+
+		b, err := NewFromHiLo(bneg, bhi, blo, bprec)
+		require.NoError(t, err)
+
+		// avg with a single input and an empty list must return the input as-is
+		single := Avg(a)
+		require.Equal(t, a.String(), single.String(), "avg single %s", a)
+
+		avg1 := Avg(a, b)
+		avg2 := Avg(b, a)
+
+		// avg must be commutative
+		require.Equal(t, avg1.String(), avg2.String(), "avg commutative %s %s", a, b)
+
+		// avg of two inputs must equal the sum divided by 2, truncated to defaultPrec
+		sum := a.Add(b)
+		expected := sum.MustDiv(MustFromInt64(2, 0))
+		require.Equal(t, expected.String(), avg1.String(), "avg %s %s", a, b)
+
+		// compare with shopspring/decimal
+		aa := ssDecimal(aneg, ahi, alo, aprec)
+		bb := ssDecimal(bneg, bhi, blo, bprec)
+		cc := aa.Add(bb).DivRound(ss.NewFromInt(2), 28).Truncate(int32(defaultPrec))
+
+		require.Equal(t, cc.String(), avg1.String(), "avg %s %s", a, b)
+	})
+}
+
+func FuzzParts(f *testing.F) {
+	for _, c := range corpus {
+		f.Add(c.neg, c.hi, c.lo, c.prec)
+	}
+
+	f.Fuzz(func(t *testing.T, neg bool, hi uint64, lo uint64, prec uint8) {
+		prec = prec % maxPrec
+
+		a, err := NewFromHiLo(neg, hi, lo, prec)
+		require.NoError(t, err)
+
+		whole, frac := Parts(a)
+
+		// whole must equal Trunc(0)
+		require.Equal(t, a.Trunc(0).String(), whole.String(), "parts whole %s", a)
+
+		// whole + frac must always reconstruct the original number
+		require.Equal(t, a.String(), whole.Add(frac).String(), "parts roundtrip %s", a)
+
+		// frac must keep the sign of a
+		if !frac.IsZero() {
+			require.Equal(t, a.Sign(), frac.Sign(), "parts sign %s", a)
+		}
+
+		// compare with shopspring/decimal
+		aa := ssDecimal(neg, hi, lo, prec)
+		cc := aa.Truncate(0)
+		fd := aa.Sub(cc)
+
+		require.Equal(t, cc.String(), whole.String(), "parts whole %s", a)
+		require.Equal(t, fd.String(), frac.String(), "parts frac %s", a)
+	})
+}
