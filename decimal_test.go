@@ -1614,6 +1614,29 @@ func TestAvg(t *testing.T) {
 	}
 }
 
+func TestAvgSingleInput(t *testing.T) {
+	testcases := []struct {
+		a    string
+		want string
+	}{
+		{"1.123", "1.123"},
+		{"0", "0"},
+		{"-123.456", "-123.456"},
+		{"9999999999999999999.9999999999999999999", "9999999999999999999.9999999999999999999"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.a, func(t *testing.T) {
+			d, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			// a single input with an empty list must return the input as-is
+			got := Avg(d)
+			require.Equal(t, tc.want, got.String())
+		})
+	}
+}
+
 func TestParts(t *testing.T) {
 	testcases := []struct {
 		a         string
