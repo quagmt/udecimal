@@ -62,8 +62,8 @@ func FuzzParse(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -94,8 +94,8 @@ func FuzzAddDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -128,7 +128,7 @@ func FuzzAdd64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
-		aprec = aprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -158,8 +158,8 @@ func FuzzSubDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -192,7 +192,7 @@ func FuzzSub64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
-		aprec = aprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -222,8 +222,8 @@ func FuzzMulDec(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -262,7 +262,7 @@ func FuzzMul64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
-		aprec = aprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
 
@@ -292,9 +292,24 @@ func FuzzDivDec(f *testing.F) {
 		}
 	}
 
+	// inputs where div256by128 hits a window whose top word equals v.hi (issue #46),
+	// same as TestDivU128FastPath
+	for _, tc := range []struct{ a, b string }{
+		{"340282366920938463463374607431768211455", "184467440737095516141553255926290448384"},
+		{"133409721833455732588068166446", "72321555121259769515495888249"},
+		{"270240073904042979334573788632", "146497437609703335958137008241"},
+		{"21017606257478205086286238203243994173", "11862310486351613452867632067"},
+		{"481189726465641369515805649831748674", "587233650842469866172483"},
+		{"62771017795841019268", "1.8446744203594098861"},
+		{"8632437340181229192449342221", "253684533.1802602069988042818"},
+	} {
+		a, b := MustParse(tc.a), MustParse(tc.b)
+		f.Add(a.neg, a.coef.u128.hi, a.coef.u128.lo, a.prec, b.neg, b.coef.u128.hi, b.coef.u128.lo, b.prec)
+	}
+
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -317,6 +332,16 @@ func FuzzDivDec(f *testing.F) {
 
 		require.NoError(t, err)
 
+		// The u128 fast path may only give up (and Div falls back to big.Int) when the result
+		// doesn't fit in u128. See TestDivU128FastPath.
+		fast, err := tryDivU128(a, b, aneg != bneg)
+		if c.coef.GetBig().BitLen() <= 128 {
+			require.NoError(t, err, "a: %s, b: %s", a, b)
+			require.Equal(t, c.String(), fast.String(), "a: %s, b: %s", a, b)
+		} else {
+			require.Equal(t, errOverflow, err, "a: %s, b: %s", a, b)
+		}
+
 		// compare with shopspring/decimal
 		aa := ssDecimal(aneg, ahi, alo, aprec)
 		bb := ssDecimal(bneg, bhi, blo, bprec)
@@ -336,6 +361,58 @@ func FuzzDivDec(f *testing.F) {
 	})
 }
 
+// FuzzDiv256by128 checks div256by128 against big.Int on the dividends issue #46 broke.
+// With the normalized dividend a = [a3, a2, a1, a0] and normalized divisor [v.hi, v.lo]:
+//  1. a3 = 0 and a2 == v.hi:
+//     - a1 < v.lo: q has 1 digit, and its step's window starts with u2 == v.hi
+//     - a1 >= v.lo: q has 2 digits (the digit count the old a2 > v.hi check got wrong)
+//  2. a3 == v.hi: the 1st step of a 2-digit q has a window starting with u2 == v.hi
+//  3. the 1st step leaves a remainder [v.hi, x]: the 2nd step's window starts with u2 == v.hi
+//
+// Cases 1 (a1 < v.lo), 2 and 3 are the only ways a window can start with u2 == v.hi.
+//
+// Random words almost never produce these, so each run builds all 3 from the fuzz inputs.
+// Random dividends are covered by TestDiv256by128Random.
+func FuzzDiv256by128(f *testing.F) {
+	f.Add(uint8(0), uint64(9999999999999999999), uint64(0), uint64(math.MaxUint64), uint64(math.MaxUint64))
+	f.Add(uint8(13), uint64(1<<63|12345), uint64(0x5555<<48), uint64(0x1234), uint64(0xabcdef))
+	f.Add(uint8(47), uint64(1<<63), uint64(math.MaxUint64), uint64(math.MaxUint64-1), uint64(1<<63))
+
+	f.Fuzz(func(t *testing.T, shift uint8, vhi, vlo, x, y uint64) {
+		n := uint(shift % 64)
+
+		// vn is v after normalization (top bit set, low n bits 0), v is the real divisor
+		vn := u128FromHiLo(vhi|1<<63, vlo&^(1<<n-1))
+		v := vn.Rsh(n)
+
+		// 1. a2 == v.hi: q has 1 or 2 digits depending on x (e.g. 866 vs 896 / 87)
+		require.True(t, compareWithBigInt(t, fromNormalized(0, vn.hi, x, y, n), v))
+
+		// Cases 2 and 3 need x < v.lo:
+		//   - case 2: [a3, a2] = [v.hi, x] must be < v (div256by128 requires u.carry < v)
+		//   - case 3: the remainder [v.hi, x] must be < v
+		// Neither is possible when v.lo == 0.
+		if vn.lo == 0 {
+			return
+		}
+
+		x %= vn.lo
+
+		// 2. a3 == v.hi: the 1st window starts with v.hi (e.g. 8666 / 87)
+		require.True(t, compareWithBigInt(t, fromNormalized(vn.hi, x, y, y, n), v))
+
+		// 3. the 1st window leaves remainder [v.hi, x], so the 2nd window starts with v.hi
+		//    (e.g. 6046 / 87: 604 -> rem 82, next window 826)
+		//    a = (y*v + [v.hi, x]) << 64 + y
+		a := new(big.Int).Mul(new(big.Int).SetUint64(y), vn.ToBigInt())
+		a.Add(a, u128FromHiLo(vn.hi, x).ToBigInt())
+		a.Lsh(a, 64).Or(a, new(big.Int).SetUint64(y))
+
+		w := u256FromBig(a)
+		require.True(t, compareWithBigInt(t, fromNormalized(w.carry.hi, w.carry.lo, w.hi, w.lo, n), v))
+	})
+}
+
 func FuzzDiv64(f *testing.F) {
 	for _, c := range corpus {
 		for _, d := range corpus {
@@ -344,7 +421,7 @@ func FuzzDiv64(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, blo uint64) {
-		aprec = aprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -390,8 +467,8 @@ func FuzzQuoRem(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -428,8 +505,8 @@ func FuzzRoundBank(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -447,11 +524,11 @@ func FuzzRoundBank(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundPrecision % maxPrec)
+		u8Round := uint8(roundPrecision % (maxPrec + 1))
 		cround := c.RoundBank(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundPrecision % maxPrec)
+		i32Round := int32(roundPrecision % (maxPrec + 1))
 		cc := ss.RequireFromString(cstr).RoundBank(i32Round)
 
 		require.Equal(t, cc.String(), cround.String(), "roundBank %s %d", c, roundPrecision)
@@ -467,8 +544,8 @@ func FuzzRoundAwayFromZero(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -486,11 +563,11 @@ func FuzzRoundAwayFromZero(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundPrecision % maxPrec)
+		u8Round := uint8(roundPrecision % (maxPrec + 1))
 		cround := c.RoundAwayFromZero(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundPrecision % maxPrec)
+		i32Round := int32(roundPrecision % (maxPrec + 1))
 		cc := ss.RequireFromString(cstr).RoundUp(i32Round)
 
 		require.Equal(t, cc.String(), cround.String(), "roundAwayFromZero %s %d", c, roundPrecision)
@@ -505,8 +582,8 @@ func FuzzFloor(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -541,8 +618,8 @@ func FuzzCeil(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -578,8 +655,8 @@ func FuzzTrunc(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8, roundPrecision uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -597,11 +674,11 @@ func FuzzTrunc(f *testing.F) {
 
 		cstr := c.String()
 
-		u8Round := uint8(roundPrecision) % maxPrec
+		u8Round := uint8(roundPrecision) % (maxPrec + 1)
 		cround := c.Trunc(u8Round)
 
 		// compare with shopspring/decimal
-		i32Round := int32(roundPrecision % maxPrec)
+		i32Round := int32(roundPrecision % (maxPrec + 1))
 		cc := ss.RequireFromString(cstr).Truncate(i32Round)
 
 		require.Equal(t, cc.String(), cround.String(), "trunc %s %d", c, roundPrecision)
@@ -650,8 +727,8 @@ func FuzzPowToIntPart(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -758,7 +835,7 @@ func FuzzPowNegative(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, pow int64) {
-		aprec = aprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -800,8 +877,8 @@ func FuzzMarshalJSON(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -835,8 +912,8 @@ func FuzzMarshalBinary(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -870,8 +947,8 @@ func FuzzAvg(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aneg bool, ahi uint64, alo uint64, aprec uint8, bneg bool, bhi uint64, blo uint64, bprec uint8) {
-		aprec = aprec % maxPrec
-		bprec = bprec % maxPrec
+		aprec = aprec % (maxPrec + 1)
+		bprec = bprec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(aneg, ahi, alo, aprec)
 		require.NoError(t, err)
@@ -909,7 +986,7 @@ func FuzzParts(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, neg bool, hi uint64, lo uint64, prec uint8) {
-		prec = prec % maxPrec
+		prec = prec % (maxPrec + 1)
 
 		a, err := NewFromHiLo(neg, hi, lo, prec)
 		require.NoError(t, err)
