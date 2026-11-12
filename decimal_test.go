@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -3024,6 +3025,46 @@ func TestSqrt(t *testing.T) {
 
 			a1 := decimal.RequireFromString(b.String()).Sub(aa).Truncate(int32(b.prec))
 			require.True(t, a1.IsZero())
+		})
+	}
+}
+
+// Newton's method has to stop at floor(sqrt(n)). When n+1 is a perfect square,
+// e.g. d = 1.0000000000000000002 with n = d * 10^38 = (10^19+1)^2 - 1,
+// the iteration used to jump between floor(sqrt(n)) and floor(sqrt(n))+1 forever.
+func TestSqrtNextToPerfectSquare(t *testing.T) {
+	testcases := []struct {
+		a, want string
+	}{
+		{"1.0000000000000000002", "1"},
+		{"0.9999999999999999998", "0.9999999999999999998"},
+		{"4.0000000000000000004", "2"},
+		{"9.0000000000000000006", "3"},
+		{"1000000000000000000.0000000002", "1000000000"},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("sqrt(%s)", tc.a), func(t *testing.T) {
+			a := MustParse(tc.a)
+
+			type result struct {
+				d   Decimal
+				err error
+			}
+
+			done := make(chan result, 1)
+			go func() {
+				d, err := a.Sqrt()
+				done <- result{d, err}
+			}()
+
+			select {
+			case r := <-done:
+				require.NoError(t, r.err)
+				require.Equal(t, tc.want, r.d.String())
+			case <-time.After(5 * time.Second):
+				t.Fatal("Sqrt doesn't return")
+			}
 		})
 	}
 }
