@@ -470,11 +470,11 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 }
 
 func (d *Decimal) unmarshalBinaryU128(data []byte) error {
-	d.neg = data[0]&1 == 1
-	d.prec = data[1]
-
+	prec := data[1]
 	totalBytes := data[2]
-	if int(totalBytes) != len(data) {
+
+	// check everything first, so d is not changed when the data is invalid
+	if int(totalBytes) != len(data) || prec > maxPrec {
 		return ErrInvalidBinaryData
 	}
 
@@ -489,20 +489,21 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 		return ErrInvalidBinaryData
 	}
 
-	d.coef.u128 = coef
+	// Replace the whole value, d may hold a big.Int from before. newDecimal also makes zero the same value
+	// as everywhere else, whatever sign and prec the data has.
+	*d = newDecimal(data[0]&1 == 1, bintFromU128(coef), prec)
 	return nil
 }
 
 func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
-	d.neg = data[0]&1 == 1
-	d.prec = data[1]
-
+	prec := data[1]
 	totalBytes := data[2]
-	if int(totalBytes) != len(data) {
+
+	if int(totalBytes) != len(data) || prec > maxPrec {
 		return ErrInvalidBinaryData
 	}
 
-	d.coef.bigInt = new(big.Int).SetBytes(data[3:totalBytes])
+	*d = newDecimal(data[0]&1 == 1, bintFromBigInt(new(big.Int).SetBytes(data[3:totalBytes])), prec)
 	return nil
 }
 
