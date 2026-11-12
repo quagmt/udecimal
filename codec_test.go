@@ -246,6 +246,8 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 		{"total len mismatched", []byte{0x01, 0x02, 0x01, 0x04, 0x05}, fmt.Errorf("invalid binary data")},
 		{"len is less than 3", []byte{0x01, 0x02}, fmt.Errorf("invalid binary data")},
 		{"len is less than 3, bigInt", []byte{0x11, 0x02, 0x01}, fmt.Errorf("invalid binary data")},
+		{"prec out of range", []byte{0x00, 20, 11, 0, 0, 0, 0, 0, 0, 0, 1}, fmt.Errorf("invalid binary data")},
+		{"prec out of range, bigInt", []byte{0x10, 200, 11, 0, 0, 0, 0, 0, 0, 0, 1}, fmt.Errorf("invalid binary data")},
 	}
 
 	for _, tc := range testcases {
@@ -253,6 +255,91 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 			var d Decimal
 			err := d.UnmarshalBinary(tc.data)
 			require.Equal(t, tc.wantErr, err)
+		})
+	}
+}
+
+// A failed UnmarshalBinary must not change the value.
+func TestUnmarshalBinaryInvalidKeepsValue(t *testing.T) {
+	d := MustParse("-1.5")
+
+	require.Error(t, d.UnmarshalBinary([]byte{0x00, 20, 11, 0, 0, 0, 0, 0, 0, 0, 1}))
+	require.Equal(t, "-1.5", d.String())
+
+	require.Error(t, d.UnmarshalBinary([]byte{0x10, 200, 11, 0, 0, 0, 0, 0, 0, 0, 1}))
+	require.Equal(t, "-1.5", d.String())
+
+	require.Error(t, d.UnmarshalBinary([]byte{0x00, 2, 12, 0, 0, 0, 0, 0, 0, 0, 1}))
+	require.Equal(t, "-1.5", d.String())
+}
+
+// Decoding into a Decimal that already holds a value (e.g. in a loop) must not keep anything of the old value.
+func TestUnmarshalBinaryReusedReceiver(t *testing.T) {
+	values := []string{
+		"123456789012345678901234567890123456789.5", // the coefficient needs a big.Int
+		"1.23",
+		"-4.56",
+		"123456789012345678901234567890123456789.5",
+		"0",
+		"-12345678901234567890.1234567890123456789",
+		"-12345678901234567890123456789012345678901.5",
+		"7",
+	}
+
+	t.Run("UnmarshalBinary", func(t *testing.T) {
+		var d Decimal
+
+		for _, v := range values {
+			want := MustParse(v)
+
+			data, err := want.MarshalBinary()
+			require.NoError(t, err)
+
+			require.NoError(t, d.UnmarshalBinary(data))
+			require.Equal(t, want.String(), d.String())
+			require.Zero(t, want.Cmp(d))
+		}
+	})
+
+	t.Run("gob", func(t *testing.T) {
+		var buffer bytes.Buffer
+
+		encoder := gob.NewEncoder(&buffer)
+		for _, v := range values {
+			require.NoError(t, encoder.Encode(MustParse(v)))
+		}
+
+		var d Decimal
+
+		decoder := gob.NewDecoder(&buffer)
+		for _, v := range values {
+			require.NoError(t, decoder.Decode(&d))
+			require.Equal(t, MustParse(v).String(), d.String())
+		}
+	})
+}
+
+// Zero must be the same value as everywhere else, whatever sign and prec the data has.
+func TestUnmarshalBinaryZero(t *testing.T) {
+	testcases := []struct {
+		name string
+		data []byte
+	}{
+		{"negative zero", []byte{0x01, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0}},
+		{"zero with prec", []byte{0x00, 5, 11, 0, 0, 0, 0, 0, 0, 0, 0}},
+		{"zero, 128 bits", []byte{0x01, 3, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+		{"zero, bigInt", []byte{0x11, 3, 3}},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// start from a value, so a decode that keeps part of it is found
+			d := MustParse("123456789012345678901234567890123456789.5")
+
+			require.NoError(t, d.UnmarshalBinary(tc.data))
+			require.Equal(t, Zero, d)
+			require.Zero(t, d.Cmp(Zero))
+			require.True(t, d.Equal(Zero))
 		})
 	}
 }
