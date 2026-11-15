@@ -3288,3 +3288,82 @@ func TestConversionHiLo(t *testing.T) {
 		})
 	}
 }
+
+func TestDivPanic(t *testing.T) {
+	left := MustParse("340282366920938463463374607431768211455")
+	right := MustParse("184467440737095516141553255926290448384")
+
+	require.NotPanics(t, func() {
+		_, err := left.Div(right)
+		require.NoError(t, err)
+	})
+}
+
+// TestDivU128FastPath checks when Div uses the u128 fast path (tryDivU128).
+// The fast path may give up (and Div falls back to big.Int) only when the quotient doesn't
+// fit in u128 (overflow = true). Otherwise it must succeed: before issue #46 was fixed, some
+// inputs whose quotient fits fell back to big.Int, or panicked.
+func TestDivU128FastPath(t *testing.T) {
+	testcases := []struct {
+		a, b     string
+		want     string
+		overflow bool
+	}{
+		// 2 quotient digits, a2 == v.hi
+		{"340282366920938463463374607431768211455", "184467440737095516141553255926290448384", "1.8446744073709551617", false},
+		{"-340282366920938463463374607431768211455", "184467440737095516141553255926290448384", "-1.8446744073709551617", false},
+		{"340282366920938463463374607431768211455", "-184467440737095516141553255926290448384", "-1.8446744073709551617", false},
+		{"-340282366920938463463374607431768211455", "-184467440737095516141553255926290448384", "1.8446744073709551617", false},
+		// 1 quotient digit, u2 == v.hi, no rOverflow
+		{"133409721833455732588068166446", "72321555121259769515495888249", "1.8446744073709551615", false},
+		// 1 quotient digit, u2 == v.hi, rOverflow
+		{"270240073904042979334573788632", "146497437609703335958137008241", "1.8446744073709551615", false},
+		// 2 quotient digits, 2nd window u2 == v.hi, no rOverflow
+		{"21017606257478205086286238203243994173", "11862310486351613452867632067", "1771797010.5116010551909023743", false},
+		// 2 quotient digits, 2nd window u2 == v.hi, rOverflow
+		{"481189726465641369515805649831748674", "587233650842469866172483", "819417834409.3642048980039761919", false},
+		// 2 quotient digits, 1st window u2 == v.hi, no rOverflow
+		{"62771017795841019268", "1.8446744203594098861", "34028236692093846346.2352938759722552363", false},
+		// 2 quotient digits, 1st window u2 == v.hi, rOverflow
+		{"8632437340181229192449342221", "253684533.1802602069988042818", "34028236692093846346.2736941755970381427", false},
+		// quotient = 2^128 - 2: largest-ish quotient that still fits in u128
+		{"17014118346046923173.1687303715884105727", "0.5", "34028236692093846346.3374607431768211454", false},
+		// quotient = 2^128: doesn't fit in u128
+		{"17014118346046923173.1687303715884105728", "0.5", "34028236692093846346.3374607431768211456", true},
+		// quotient far above 2^128
+		{"1234567890123456789.1234567890123456789", "0.0000000000000000002", "6172839450617283945617283945061728394.5", true},
+		{"1234567890123456789.1234567890123456789", "0.000000001", "1234567890123456789123456789.0123456789", true},
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s/%s", tc.a, tc.b), func(t *testing.T) {
+			a, err := Parse(tc.a)
+			require.NoError(t, err)
+
+			b, err := Parse(tc.b)
+			require.NoError(t, err)
+
+			c, err := a.Div(b)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, c.String())
+			assertOverflow(t, c, tc.overflow)
+
+			fast, err := tryDivU128(a, b, a.neg != b.neg)
+			if tc.overflow {
+				// quotient doesn't fit in u128: the fast path must give up
+				require.Equal(t, errOverflow, err)
+			} else {
+				// quotient fits in u128: the fast path must succeed, no big.Int fallback
+				require.NoError(t, err)
+				require.Equal(t, tc.want, fast.String())
+			}
+
+			// compare with shopspring/decimal
+			aa := decimal.RequireFromString(tc.a)
+			bb := decimal.RequireFromString(tc.b)
+
+			cc := aa.DivRound(bb, 28).Truncate(int32(c.Prec()))
+			require.Equal(t, cc.String(), c.String())
+		})
+	}
+}
