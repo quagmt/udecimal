@@ -1748,7 +1748,11 @@ func (d Decimal) sqrtU128() (Decimal, error) {
 		}
 
 		x1 = x1.Rsh(1)
-		if x1.Cmp(x) == 0 {
+
+		// x never gets below floor(sqrt(coef)), so stop as soon as x doesn't decrease.
+		// Stopping only when x1 == x never ends if coef+1 is a perfect square,
+		// because then x jumps between floor(sqrt(coef)) and floor(sqrt(coef))+1.
+		if x1.Cmp(x) >= 0 {
 			break
 		}
 
