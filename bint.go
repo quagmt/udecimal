@@ -144,8 +144,8 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
-	// prevent "-.123" or "+.123"
-	if s[pos] == '.' {
+	// prevent "-.123" or "+.123", and a second sign as in "-+123" that big.Int would read as a sign again
+	if s[pos] < '0' || s[pos] > '9' {
 		return false, bint{}, 0, errInvalidFormat(s)
 	}
 
