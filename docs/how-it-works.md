@@ -60,9 +60,8 @@ and `Div`, and don't allocate. Each operation uses the fast path under these con
 Lowering the default precision with `SetDefaultPrecision` raises this limit. At a default precision of 2, the
 quotient can reach about 3.4 × 10^36.
 
-A value computed with `math/big` keeps using `math/big`, even if it would fit in 128 bits. Operations on it allocate,
-`ToHiLo` returns `ok = false`, and `Int64` returns `ErrIntPartOverflow`. For example, `10^39 - (10^39 - 1)` returns
-`1` stored as `math/big`.
+A result computed with `math/big` is stored in 128 bits again if it fits. For example, `10^39 - (10^39 - 1)` is
+computed with `math/big` and returns `1` stored in 128 bits, so later operations on it use the fast path.
 
 ## math/big fallback
 

@@ -170,20 +170,22 @@ func TestCodeBlocks(t *testing.T) {
 	}
 }
 
-// TestBigValuesStayBig pins what How it works says: a result computed with math/big stays a math/big value even
-// when it would fit in 128 bits, so ToHiLo reports !ok, Int64 overflows and later operations allocate.
-func TestBigValuesStayBig(t *testing.T) {
+// TestBigResultsFitAgain pins what How it works says: a result computed with math/big is stored in 128 bits again
+// if it fits, so ToHiLo and Int64 work on it and later operations don't allocate.
+func TestBigResultsFitAgain(t *testing.T) {
 	a := udecimal.MustParse("1" + strings.Repeat("0", 39)) // 10^39: more than 2^128 - 1
 	b := udecimal.MustParse(strings.Repeat("9", 39))       // 10^39 - 1: more than 2^128 - 1
 	one := a.Sub(b)
 	require.Equal(t, "1", one.String())
 
-	_, _, _, _, ok := one.ToHiLo()
-	require.False(t, ok)
+	_, _, lo, _, ok := one.ToHiLo()
+	require.True(t, ok)
+	require.Equal(t, uint64(1), lo)
 
-	_, err := one.Int64()
-	require.ErrorIs(t, err, udecimal.ErrIntPartOverflow)
+	n, err := one.Int64()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), n)
 
 	two := udecimal.MustParse("2")
-	require.Positive(t, testing.AllocsPerRun(10, func() { _ = one.Add(two) }))
+	require.Zero(t, testing.AllocsPerRun(10, func() { _ = one.Add(two) }))
 }

@@ -2,6 +2,7 @@ package udecimal
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"strings"
@@ -58,6 +59,14 @@ func (u *bint) overflow() bool {
 }
 
 func bintFromBigInt(b *big.Int) bint {
+	// a value computed with big.Int can fit in u128 again, e.g. 10^39 - (10^39-1) = 1
+	if b.BitLen() <= 128 {
+		var buf [16]byte
+		b.FillBytes(buf[:])
+
+		return bint{u128: u128{hi: binary.BigEndian.Uint64(buf[:8]), lo: binary.BigEndian.Uint64(buf[8:])}}
+	}
+
 	return bint{bigInt: b}
 }
 
