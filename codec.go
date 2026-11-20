@@ -375,9 +375,9 @@ func (d *Decimal) UnmarshalText(data []byte) error {
 //	Binary format: [overflow + neg] [prec] [total bytes] [coef]
 //
 //	 example 1: -1.2345
-//	 1st byte: 0b0001_0000 (overflow = true, neg = false)
+//	 1st byte: 0b0000_0001 (overflow = false, neg = true)
 //	 2nd byte: 0b0000_0100 (prec = 4)
-//	 3rd byte: 0b0000_1101 (total bytes = 11)
+//	 3rd byte: 0b0000_1011 (total bytes = 11)
 //	 4th-11th bytes: 0x0000_0000_0000_3039 (coef = 12345, only stores the coef.lo part)
 //
 //	 example 2: 1234567890123456789.1234567890123456789
