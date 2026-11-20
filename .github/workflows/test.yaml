@@ -33,7 +33,8 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [oldstable, stable]
+        # the minimum version in go.mod, and the latest release
+        go-version: ["1.23", stable]
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -45,7 +46,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go-version }}
 
       - name: Run tests
         run: go test -tags='!fuzz' -race -failfast -coverpkg=./... -coverprofile="coverage.txt" -covermode=atomic ./...
