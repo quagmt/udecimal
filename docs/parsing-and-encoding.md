@@ -65,8 +65,9 @@ other than `ParseModeError` or `ParseModeTrunc`.
 
 The layout is `[flags] [prec] [total length] [coefficient bytes]`: one flag byte for the sign and for whether the
 coefficient is stored as `math/big`, the precision, the total length in bytes, and the coefficient in big-endian
-order. A 128-bit coefficient takes 8 bytes, or 16 if it doesn't fit in 64 bits. `UnmarshalBinary` returns
-`ErrInvalidBinaryData` for data that doesn't follow this layout.
+order. A 128-bit coefficient takes 8 bytes, or 16 if it doesn't fit in 64 bits. The total length is 1 byte, so
+`MarshalBinary` returns `ErrBinaryTooLarge` for a value longer than 255 bytes, which is a coefficient of about 600
+digits or more. `UnmarshalBinary` returns `ErrInvalidBinaryData` for data that doesn't follow this layout.
 
 ## Interfaces
 

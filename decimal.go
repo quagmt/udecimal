@@ -118,6 +118,10 @@ var (
 	// The binary data should follow the format as described in MarshalBinary
 	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
 
+	// ErrBinaryTooLarge is returned by MarshalBinary and AppendBinary when the encoded value would be longer than
+	// 255 bytes, the most its 1-byte length field can hold. This happens for coefficients of about 600 digits or more.
+	ErrBinaryTooLarge = fmt.Errorf("value is too large for the binary format")
+
 	// ErrZeroPowNegative is returned when raising zero to a negative power
 	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")
 

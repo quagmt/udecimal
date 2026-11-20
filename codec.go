@@ -440,6 +440,11 @@ func (d Decimal) appendBinaryBigInt(input []byte) ([]byte, error) {
 
 	words := d.coef.bigInt.Bits()
 	totalBytes := 3 + len(words)*(bits.UintSize/8)
+	if totalBytes > 255 {
+		// the total length is stored in 1 byte
+		return nil, ErrBinaryTooLarge
+	}
+
 	buf := make([]byte, totalBytes)
 
 	// overflow + neg with overflow = true (always 1)

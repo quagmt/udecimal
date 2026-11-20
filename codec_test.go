@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
 	"strings"
 	"testing"
@@ -635,5 +636,35 @@ func BenchmarkAppendBinary(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		a, _ = d.AppendBinary(a)
+	}
+}
+
+// The total length is stored in 1 byte, so a coefficient of about 600 digits or more must be an error, not corrupt data.
+func TestMarshalBinaryTooLarge(t *testing.T) {
+	testcases := []struct {
+		bits    uint // the coefficient is 2^bits - 1
+		wantErr error
+	}{
+		{1984, nil},               // 31 64-bit words: 3 + 248 = 251 bytes
+		{2048, ErrBinaryTooLarge}, // 32 64-bit words: 3 + 256 = 259 bytes
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprint(tc.bits), func(t *testing.T) {
+			coef := new(big.Int).Sub(new(big.Int).Lsh(bigOne, tc.bits), bigOne)
+			d := newDecimal(false, bintFromBigInt(coef), 0)
+
+			data, err := d.MarshalBinary()
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			var got Decimal
+			require.NoError(t, got.UnmarshalBinary(data))
+			require.Equal(t, d.String(), got.String())
+		})
 	}
 }
