@@ -1,0 +1,14 @@
+goos: darwin
+cpu: Apple M4
+BenchmarkAdd
+BenchmarkAdd/1.Add(2)
+BenchmarkAdd/1.Add(2)-10         	     100	        50.00 ns/op	      16 B/op	       1 allocs/op
+BenchmarkAdd/1.Add(2)-10         	     100	        60.00 ns/op	      16 B/op	       1 allocs/op
+BenchmarkAddWide
+BenchmarkAddWide/9.9.Add(1)
+    benchmarks_test.go:245: cannot represent: parsed 9.9 as 9
+--- SKIP: BenchmarkAddWide/9.9.Add(1)
+BenchmarkAddWide/9.9.Add(1)
+    benchmarks_test.go:245: cannot represent: parsed 9.9 as 9
+--- SKIP: BenchmarkAddWide/9.9.Add(1)
+PASS

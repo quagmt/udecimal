@@ -1,0 +1,68 @@
+site_name: udecimal
+site_description: Fast, zero-allocation fixed-point decimals for Go
+site_url: https://quagmt.github.io/udecimal/
+repo_url: https://github.com/quagmt/udecimal
+repo_name: quagmt/udecimal
+edit_uri: edit/master/docs/
+
+# design docs and plans live next to the site sources but are not part of it
+exclude_docs: |
+  superpowers/
+  requirements.txt
+  overrides/
+  snippets/
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  analytics:
+    provider: google
+    property: G-YBJ44BF01E
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  # generated tables, charts and Example snippets; a missing file fails the build
+  - pymdownx.snippets:
+      base_path: [docs/snippets]
+      check_paths: true
+
+nav:
+  - Home: index.md
+  - Overview:
+      - Comparison: comparison.md
+      - Performance: performance.md
+      - Migrating from shopspring: from-shopspring.md
+  - Guide:
+      - Basics: basics.md
+      - Precision and rounding: precision.md
+      - Parsing and encoding: parsing-and-encoding.md
+  - Internals:
+      - How it works: how-it-works.md
+  - API reference: https://pkg.go.dev/github.com/quagmt/udecimal

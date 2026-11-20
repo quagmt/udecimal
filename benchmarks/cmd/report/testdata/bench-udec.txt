@@ -1,0 +1,14 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/quagmt/udecimal/benchmarks
+cpu: Apple M4
+BenchmarkAdd
+BenchmarkAdd/1.Add(2)
+BenchmarkAdd/1.Add(2)-10         	     100	        10.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAdd/1.Add(2)-10         	     100	        12.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddWide
+BenchmarkAddWide/9.9.Add(1)
+BenchmarkAddWide/9.9.Add(1)-10   	     100	        20.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAddWide/9.9.Add(1)-10   	     100	        22.00 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/quagmt/udecimal/benchmarks	1.000s

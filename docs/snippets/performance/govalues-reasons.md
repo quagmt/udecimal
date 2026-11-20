@@ -1,0 +1,8 @@
+- `parsed 1234567890123456789.1234567890123456879 as 1234567890123456789`
+- `parsing decimal: decimal overflow: the integer part of a decimal.Decimal can have at most 19 digits, but it has 29 digits`
+- `parsing decimal: decimal overflow: the integer part of a decimal.Decimal can have at most 19 digits, but it has 24 digits`
+- `parsing decimal: decimal overflow: the integer part of a decimal.Decimal can have at most 19 digits, but it has 27 digits`
+- `parsed 12345.1234567890123456789 as 12345.12345678901235`
+- `parsed 1234.1234567890123456879 as 1234.123456789012346`
+- `parsed 12345.1234567890123456879 as 12345.12345678901235`
+- `parsing decimal: decimal overflow: the integer part of a decimal.Decimal can have at most 19 digits, but it has 38 digits`
