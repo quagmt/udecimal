@@ -1,0 +1,73 @@
+name: Docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - mkdocs.yml
+      - ".github/workflows/docs.yaml"
+      # the docs embed Examples, benchmark data and the shopspring mapping, all checked by benchmarks/ tests
+      - "**.go"
+      - go.mod
+      - go.sum
+      - "benchmarks/**"
+  pull_request:
+    paths:
+      - "docs/**"
+      - mkdocs.yml
+      - ".github/workflows/docs.yaml"
+      - "**.go"
+      - go.mod
+      - go.sum
+      - "benchmarks/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: benchmarks/go.mod
+
+      # fails when a snippet, chart or table is stale, a migration row is wrong, or an exported name is undocumented
+      - name: Check docs against the code
+        working-directory: benchmarks
+        run: go test ./...
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install MkDocs Material
+        run: pip install -r docs/requirements.txt
+
+      - name: Build
+        run: mkdocs build --strict
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    # only deploys share the group, so a pull request build never cancels a pending deploy
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

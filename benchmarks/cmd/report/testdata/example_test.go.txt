@@ -1,0 +1,18 @@
+package demo_test
+
+import "fmt"
+
+func ExampleTwo() {
+	a := 1
+
+	// a comment inside the body stays
+	fmt.Println(a)
+	fmt.Println(a + 1)
+	// Output:
+	// 1
+	// 2
+}
+
+func Example_noOutput() {
+	fmt.Println("x")
+}

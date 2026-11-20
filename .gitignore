@@ -22,3 +22,8 @@ go.work
 go.work.sum
 
 .vscode/**
+site/
+
+# superpowers workflow files (design docs, plans, scratch); kept locally, never committed
+.superpowers/
+docs/superpowers/
