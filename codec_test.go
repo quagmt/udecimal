@@ -98,7 +98,7 @@ func TestUnmarshalText(t *testing.T) {
 		{"", "error unmarshaling to Decimal: can't parse empty string", ErrEmptyString},
 		{" ", "error unmarshaling to Decimal: invalid format: can't parse ' '", ErrInvalidFormat},
 		{"abc", "error unmarshaling to Decimal: invalid format: can't parse 'abc'", ErrInvalidFormat},
-		{"1234567890123.12345678901234567899", "error unmarshaling to Decimal: precision out of range. Only support maximum 19 digits after the decimal point", ErrPrecOutOfRange},
+		{"1234567890123.12345678901234567899", "error unmarshaling to Decimal: precision out of range: more decimal places than the default precision", ErrPrecOutOfRange},
 		{"1234567890123.1234567890123", "", nil},
 	}
 
