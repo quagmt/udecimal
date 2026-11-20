@@ -1,12 +1,13 @@
 # udecimal
 
 [![build](https://github.com/quagmt/udecimal/actions/workflows/test.yaml/badge.svg)](https://github.com/quagmt/udecimal/actions/workflows/test.yaml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/quagmt/udecimal)](https://goreportcard.com/report/github.com/quagmt/udecimal)
 [![codecov](https://codecov.io/gh/quagmt/udecimal/graph/badge.svg?token=662ET843EZ)](https://codecov.io/gh/quagmt/udecimal)
 [![GoDoc](https://pkg.go.dev/badge/github.com/quagmt/udecimal)](https://pkg.go.dev/github.com/quagmt/udecimal)
 [![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#financial)
 
-High performance, high precision, zero allocation fixed-point decimal number for financial applications.
+High performance, high precision fixed-point decimal number for financial applications, allocation-free on the fast path.
+
+Documentation, comparisons and benchmarks: <https://quagmt.github.io/udecimal/>
 
 ## Installation
 
@@ -18,10 +19,10 @@ go get github.com/quagmt/udecimal
 
 ## Features
 
-- **High Precision**: Supports up to 19 decimal places with no precision loss during arithmetic operations.
-- **Zero Memory Allocation**: Designed for almost 99% zero memory allocation (see [How it works](#how-it-works)).
-- **Optimized for Speed**: 5x~20x faster than [shopspring/decimal](https://github.com/shopspring/decimal) and [ericlagergren/decimal](https://github.com/ericlagergren/decimal) (see [Benchmark](benchmarks/README.md)).
-- **Panic-Free**: All errors are returned as values, ensuring no unexpected panics.
+- **High Precision**: Supports up to 19 decimal places. Extra digits are truncated; rounding is always an explicit call.
+- **Zero Memory Allocation**: `Add`, `Sub`, `Mul` and `Div` don't allocate while values fit in 128 bits. See [How it works](https://quagmt.github.io/udecimal/how-it-works/) for the exact limits.
+- **Optimized for Speed**: For inputs of up to 19 digits, `Add`, `Sub`, `Mul` and `Div` are 4x~8x faster than [shopspring/decimal](https://github.com/shopspring/decimal) and 1.6x~5.7x faster than [ericlagergren/decimal](https://github.com/ericlagergren/decimal) on an Apple M4. See [Performance](https://quagmt.github.io/udecimal/performance/) for all benchmarks, including cockroachdb/apd and govalues/decimal.
+- **Errors as Values**: Operations that can fail, such as `Parse`, `Div`, `PowInt32` and `Sqrt`, return an `error`. Only the `Must*` helpers, `SetDefaultPrecision` and `SetDefaultParseMode` panic.
 - **Concurrent-Safe**: All arithmetic operations return a new `Decimal` value while keeping the original value unchanged, making it safe to be shared across goroutines.
 - **Correctness**: All arithmetic operations are fuzz tested and cross-checked with `shopspring/decimal` library to ensure correctness.
 - **Versatile Rounding Methods**: Includes HALF AWAY FROM ZERO, HALF TOWARD ZERO, AWAY FROM ZERO, and Banker's rounding.
@@ -79,10 +80,10 @@ func main() {
 There are already a couple of decimal libraries available in Go, such as [shopspring/decimal](https://github.com/shopspring/decimal), [cockroachdb/apd](https://github.com/cockroachdb/apd), [govalues/decimal](https://github.com/govalues/decimal), etc. However, each of these libraries has its own limitations, for example:
 
 - [shopspring/decimal](https://github.com/shopspring/decimal) is great for general-purpose decimal arithmetic because of arbitrary precision. However, it's slow and requires memory allocation for every arithmetic operation. Also in financial applications, arbitrary precision is not always necessary.
-- [cockroachdb/apd](https://github.com/cockroachdb/apd) is faster but still requires memory allocation. Also the API is not very intuitive.
-- [govalues/decimal](https://github.com/govalues/decimal) is fast, no memory allocation, easy to use but the data range is only limited to 19 digits (include both the integer and fractional parts). Some operations (especially Quo/QuoRem) usually overflow and fallback to use big.Int API, which hurts the performance. Another limitation is that it starts losing precision when the total number of digits exceeds 19.
+- [cockroachdb/apd](https://github.com/cockroachdb/apd) is faster, but its `Div` allocates. Also the API is not very intuitive.
+- [govalues/decimal](https://github.com/govalues/decimal) is fast, doesn't allocate in `Add`, `Sub` and `Mul`, and is easy to use, but the data range is only limited to 19 digits (include both the integer and fractional parts). Some operations (especially Quo/QuoRem) usually overflow and fallback to use big.Int API, which hurts the performance. Another limitation is that it starts losing precision when the total number of digits exceeds 19.
 
-This library is designed to address these limitations, providing both high performance and zero allocation while maintaining an acceptable range of precision, which is suitable for most financial applications.
+This library is designed to address these limitations, providing both high performance and allocation-free arithmetic on the fast path while maintaining an acceptable range of precision, which is suitable for most financial applications.
 
 ## Rounding Methods
 
