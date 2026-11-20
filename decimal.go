@@ -738,7 +738,7 @@ func (d Decimal) Prec() int {
 // Example:
 //
 //	u := MustParse("0.000001")
-//	d := MustParse("123.4567891") // 123.456, prec = 3
+//	d := MustParse("123.4567891") // 123.4567891, prec = 7
 //	d = d.Trunc(u.PrecUint()) // 123.456789
 func (d Decimal) PrecUint() uint8 {
 	return d.prec
@@ -804,6 +804,7 @@ func Max(a Decimal, b ...Decimal) Decimal {
 	return result
 }
 
+// Min returns the minimum decimal from the list of decimals.
 func Min(a Decimal, b ...Decimal) Decimal {
 	result := a
 	for _, v := range b {
@@ -1033,10 +1034,10 @@ func (d Decimal) RoundBank(prec uint8) Decimal {
 //
 // Examples:
 //
-//	Round(1.12, 1) = 1.2
-//	Round(1.15, 1) = 1.2
-//	Round(-1.12, 1) = -1.12
-//	Round(-1.15, 1) = -1.12
+//	RoundAwayFromZero(1.12, 1) = 1.2
+//	RoundAwayFromZero(1.15, 1) = 1.2
+//	RoundAwayFromZero(-1.12, 1) = -1.2
+//	RoundAwayFromZero(-1.15, 1) = -1.2
 func (d Decimal) RoundAwayFromZero(prec uint8) Decimal {
 	if prec >= d.prec {
 		return d
@@ -1072,10 +1073,10 @@ func (d Decimal) RoundAwayFromZero(prec uint8) Decimal {
 //
 // Examples:
 //
-//	Round(1.12345, 4) = 1.1235
-//	Round(1.12335, 4) = 1.1234
-//	Round(1.5, 0) = 2
-//	Round(-1.5, 0) = -2
+//	RoundHAZ(1.12345, 4) = 1.1235
+//	RoundHAZ(1.12335, 4) = 1.1234
+//	RoundHAZ(1.5, 0) = 2
+//	RoundHAZ(-1.5, 0) = -2
 func (d Decimal) RoundHAZ(prec uint8) Decimal {
 	if prec >= d.prec {
 		return d
@@ -1114,10 +1115,10 @@ func (d Decimal) RoundHAZ(prec uint8) Decimal {
 //
 // Examples:
 //
-//	Round(1.12345, 4) = 1.1234
-//	Round(1.12335, 4) = 1.1233
-//	Round(1.5, 0) = 1
-//	Round(-1.5, 0) = -1
+//	RoundHTZ(1.12345, 4) = 1.1234
+//	RoundHTZ(1.12335, 4) = 1.1233
+//	RoundHTZ(1.5, 0) = 1
+//	RoundHTZ(-1.5, 0) = -1
 func (d Decimal) RoundHTZ(prec uint8) Decimal {
 	if prec >= d.prec {
 		return d
@@ -1390,12 +1391,12 @@ func trailingZerosU128(n u128) uint8 {
 //
 // Examples:
 //
-//	PowInt32(0, 0) = 1
-//	PowInt32(2, 0) = 1
-//	PowInt32(0, 1) = 0
-//	PowInt32(0, -1) results in an error
-//	PowInt32(2.5, 2.6) = 2.5^2 = 6.25
-//	PowInt32(2.5, -2.123) = 2.5^(-2) = 0.16
+//	PowToIntPart(0, 0) = 1
+//	PowToIntPart(2, 0) = 1
+//	PowToIntPart(0, 1) = 0
+//	PowToIntPart(0, -1) results in an error
+//	PowToIntPart(2.5, 2.6) = 2.5^2 = 6.25
+//	PowToIntPart(2.5, -2.123) = 2.5^(-2) = 0.16
 func (d Decimal) PowToIntPart(e Decimal) (Decimal, error) {
 	if d.coef.IsZero() && e.neg {
 		return Decimal{}, ErrZeroPowNegative
