@@ -474,7 +474,7 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	totalBytes := data[2]
 
 	// check everything first, so d is not changed when the data is invalid
-	if int(totalBytes) != len(data) || prec > maxPrec {
+	if int(totalBytes) != len(data) || prec > defaultPrec {
 		return ErrInvalidBinaryData
 	}
 
@@ -499,7 +499,7 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 	prec := data[1]
 	totalBytes := data[2]
 
-	if int(totalBytes) != len(data) || prec > maxPrec {
+	if int(totalBytes) != len(data) || prec > defaultPrec {
 		return ErrInvalidBinaryData
 	}
 

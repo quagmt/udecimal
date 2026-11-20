@@ -115,7 +115,7 @@ All errors are package variables, so you can check them with `errors.Is`:
 | `ErrExponentTooLarge` | `PowToIntPart` when the integer part of the exponent is beyond ±`math.MaxInt32` |
 | `ErrSqrtNegative` | `Sqrt` of a negative value |
 | `ErrIntPartOverflow` | `Int64` when the integer part doesn't fit |
-| `ErrInvalidBinaryData` | `UnmarshalBinary` of data in the wrong layout |
+| `ErrInvalidBinaryData` | `UnmarshalBinary` of data in the wrong layout, or with more decimal places than the default precision |
 
 The text decoders (`UnmarshalJSON`, `UnmarshalText` and `Scan`) wrap the errors from `Parse`, and `NewFromFloat64`
 wraps its own errors, so use `errors.Is` instead of `==`.

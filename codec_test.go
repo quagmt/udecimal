@@ -259,6 +259,38 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 	}
 }
 
+// Like Parse, UnmarshalBinary must reject more decimal places than the default precision; Div panics on such a value.
+func TestUnmarshalBinaryPrecAboveDefault(t *testing.T) {
+	defer SetDefaultPrecision(maxPrec)
+
+	SetDefaultPrecision(2)
+
+	testcases := []struct {
+		name    string
+		data    []byte
+		want    string
+		wantErr error
+	}{
+		{"prec 2", []byte{0x00, 2, 11, 0, 0, 0, 0, 0, 0, 0, 123}, "1.23", nil},
+		{"prec 3", []byte{0x00, 3, 11, 0, 0, 0, 0, 0, 0, 0x04, 0xd2}, "", ErrInvalidBinaryData}, // 1.234
+		{"prec 3, bigInt", []byte{0x10, 3, 4, 1}, "", ErrInvalidBinaryData},                     // 0.001
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var d Decimal
+			err := d.UnmarshalBinary(tc.data)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, d.String())
+		})
+	}
+}
+
 // A failed UnmarshalBinary must not change the value.
 func TestUnmarshalBinaryInvalidKeepsValue(t *testing.T) {
 	d := MustParse("-1.5")
