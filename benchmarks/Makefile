@@ -1,23 +1,27 @@
-
-bench:
-	# @go test -bench BenchmarkMarshalJSON -benchmem -memprofile mem.out -cpuprofile cpu.out -run NONE
-	@go test -bench BenchmarkMarshalJSON -benchmem -count=10 -run NONE > new.txt
+# -v keeps the skip reasons (e.g. "cannot represent: ...") in the output; benchstat ignores those lines.
+BENCH = go test -run NONE -bench=./$(1) -benchmem -count=10 -timeout=2h -v . | sed "s/$(1)\\///g" > bench-$(2).txt
 
 bench-udec:
-	@rm -f bench-udec.txt
-	@go test -bench=./udec -benchmem -count=10 -timeout=1h> bench-udec.txt
-	@sed -i 's/udec\///g' bench-udec.txt
+	@$(call BENCH,udec,udec)
 
 bench-ss:
-	@rm -f bench-ss.txt
-	@go test -bench=./ss -benchmem -count=10 -timeout=1h> bench-ss.txt
-	@sed -i 's/ss\///g' bench-ss.txt
-	
+	@$(call BENCH,ss,ss)
+
 bench-ed:
-	@rm -f bench-ed.txt
-	@go test -bench=./eric -benchmem -count=10 -timeout=1h> bench-ed.txt
-	@sed -i 's/eric\///g' bench-ed.txt
+	@$(call BENCH,eric,ed)
+
+bench-apd:
+	@$(call BENCH,apd,apd)
+
+bench-gov:
+	@$(call BENCH,gov,gov)
+
+bench-all: bench-udec bench-ss bench-ed bench-apd bench-gov
 
 stats:
 	@benchstat shopspring=bench-ss.txt udecimal=bench-udec.txt > bench-vs-shopspring.txt
 	@benchstat ericlagergren=bench-ed.txt udecimal=bench-udec.txt > bench-vs-ericlagergren.txt
+	@benchstat apd=bench-apd.txt udecimal=bench-udec.txt > bench-vs-apd.txt
+	@benchstat govalues=bench-gov.txt udecimal=bench-udec.txt > bench-vs-govalues.txt
+
+.PHONY: bench-udec bench-ss bench-ed bench-apd bench-gov bench-all stats
