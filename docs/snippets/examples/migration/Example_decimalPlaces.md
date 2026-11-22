@@ -6,5 +6,5 @@ b, err := udecimal.Parse("0.12345678901234567890123")
 fmt.Println("udecimal:  ", b, err)
 // Output:
 // shopspring: 0.12345678901234567890123 <nil>
-// udecimal:   0 precision out of range. Only support maximum 19 digits after the decimal point
+// udecimal:   0 precision out of range: more decimal places than the default precision
 ```

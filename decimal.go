@@ -93,7 +93,7 @@ var (
 
 	// ErrPrecOutOfRange is returned when the decimal precision is greater than the default precision
 	// default precision can be configured using SetDefaultPrecision, and its value is up to 19
-	ErrPrecOutOfRange = fmt.Errorf("precision out of range. Only support maximum %d digits after the decimal point", defaultPrec)
+	ErrPrecOutOfRange = fmt.Errorf("precision out of range: more decimal places than the default precision")
 
 	// ErrEmptyString is returned when the input string is empty
 	ErrEmptyString = fmt.Errorf("can't parse empty string")
