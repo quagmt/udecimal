@@ -177,6 +177,12 @@ func parseBint(s []byte) (bool, bint, uint8, error) {
 			}
 		case ParseModeTrunc:
 			if prec > int(defaultPrec) {
+				// error if a dropped character isn't a digit: TrimLeft strips the leading digits, so anything left
+				// starts with a non-digit. Otherwise "1.23E+5" would be cut to "1.23" and parse as 1.23 instead of failing.
+				if len(bytes.TrimLeft(value[pIndex+1+int(defaultPrec):], "0123456789")) > 0 {
+					return false, bint{}, 0, errInvalidFormat(s)
+				}
+
 				value = value[:pIndex+1+int(defaultPrec)]
 				prec = int(defaultPrec)
 			}
@@ -284,8 +290,25 @@ func parseSmallToU128(s []byte) (u128, uint8, error) {
 				return u128{}, 0, ErrInvalidFormat
 			}
 
-			if prec > defaultPrec {
-				return u128{}, 0, ErrPrecOutOfRange
+			switch defaultParseMode {
+			case ParseModeError:
+				if prec > defaultPrec {
+					return u128{}, 0, ErrPrecOutOfRange
+				}
+			case ParseModeTrunc:
+				if prec > defaultPrec {
+					// error if a dropped character isn't a digit: TrimLeft strips the leading digits, so anything left
+					// starts with a non-digit. Otherwise "1.23E+5" would be cut to "1.23" and parse as 1.23 instead of failing.
+					if len(bytes.TrimLeft(s[i+1+int(defaultPrec):], "0123456789")) > 0 {
+						return u128{}, 0, ErrInvalidFormat
+					}
+
+					// the loop condition reads len(s) again, so the loop stops at the new end
+					s = s[:i+1+int(defaultPrec)]
+					prec = defaultPrec
+				}
+			default:
+				return u128{}, 0, fmt.Errorf("invalid parse mode: %d. Make sure to use SetParseMode with a valid value", defaultParseMode)
 			}
 
 			continue
@@ -334,6 +357,12 @@ func parseLargeToU128(s []byte) (u128, uint8, error) {
 		}
 	case ParseModeTrunc:
 		if prec > defaultPrec {
+			// error if a dropped character isn't a digit: TrimLeft strips the leading digits, so anything left
+			// starts with a non-digit. Otherwise "1.23E+5" would be cut to "1.23" and parse as 1.23 instead of failing.
+			if len(bytes.TrimLeft(s[pos+1+int(defaultPrec):], "0123456789")) > 0 {
+				return u128{}, 0, ErrInvalidFormat
+			}
+
 			s = s[:pos+1+int(defaultPrec)]
 			prec = defaultPrec
 		}
