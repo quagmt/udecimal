@@ -287,6 +287,11 @@ func (d Decimal) Int64() (int64, error) {
 	}
 
 	if d1.coef.u128.Cmp64(math.MaxInt64) > 0 {
+		// -2^63 still fits in int64, even though 2^63 does not
+		if d1.neg && d1.coef.u128.hi == 0 && d1.coef.u128.lo == 1<<63 {
+			return math.MinInt64, nil
+		}
+
 		return 0, ErrIntPartOverflow
 	}
 
