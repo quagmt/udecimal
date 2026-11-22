@@ -66,12 +66,72 @@ func TestParseModeTrunc(t *testing.T) {
 	}
 }
 
+func TestParseModeTruncInvalid(t *testing.T) {
+	defer SetDefaultParseMode(ParseModeError)
+
+	SetDefaultParseMode(ParseModeTrunc)
+
+	// the invalid part is after the 19th decimal place, which trunc mode drops
+	testcases := []string{
+		"1.00000000000000000000E+5",
+		"-1.00000000000000000000E-7",
+		"1.1234567890123456789abc",
+		"1.12345678901234567890.5",
+		"123456789012345678901234567890123456789012.12345678901234567890E+5",
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc, func(t *testing.T) {
+			_, err := Parse(tc)
+			require.ErrorIs(t, err, ErrInvalidFormat)
+		})
+	}
+}
+
+func TestParseModeTruncLowPrec(t *testing.T) {
+	defer SetDefaultParseMode(ParseModeError)
+	defer SetDefaultPrecision(maxPrec)
+
+	SetDefaultParseMode(ParseModeTrunc)
+	SetDefaultPrecision(2)
+
+	testcases := []struct {
+		input   string
+		want    string
+		wantErr error
+	}{
+		{"1.2", "1.2", nil},
+		{"1.234", "1.23", nil},
+		{"-1.239", "-1.23", nil},
+		{"1.2345678901234567890123", "1.23", nil},
+		{"123456789012345678901234567890123456789012.999", "123456789012345678901234567890123456789012.99", nil},
+		{"1.23x", "", ErrInvalidFormat},
+		{"1.2.3", "", ErrInvalidFormat},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			d, err := Parse(tc.input)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, d.String())
+		})
+	}
+}
+
 func TestInvalidParseMode(t *testing.T) {
 	defer SetDefaultParseMode(ParseModeError)
 
 	defaultParseMode = 2
 
 	testcases := []string{
+		// short input, parsed by parseSmallToU128
+		"1.5",
+		"-1.5",
 		"1.123456789012345678999",
 		"-1.123456789012345678999",
 		"12324564654613213216546546132131265.123456789012345678999",
