@@ -508,7 +508,14 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 		return ErrInvalidBinaryData
 	}
 
-	*d = newDecimal(data[0]&1 == 1, bintFromBigInt(new(big.Int).SetBytes(data[3:totalBytes])), prec)
+	v := newDecimal(data[0]&1 == 1, bintFromBigInt(new(big.Int).SetBytes(data[3:totalBytes])), prec)
+
+	// same limit as Parse, so text and binary input accept the same values
+	if len(v.String()) > maxStrLen {
+		return ErrInvalidBinaryData
+	}
+
+	*d = v
 	return nil
 }
 

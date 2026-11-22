@@ -67,7 +67,14 @@ The layout is `[flags] [prec] [total length] [coefficient bytes]`: one flag byte
 coefficient is stored as `math/big`, the precision, the total length in bytes, and the coefficient in big-endian
 order. A 128-bit coefficient takes 8 bytes, or 16 if it doesn't fit in 64 bits. The total length is 1 byte, so
 `MarshalBinary` returns `ErrBinaryTooLarge` for a value longer than 255 bytes, which is a coefficient of about 600
-digits or more. `UnmarshalBinary` returns `ErrInvalidBinaryData` for data that doesn't follow this layout.
+digits or more. `UnmarshalBinary` returns `ErrInvalidBinaryData` for data that doesn't follow this layout, or that
+holds a value longer than 200 characters as a string.
+
+### Length limit
+
+`Parse`, the text decoders and `UnmarshalBinary` all reject a value longer than 200 characters as a string. The limit
+applies to input only: arithmetic can produce a longer value, and `String` and the encoders still write it, but this
+library can't read it back.
 
 ## Interfaces
 

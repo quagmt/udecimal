@@ -643,10 +643,11 @@ func BenchmarkAppendBinary(b *testing.B) {
 func TestMarshalBinaryTooLarge(t *testing.T) {
 	testcases := []struct {
 		bits    uint // the coefficient is 2^bits - 1
+		wantLen int
 		wantErr error
 	}{
-		{1984, nil},               // 31 64-bit words: 3 + 248 = 251 bytes
-		{2048, ErrBinaryTooLarge}, // 32 64-bit words: 3 + 256 = 259 bytes
+		{1984, 251, nil},             // 31 64-bit words: 3 + 248 = 251 bytes
+		{2048, 0, ErrBinaryTooLarge}, // 32 64-bit words: 3 + 256 = 259 bytes
 	}
 
 	for _, tc := range testcases {
@@ -662,8 +663,54 @@ func TestMarshalBinaryTooLarge(t *testing.T) {
 
 			require.NoError(t, err)
 
+			// UnmarshalBinary rejects this value (longer than 200 characters), so check the length byte directly
+			require.Len(t, data, tc.wantLen)
+			require.Equal(t, byte(tc.wantLen), data[2])
+		})
+	}
+}
+
+// UnmarshalBinary has the same 200-character limit as Parse, while MarshalBinary writes any value up to 255 bytes.
+func TestUnmarshalBinaryMaxStrLen(t *testing.T) {
+	testcases := []struct {
+		neg     bool
+		coef    string
+		prec    uint8
+		strLen  int // length of String()
+		wantErr error
+	}{
+		{false, strings.Repeat("1", 200), 0, 200, nil},
+		{false, strings.Repeat("1", 201), 0, 201, ErrInvalidBinaryData},
+		// the sign counts
+		{true, strings.Repeat("1", 199), 0, 200, nil},
+		{true, strings.Repeat("1", 200), 0, 201, ErrInvalidBinaryData},
+		// the decimal point counts
+		{false, strings.Repeat("1", 199), 19, 200, nil},
+		{false, strings.Repeat("1", 200), 19, 201, ErrInvalidBinaryData},
+		// String doesn't print trailing zeros after the point, so this 219-digit coefficient is 200 characters
+		{false, strings.Repeat("1", 200) + strings.Repeat("0", 19), 19, 200, nil},
+		{false, strings.Repeat("1", 201) + strings.Repeat("0", 19), 19, 201, ErrInvalidBinaryData},
+	}
+
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			coef, ok := new(big.Int).SetString(tc.coef, 10)
+			require.True(t, ok)
+
+			d := newDecimal(tc.neg, bintFromBigInt(coef), tc.prec)
+			require.Len(t, d.String(), tc.strLen)
+
+			data, err := d.MarshalBinary()
+			require.NoError(t, err)
+
 			var got Decimal
-			require.NoError(t, got.UnmarshalBinary(data))
+			err = got.UnmarshalBinary(data)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
 			require.Equal(t, d.String(), got.String())
 		})
 	}
