@@ -25,10 +25,20 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # same as test.yaml: gotestsum also writes the results as JUnit XML for Codecov
       - name: Run tests
-        run: go test -tags='!fuzz' -race -failfast -coverpkg=./... -coverprofile="coverage.txt" -covermode=atomic ./...
+        run: go run gotest.tools/gotestsum@v1.12.3 --junitfile junit.xml -- -tags='!fuzz' -race -failfast -coverpkg=./... -coverprofile="coverage.txt" -covermode=atomic ./...
 
       - name: Codecov
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Codecov's Test Analytics page shows the default branch (master) unless you pick another branch
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: junit.xml

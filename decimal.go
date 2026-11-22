@@ -15,10 +15,11 @@ var (
 	// maxPrec is the maximum number of digits after the decimal point
 	maxPrec uint8 = 19
 
-	// maxStrLen is the maximum length of string input when using Parse/MustParse
-	// set it to 200 so string length value can fit in 1 byte (for MarshalBinary).
-	// Also such that big number (more than 200 digits) is unrealistic in financial system
-	// which this library is mainly designed for
+	// maxStrLen is the maximum length of a string that Parse and the text decoders accept, and of the string form of
+	// a value that UnmarshalBinary accepts. It limits input only: arithmetic can produce a longer value, and String
+	// and the encoders still write it. It bounds the CPU cost of parsing untrusted input into math/big, which grows
+	// faster than the length. A number that long is unrealistic in financial systems, which this library is mainly
+	// designed for.
 	maxStrLen = 200
 )
 
@@ -98,10 +99,8 @@ var (
 	// ErrEmptyString is returned when the input string is empty
 	ErrEmptyString = fmt.Errorf("can't parse empty string")
 
-	// ErrMaxStrLen is returned when the input string exceeds the maximum length
-	// Maximum length is arbitrarily set to 200 so string length value can fit in 1 byte (for MarshalBinary).
-	// Also such that big number (more than 200 digits) is unrealistic in financial system
-	// which this library is mainly designed for.
+	// ErrMaxStrLen is returned when the input string is longer than 200 characters.
+	// A number that long is unrealistic in financial systems, which this library is mainly designed for.
 	ErrMaxStrLen = fmt.Errorf("string input exceeds maximum length %d", maxStrLen)
 
 	// ErrInvalidFormat is returned when the input string is not in the correct format
@@ -115,8 +114,13 @@ var (
 	ErrSqrtNegative = fmt.Errorf("can't calculate square root of negative number")
 
 	// ErrInvalidBinaryData is returned when unmarshalling invalid binary data
-	// The binary data should follow the format as described in MarshalBinary
+	// The binary data should follow the format as described in MarshalBinary,
+	// and hold a value whose string form is at most 200 characters, the same limit as Parse.
 	ErrInvalidBinaryData = fmt.Errorf("invalid binary data")
+
+	// ErrBinaryTooLarge is returned by MarshalBinary and AppendBinary when the encoded value would be longer than
+	// 255 bytes, the most its 1-byte length field can hold. This happens for coefficients of about 600 digits or more.
+	ErrBinaryTooLarge = fmt.Errorf("value is too large for the binary format")
 
 	// ErrZeroPowNegative is returned when raising zero to a negative power
 	ErrZeroPowNegative = fmt.Errorf("can't raise zero to a negative power")

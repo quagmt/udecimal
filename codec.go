@@ -440,6 +440,11 @@ func (d Decimal) appendBinaryBigInt(input []byte) ([]byte, error) {
 
 	words := d.coef.bigInt.Bits()
 	totalBytes := 3 + len(words)*(bits.UintSize/8)
+	if totalBytes > 255 {
+		// the total length is stored in 1 byte
+		return nil, ErrBinaryTooLarge
+	}
+
 	buf := make([]byte, totalBytes)
 
 	// overflow + neg with overflow = true (always 1)
@@ -474,7 +479,7 @@ func (d *Decimal) unmarshalBinaryU128(data []byte) error {
 	totalBytes := data[2]
 
 	// check everything first, so d is not changed when the data is invalid
-	if int(totalBytes) != len(data) || prec > maxPrec {
+	if int(totalBytes) != len(data) || prec > defaultPrec {
 		return ErrInvalidBinaryData
 	}
 
@@ -499,11 +504,18 @@ func (d *Decimal) unmarshalBinaryBigInt(data []byte) error {
 	prec := data[1]
 	totalBytes := data[2]
 
-	if int(totalBytes) != len(data) || prec > maxPrec {
+	if int(totalBytes) != len(data) || prec > defaultPrec {
 		return ErrInvalidBinaryData
 	}
 
-	*d = newDecimal(data[0]&1 == 1, bintFromBigInt(new(big.Int).SetBytes(data[3:totalBytes])), prec)
+	v := newDecimal(data[0]&1 == 1, bintFromBigInt(new(big.Int).SetBytes(data[3:totalBytes])), prec)
+
+	// same limit as Parse, so text and binary input accept the same values
+	if len(v.String()) > maxStrLen {
+		return ErrInvalidBinaryData
+	}
+
+	*d = v
 	return nil
 }
 

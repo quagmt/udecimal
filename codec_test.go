@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
 	"strings"
 	"testing"
@@ -255,6 +256,38 @@ func TestInvalidUnmarshalBinary(t *testing.T) {
 			var d Decimal
 			err := d.UnmarshalBinary(tc.data)
 			require.Equal(t, tc.wantErr, err)
+		})
+	}
+}
+
+// Like Parse, UnmarshalBinary must reject more decimal places than the default precision; Div panics on such a value.
+func TestUnmarshalBinaryPrecAboveDefault(t *testing.T) {
+	defer SetDefaultPrecision(maxPrec)
+
+	SetDefaultPrecision(2)
+
+	testcases := []struct {
+		name    string
+		data    []byte
+		want    string
+		wantErr error
+	}{
+		{"prec 2", []byte{0x00, 2, 11, 0, 0, 0, 0, 0, 0, 0, 123}, "1.23", nil},
+		{"prec 3", []byte{0x00, 3, 11, 0, 0, 0, 0, 0, 0, 0x04, 0xd2}, "", ErrInvalidBinaryData}, // 1.234
+		{"prec 3, bigInt", []byte{0x10, 3, 4, 1}, "", ErrInvalidBinaryData},                     // 0.001
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var d Decimal
+			err := d.UnmarshalBinary(tc.data)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.want, d.String())
 		})
 	}
 }
@@ -603,5 +636,82 @@ func BenchmarkAppendBinary(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		a, _ = d.AppendBinary(a)
+	}
+}
+
+// The total length is stored in 1 byte, so a coefficient of about 600 digits or more must be an error, not corrupt data.
+func TestMarshalBinaryTooLarge(t *testing.T) {
+	testcases := []struct {
+		bits    uint // the coefficient is 2^bits - 1
+		wantLen int
+		wantErr error
+	}{
+		{1984, 251, nil},             // 31 64-bit words: 3 + 248 = 251 bytes
+		{2048, 0, ErrBinaryTooLarge}, // 32 64-bit words: 3 + 256 = 259 bytes
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprint(tc.bits), func(t *testing.T) {
+			coef := new(big.Int).Sub(new(big.Int).Lsh(bigOne, tc.bits), bigOne)
+			d := newDecimal(false, bintFromBigInt(coef), 0)
+
+			data, err := d.MarshalBinary()
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// UnmarshalBinary rejects this value (longer than 200 characters), so check the length byte directly
+			require.Len(t, data, tc.wantLen)
+			require.Equal(t, byte(tc.wantLen), data[2])
+		})
+	}
+}
+
+// UnmarshalBinary has the same 200-character limit as Parse, while MarshalBinary writes any value up to 255 bytes.
+func TestUnmarshalBinaryMaxStrLen(t *testing.T) {
+	testcases := []struct {
+		neg     bool
+		coef    string
+		prec    uint8
+		strLen  int // length of String()
+		wantErr error
+	}{
+		{false, strings.Repeat("1", 200), 0, 200, nil},
+		{false, strings.Repeat("1", 201), 0, 201, ErrInvalidBinaryData},
+		// the sign counts
+		{true, strings.Repeat("1", 199), 0, 200, nil},
+		{true, strings.Repeat("1", 200), 0, 201, ErrInvalidBinaryData},
+		// the decimal point counts
+		{false, strings.Repeat("1", 199), 19, 200, nil},
+		{false, strings.Repeat("1", 200), 19, 201, ErrInvalidBinaryData},
+		// String doesn't print trailing zeros after the point, so this 219-digit coefficient is 200 characters
+		{false, strings.Repeat("1", 200) + strings.Repeat("0", 19), 19, 200, nil},
+		{false, strings.Repeat("1", 201) + strings.Repeat("0", 19), 19, 201, ErrInvalidBinaryData},
+	}
+
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			coef, ok := new(big.Int).SetString(tc.coef, 10)
+			require.True(t, ok)
+
+			d := newDecimal(tc.neg, bintFromBigInt(coef), tc.prec)
+			require.Len(t, d.String(), tc.strLen)
+
+			data, err := d.MarshalBinary()
+			require.NoError(t, err)
+
+			var got Decimal
+			err = got.UnmarshalBinary(data)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, d.String(), got.String())
+		})
 	}
 }
