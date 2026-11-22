@@ -85,3 +85,30 @@ func TestInvalidParseMode(t *testing.T) {
 		})
 	}
 }
+
+func TestBigResultFitsU128(t *testing.T) {
+	// a and b are parsed with math/big, but a - b fits in 128 bits, so it must be stored as u128
+	testcases := []struct {
+		a, b string
+		want int64
+	}{
+		{"1000000000000000000000000000000000000000", "999999999999999999999999999999999999999", 1}, // 10^39 - (10^39-1)
+		{"-1000000000000000000000000000000000000000", "-1000000000000000000000000000000000000005", 5},
+		{"0000000000000000000000000000000000000000000012", "0", 12}, // more than 41 characters
+	}
+
+	for _, tc := range testcases {
+		t.Run(fmt.Sprintf("%s-%s", tc.a, tc.b), func(t *testing.T) {
+			d := MustParse(tc.a).Sub(MustParse(tc.b))
+			require.False(t, d.coef.overflow())
+
+			got, err := d.Int64()
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+
+			_, _, lo, _, ok := d.ToHiLo()
+			require.True(t, ok)
+			require.Equal(t, uint64(tc.want), lo)
+		})
+	}
+}

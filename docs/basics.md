@@ -92,9 +92,9 @@ the number of decimal places.
 |---|---|
 | `String` | the shortest form, without trailing zeros |
 | `StringFixed(prec)` | at least `prec` decimal places, padded with zeros; it doesn't round |
-| `Int64` | the integer part as an `int64`; an error if it doesn't fit, or if the value is stored as `math/big` (see [How it works](how-it-works.md#fast-path)) |
+| `Int64` | the integer part as an `int64`; an error if it doesn't fit |
 | `InexactFloat64` | the nearest `float64` |
-| `ToHiLo` | the sign, the 128-bit coefficient as two `uint64` values, and the precision; `ok` is false if the value is stored as `math/big`, which includes every result computed with `math/big` |
+| `ToHiLo` | the sign, the 128-bit coefficient as two `uint64` values, and the precision; `ok` is false if the coefficient doesn't fit in 128 bits |
 
 --8<-- "examples/udecimal/ExampleDecimal_StringFixed.md"
 
